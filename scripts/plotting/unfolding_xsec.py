@@ -732,7 +732,7 @@ for poi_type, poi_type_ref in zip(poi_types, poi_types_ref):
             if "xsec" in args.plots:
                 plot_xsec_unfolded(data_c, edges, poi_type, data_c_ref, bin_widths=binwidths, channel=channel, scale=scale, normalize=args.normalize, axes=channel_axes, 
                     process_label=process_label, 
-                    #hist_others=[hxnorm, hMiNNLO], label_others=[r"MiNNLO $\times$ SCETlib+DYTurbo", "MiNNLO"], color_others=["blue", "red"]
+                    hist_others=[hxnorm, hMiNNLO], label_others=[r"MiNNLO $\times$ SCETlib+DYTurbo", "MiNNLO"], color_others=["blue", "red"]
                 )
 
             if "uncertainties" in args.plots:
