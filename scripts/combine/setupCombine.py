@@ -891,7 +891,7 @@ if __name__ == "__main__":
             args.doStatOnly = True
     
     if args.hdf5: 
-        writer = HDF5Writer.HDF5Writer()
+        writer = HDF5Writer.HDF5Writer(sparse=args.sparse)
 
         # loop over all files
         outnames = []

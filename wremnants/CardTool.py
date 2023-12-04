@@ -741,7 +741,7 @@ class CardTool(object):
                 logger.warning(f"These processes are taken from nominal datagroups: {processesFromNomi}")
                 datagroupsFromNomi = self.datagroups
                 datagroupsFromNomi.loadHistsForDatagroups(
-                    baseName=self.nominalName, syst=self.nominalName, # CHECK: shouldn't it be syst=pseudoData?
+                    baseName=self.nominalName, syst=self.nominalName,
                     procsToRead=processesFromNomi, 
                     label=pseudoData,
                     scaleToNewLumi=self.lumiScale,
@@ -751,7 +751,6 @@ class CardTool(object):
                 procDictFromNomi = datagroupsFromNomi.getDatagroups()
                 hists.extend([procDictFromNomi[proc].hists[pseudoData] for proc in processesFromNomi])
             # done, now sum all histograms
-
             hdata = hh.sumHists(hists)
             if self.pseudoDataAxes[idx] is None:
                 extra_ax = [ax for ax in hdata.axes.name if ax not in self.fit_axes]
