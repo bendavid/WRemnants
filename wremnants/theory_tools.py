@@ -391,7 +391,8 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
         var_axis = helpers[generator].tensor_axes[-1]
 
         hist_name = f"{name}_{generator}Corr"
-        unc = df.HistoBoost(hist_name, axes, [*cols, f"{generator}Weight_tensor"], tensor_axes=[var_axis], storage=hist.storage.Double())
+        weight_tensor_name = f"{generator}Weight_tensor"
+        unc = df.HistoBoost(hist_name, axes, [*cols, weight_tensor_name], tensor_axes=[var_axis], storage=hist.storage.Double())
         res.append(unc)
 
         def is_flavor_dependent_np(var_label):
@@ -408,9 +409,9 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
             omegaidxs = [0] + omegaidxs
 
             if f"{generator}FlavDepNP" not in df.GetColumnNames():
-                np_idx_helper = ROOT.wrem.index_taker[df.GetColumnType(f"{generator}Weight_tensor"), len(omegaidxs)](omegaidxs)
+                np_idx_helper = ROOT.wrem.index_taker[df.GetColumnType(weight_tensor_name), len(omegaidxs)](omegaidxs)
 
-                df = df.Define(f"{generator}FlavDepNP", np_idx_helper, [f"{generator}Weight_tensor"])
+                df = df.Define(f"{generator}FlavDepNP", np_idx_helper, [weight_tensor_name])
 
             axis_FlavDepNP = hist.axis.StrCategory([var_axis[idx] for idx in omegaidxs], name = var_axis.name)
 
@@ -420,6 +421,31 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
             cols_FlavDepNP = cols + ["absYVgen", "chargeVgen", f"{generator}FlavDepNP"]
             unc_FlavDepNP = df.HistoBoost(hist_name_FlavDepNP, axes_FlavDepNP, cols_FlavDepNP, tensor_axes = [axis_FlavDepNP])
             res.append(unc_FlavDepNP)
+
+        def is_pt_dependent_scale(var_label):
+            return var_label.startswith("renorm_fact_resum_transition_scale")
+
+        # special treatment for envelope of scale variations since they need to be decorrelated in pt
+        if isinstance(var_axis, hist.axis.StrCategory) and any(is_pt_dependent_scale(var_label) for var_label in var_axis):
+
+            scaleidxs = [var_axis.index(var_label) for var_label in var_axis if is_pt_dependent_scale(var_label)]
+
+            # include nominal as well
+            scaleidxs = [0] + scaleidxs
+
+            if f"{generator}PtDepScales" not in df.GetColumnNames():
+                scale_idx_helper = ROOT.wrem.index_taker[df.GetColumnType(weight_tensor_name), len(scaleidxs)](scaleidxs)
+
+                df = df.Define(f"{generator}PtDepScales", scale_idx_helper, [weight_tensor_name])
+
+            axis_PtDepScales = hist.axis.StrCategory([var_axis[idx] for idx in scaleidxs], name = var_axis.name)
+
+            hist_name_PtDepScales = f"{name}_{generator}PtDepScales"
+            axis_ptVgen = hist.axis.Variable(common.ptV_binning, name = "ptVgen", underflow=False)
+            axes_PtDepScales = axes + [axis_ptVgen]
+            cols_PtDepScales = cols + ["ptVgen", f"{generator}PtDepScales"]
+            unc_PtDepScales = df.HistoBoost(hist_name_PtDepScales, axes_PtDepScales, cols_PtDepScales, tensor_axes = [axis_PtDepScales])
+            res.append(unc_PtDepScales)
 
     return res
 
