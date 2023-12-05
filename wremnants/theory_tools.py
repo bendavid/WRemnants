@@ -407,16 +407,10 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
             # include nominal as well
             omegaidxs = [0] + omegaidxs
 
-            if f"{generator}Omega" not in df.GetColumnNames():
-                df = df.Define(f"{generator}FlavDepNP",
-                                f"""
-                                constexpr std::array<std::ptrdiff_t, {len(omegaidxs)}> idxs = {{{",".join([str(idx) for idx in omegaidxs])}}};
-                                Eigen::TensorFixedSize<double, Eigen::Sizes<{len(omegaidxs)}>> res;
-                                for (std::size_t i = 0; i < idxs.size(); ++i) {{
-                                res(i) = {generator}Weight_tensor(idxs[i]);
-                                }}
-                                return res;
-                                """)
+            if f"{generator}FlavDepNP" not in df.GetColumnNames():
+                np_idx_helper = ROOT.wrem.index_taker[df.GetColumnType(f"{generator}Weight_tensor"), len(omegaidxs)](omegaidxs)
+
+                df = df.Define(f"{generator}FlavDepNP", np_idx_helper, [f"{generator}Weight_tensor"])
 
             axis_FlavDepNP = hist.axis.StrCategory([var_axis[idx] for idx in omegaidxs], name = var_axis.name)
 
