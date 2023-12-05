@@ -279,7 +279,6 @@ class HDF5Writer(object):
                 elif chanInfo.real_data and dg.dataName in dg.groups:
                     data_obs_hist = dg.groups[dg.dataName].hists[chanInfo.nominalName]
                     data_obs = self.get_flat_values(data_obs_hist, chanInfo, axes, return_variances=False)
-                    dg.groups[dg.dataName].hists.pop(chanInfo.nominalName)
                 else:
                     # in case pseudodata is given, write first pseudodata into data hist, otherwise write sum of expected processes
                     if chanInfo.pseudoData:
@@ -292,9 +291,15 @@ class HDF5Writer(object):
                 self.dict_data_obs[chan] = data_obs
 
             # free memory
+            del dg.groups[dg.dataName].hists[chanInfo.nominalName]
             for proc in procs_chan:
                 del dg.groups[proc].hists[chanInfo.nominalName]
             
+            # release original histograms in the proxy objects
+            dg.release_results(chanInfo.nominalName)
+            for pseudoData in chanInfo.pseudoData:
+                dg.release_results(f"{chanInfo.nominalName}_{pseudoData}")
+
             # initialize dictionaties for systematics
             self.init_data_dicts_channel(chan, procs_chan)
 
@@ -341,7 +346,7 @@ class HDF5Writer(object):
                 self.book_systematic(syst, var_name)
 
             # shape systematics
-            for systKey, syst in reversed(chanInfo.systematics.items()):
+            for systKey, syst in chanInfo.systematics.items():
                 logger.info(f"Now in channel {chan} at shape systematic group {systKey}")
 
                 if chanInfo.isExcludedNuisance(systKey): 
@@ -431,6 +436,9 @@ class HDF5Writer(object):
                     for var in var_map.keys():
                         var_map[var] = None
                     del dg.groups[proc].hists["syst"]
+
+                # release original histograms in the proxy objects
+                dg.release_results(f"{chanInfo.nominalName}_{systName}")
 
         procs = signals + bkgs
         nproc = len(procs)

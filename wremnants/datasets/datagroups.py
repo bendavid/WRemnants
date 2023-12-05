@@ -198,7 +198,15 @@ class Datagroups(object):
         else:
             meta_info = self.getMetaInfo()
             return meta_info["command"]
-        
+
+    # remove a histogram that is loaded into memory from a proxy object 
+    def release_results(self, histname):
+        for result in self.results.values():
+            if "output" not in result:
+                continue
+            if histname in res:
+                res[histname].release()
+
     # for reading pickle files
     # as a reminder, the ND hists with tensor axes in the pickle files are organized as
     # pickle[procName]["output"][baseName] where
