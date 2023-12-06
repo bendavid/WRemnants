@@ -152,10 +152,16 @@ for dataset in args.datasets:
             plot_tools.save_pdf_and_png(outdir, outfile)
             plot_tools.write_index_and_log(outdir, outfile)
 
-            if ihel == -1:
+            if ihel == -1 or ihel == 4:
                 variations.append(np.stack([0.5*np.ones_like(np.minimum.reduce([h.values() for h in hists1D])/hists1D[0].values()),1.5*np.ones_like(np.maximum.reduce([h.values() for h in hists1D])/hists1D[0].values())],axis=-1).reshape(len(uncHists[0][0].axes["ptVgen"]),len(uncHists[0][0].axes["absYVgen"]),2))
             else:
-                variations.append(np.stack([np.minimum.reduce([h.values() for h in hists1D])/hists1D[0].values(),np.maximum.reduce([h.values() for h in hists1D])/hists1D[0].values()],axis=-1).reshape(len(uncHists[0][0].axes["ptVgen"]),len(uncHists[0][0].axes["absYVgen"]),2))
+                lower = np.minimum.reduce([h.values() for h in hists1D])/np.abs(hists1D[0].values())
+                upper = np.maximum.reduce([h.values() for h in hists1D])/np.abs(hists1D[0].values())
+                
+                variations.append(np.stack([lower,upper],axis=-1).reshape(len(uncHists[0][0].axes["ptVgen"]),len(uncHists[0][0].axes["absYVgen"]),2))
+                print("helicity", ihel)
+                print("down",lower)
+                print("up",upper)
 
     variations_all = np.stack(variations,axis=-2)
     print(variations_all.shape)
