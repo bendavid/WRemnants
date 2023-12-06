@@ -3,6 +3,7 @@ from utilities.io_tools import input_tools
 from wremnants import syst_tools,theory_tools
 import numpy as np
 import re
+import hist
 
 logger = logging.child_logger(__name__)
 
@@ -106,19 +107,25 @@ class TheoryHelper(object):
 
         if self.resumUnc == "tnp":
             self.add_resum_tnp_unc(magnitude, mirror, scale)
+            self.add_transition_fo_scale_uncertainties()
+        elif self.resumUnc == "scale":
+            # two sets of nuisances, one binned in ~10% quantiles, and one inclusive in pt
+            # to avoid underestimating the correlated part of the uncertainty
+            self.add_scetlib_dyturbo_scale_uncertainty(extra_name = "fine", rebin_pt=common.ptV_binning[::2])
+            self.add_scetlib_dyturbo_scale_uncertainty(extra_name = "inclusive", rebin_pt=[common.ptV_binning[0], common.ptV_binning[-1]])
 
-        if self.resumUnc and self.resumUnc != "none":
-            self.add_resum_transition_uncertainty()
 
         if self.minnlo_unc and self.minnlo_unc not in ["none", None]:
+            # sigma_-1 uncertainty is covered by scetlib-dyturbo uncertainties if they are used
+            helicities_to_exclude = None if self.resumUnc == "minnlo" else [-1]
             for sample_group in self.samples:
                 if self.card_tool.procGroups.get(sample_group, None):
                     # two sets of nuisances, one binned in ~10% quantiles, and one inclusive in pt
                     # to avoid underestimating the correlated part of the uncertainty
-                    self.add_minnlo_scale_uncertainty(sample_group, extra_name = "fine", rebin_pt=common.ptV_binning[::2])
-                    self.add_minnlo_scale_uncertainty(sample_group, extra_name = "inclusive", rebin_pt=[common.ptV_binning[0], common.ptV_binning[-1]])
+                    self.add_minnlo_scale_uncertainty(sample_group, extra_name = "fine", rebin_pt=common.ptV_binning[::2], helicities_to_exclude=helicities_to_exclude)
+                    self.add_minnlo_scale_uncertainty(sample_group, extra_name = "inclusive", rebin_pt=[common.ptV_binning[0], common.ptV_binning[-1]], helicities_to_exclude=helicities_to_exclude)
 
-    def add_minnlo_scale_uncertainty(self, sample_group, extra_name="", use_hel_hist=True, rebin_pt=None):
+    def add_minnlo_scale_uncertainty(self, sample_group, extra_name="", use_hel_hist=True, rebin_pt=None, helicities_to_exclude=None):
         if not sample_group or sample_group not in self.card_tool.procGroups:
             logger.warning(f"Skipping QCD scale syst '{self.minnlo_unc}' for group '{sample_group}.' No process to apply it to")
             return
@@ -148,6 +155,11 @@ class TheoryHelper(object):
         # skip nominal
         skip_entries.append({"vars" : "nominal"})
 
+        if helicities_to_exclude:
+            for helicity in helicities_to_exclude:
+                skip_entries.append({"vars" : f"helicity_{helicity}_Down"})
+                skip_entries.append({"vars" : f"helicity_{helicity}_Up"})
+
         # NOTE: The map needs to be keyed on the base procs not the group names, which is
         # admittedly a bit nasty
         expanded_samples = self.card_tool.getProcNames([sample_group])
@@ -167,21 +179,6 @@ class TheoryHelper(object):
             if not hh.compatibleBins(orig_binning, binning):
                 logger.warning(f"Requested binning {binning} is not compatible with hist binning {orig_binning}. Will not rebin!")
                 binning = orig_binning
-
-            if self.resumUnc:
-            # if False:
-                pt_idx = np.argmax(binning > 25.)
-
-                if helicity:
-                    # Drop the uncertainties for low pt for sigma_-1 since this is covered by the resummation uncertainties
-                    # FIXME can't currently mix strings and complex numbers
-                    # skip_entries.extend([{"vars" : "helicity_-1_Down", pt_ax : complex(0, x)} for x in binning[:pt_idx]])
-                    # skip_entries.extend([{"vars" : "helicity_-1_Up", pt_ax : complex(0, x)} for x in binning[:pt_idx]])
-                    skip_entries.extend([{"vars" : "helicity_-1_Down", pt_ax : ibin} for ibin in range(pt_idx)])
-                    skip_entries.extend([{"vars" : "helicity_-1_Up", pt_ax : ibin} for ibin in range(pt_idx)])
-                else:
-                    # Drop the uncertainties for low pt since this is covered by the resummation uncertainties
-                    skip_entries.extend([{pt_ax : complex(0, x)} for x in binning[:pt_idx]])
 
             func = syst_tools.hist_to_variations
             preop_map = {proc : func for proc in expanded_samples}
@@ -209,6 +206,69 @@ class TheoryHelper(object):
                 formatWithValue=format_with_values,
                 passToFakes=self.propagate_to_fakes,
                 rename=base_name, # Needed to allow it to be called multiple times
+            )
+
+    def add_scetlib_dyturbo_scale_uncertainty(self, extra_name="", rebin_pt=None):
+        obs = self.card_tool.fit_axes[:]
+        pt_ax = "ptVgen" if "ptVgen" not in obs else "ptVgenAlt"
+
+        binning = np.array(rebin_pt) if rebin_pt else None
+
+        signal_samples = self.card_tool.procGroups['signal_samples']
+        hscale = self.card_tool.getHistsForProcAndSyst(signal_samples[0], self.scale_hist_name)
+        # A bit janky, but refer to the original ptVgen ax since the alt hasn't been added yet
+        orig_binning = hscale.axes[pt_ax.replace("Alt", "")].edges
+        if not hh.compatibleBins(orig_binning, binning):
+            logger.warning(f"Requested binning {binning} is not compatible with hist binning {orig_binning}. Will not rebin!")
+            binning = orig_binning
+
+        for sample_group in self.samples:
+            if not self.card_tool.procGroups.get(sample_group, None):
+                continue
+
+            name_append = self.sample_label(sample_group)
+            name_append += extra_name
+
+            sel_vars = ["renorm_fact_resum_transition_scale_max", "renorm_fact_resum_transition_scale_min"]
+
+            # skip nominal
+            skip_entries = []
+            skip_entries.append({"vars" : "pdf0"})
+
+
+            syst_axes = [pt_ax, "vars"]
+            syst_ax_labels = ["PtV", "var"]
+            format_with_values = ["edges", "center"]
+
+            # rename variations for Down and Up...
+            def action_func(h, *args, **kwargs):
+                out_var_names = [var.replace("_min","_Down").replace("_max", "_Up") for var in h.axes["vars"]]
+
+                out_var_axis = hist.axis.StrCategory(out_var_names, name="vars")
+
+                hsel = hist.Hist(*h.axes[:-1], out_var_axis, storage=h._storage_type())
+                hsel.view(flow=True)[...] = h.view(flow=True)
+
+                return syst_tools.hist_to_variations(hsel, *args, **kwargs)
+
+            action_args = {}
+            action_args["gen_axes"] = [pt_ax]
+            action_args["rebin_axes"] = [pt_ax]
+            action_args["rebin_edges"] = [binning]
+
+            self.card_tool.addSystematic(name=self.scale_hist_name,
+                processes=[sample_group],
+                group="resumTransitionFOScale",
+                splitGroup={"resum": ".*"},
+                systAxes=[pt_ax, "vars"],
+                passToFakes=self.propagate_to_fakes,
+                action = action_func,
+                actionArgs = action_args,
+                labelsByAxis=syst_ax_labels,
+                skipEntries=skip_entries,
+                baseName=name_append+"_",
+                formatWithValue=format_with_values,
+                rename=name_append, # Needed to allow it to be called multiple times
             )
 
     def set_propagate_to_fakes(self, to_fakes):
@@ -282,6 +342,8 @@ class TheoryHelper(object):
         signal_samples = self.card_tool.procGroups['signal_samples']
         self.np_hist_name = self.corr_hist_name.replace("Corr", "FlavDepNP")
         self.np_hist = self.card_tool.getHistsForProcAndSyst(signal_samples[0], self.np_hist_name)
+
+        self.scale_hist_name = self.corr_hist_name.replace("Corr", "PtDepScales")
 
         var_name = model.replace("binned_", "")
 
@@ -483,7 +545,7 @@ class TheoryHelper(object):
             
         self.card_tool.addSystematic(**as_args)
 
-    def add_resum_transition_uncertainty(self):
+    def add_transition_fo_scale_uncertainties(self):
         obs = self.card_tool.fit_axes[:]
 
         for sample_group in self.samples:
@@ -492,18 +554,15 @@ class TheoryHelper(object):
 
             name_append = self.sample_label(sample_group)
 
-            transition_vars = ["transition_points0.4_0.75_1.1", "transition_points0.2_0.45_0.7", "transition_points0.4_0.55_0.7", "transition_points0.2_0.65_1.1"]
+            sel_vars = ["transition_points0.4_0.75_1.1", "transition_points0.2_0.45_0.7", "transition_points0.4_0.55_0.7", "transition_points0.2_0.65_1.1", "renorm_scale_pt20_max", "renorm_scale_pt20_min"]
 
             self.card_tool.addSystematic(name=self.corr_hist_name,
                 processes=[sample_group],
-                group="resumTransition",
+                group="resumTransitionFOScale",
                 splitGroup={"resum": ".*"},
                 systAxes=["vars"],
                 passToFakes=self.propagate_to_fakes,
-                # NOTE: I don't actually remember why this used no_flow=ptVgen previously, I don't think there's any harm in not using it...
-                # preOpMap={s : lambda h: hh.syst_min_and_max_env_hist(h, obs, self.syst_ax,
-                    # [x for x in h.axes["vars"] if "transition_point" in x]) for s in expanded_samples},
-                preOp = lambda h: h[{"vars" : transition_vars}],
-                outNames=[f"resumTransitionSym{name_append}Up", f"resumTransitionSym{name_append}Down", f"resumTransitionAsym{name_append}Up", f"resumTransitionAsym{name_append}Down"],
-                rename=f"scetlibResumTransition{name_append}",
+                preOp = lambda h: h[{"vars" : sel_vars}],
+                outNames=[f"resumTransitionSym{name_append}Up", f"resumTransitionSym{name_append}Down", f"resumTransitionAsym{name_append}Up", f"resumTransitionAsym{name_append}Down", f"resumFOScale{name_append}Up", f"resumFOScale{name_append}Down"],
+                rename=f"resumTransitionFOScale{name_append}",
             )
