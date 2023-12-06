@@ -284,12 +284,12 @@ class HDF5Writer(object):
                 self.dict_data_obs[chan] = data_obs
 
             # free memory
-            del dg.groups[dg.dataName].hists[chanInfo.nominalName]
+            if dg.dataName in dg.groups:
+                del dg.groups[dg.dataName].hists[chanInfo.nominalName]
             for proc in procs_chan:
                 del dg.groups[proc].hists[chanInfo.nominalName]
             
             # release original histograms in the proxy objects
-            dg.release_results(chanInfo.nominalName)
             if chanInfo.pseudoData:
                 for pseudoData in chanInfo.pseudoData:
                     dg.release_results(f"{chanInfo.nominalName}_{pseudoData}")
@@ -298,7 +298,7 @@ class HDF5Writer(object):
             self.init_data_dicts_channel(chan, procs_chan)
 
             # lnN systematics
-            for var_name, syst in reversed(chanInfo.lnNSystematics.items()):
+            for var_name, syst in chanInfo.lnNSystematics.items():
                 logger.info(f"Now in channel {chan} at lnN systematic {var_name}")
 
                 if chanInfo.isExcludedNuisance(var_name): 
@@ -306,7 +306,7 @@ class HDF5Writer(object):
                 procs_syst = [p for p in syst["processes"] if p in procs_chan]
                 if len(procs_syst) == 0:
                     continue
- 
+
                 ksyst = syst["size"]
                 asymmetric = type(ksyst) is list
                 if asymmetric:

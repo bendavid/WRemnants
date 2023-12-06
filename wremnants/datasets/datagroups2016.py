@@ -8,16 +8,14 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
     # reset datagroups
     dg.groups = {}
 
+    sigOp = None
+    fakeOp = None
     if dg.mode == "wmass":
         if applySelection:
             sigOp = sel.signalHistWmass
             fakeOp = sel.fakeHistABCD
         elif simultaneousABCD:
-            sigOp = None
             fakeOp = sel.fakeHistSimultaneousABCD
-    else:
-        sigOp = None
-        fakeOp = None
 
     dg.addGroup("Data",
         members = dg.get_members_from_results(is_data=True),

@@ -261,7 +261,7 @@ class Datagroups(object):
             group.hists[label] = None
 
             for i, member in enumerate(group.members):
-                if sumFakesPartial and procName == self.fakeName and member.name in fakesMembersWithSyst:
+                if procName == self.fakeName and member.name in fakesMembersWithSyst:
                     # if we are here this process has been already used to build the fakes when running for other groups
                     continue
                 logger.debug(f"Looking at group member {member.name}")
@@ -269,7 +269,6 @@ class Datagroups(object):
                 if member.name in forceToNominal:
                     read_syst = ""
                     logger.debug(f"Forcing group member {member.name} to read the nominal hist for syst {syst}")
-
                 try:
                     h = self.readHist(baseName, member, procName, read_syst)
                     foundExact = True
