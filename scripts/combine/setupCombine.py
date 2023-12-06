@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from wremnants import CardTool,combine_helpers,combine_theory_helper, HDF5Writer
+from wremnants import CardTool,combine_helpers,combine_theory_helper, HDF5Writer, syst_tools
 from wremnants.syst_tools import massWeightNames
 from wremnants.datasets.datagroups import Datagroups
 from utilities import common, logging, boostHistHelpers as hh
@@ -107,12 +107,11 @@ def setup(args, inputFile, fitvar, xnorm=False):
         args.excludeProcGroups.append("QCD")
     filterGroup = args.filterProcGroups if args.filterProcGroups else None
     excludeGroup = args.excludeProcGroups if args.excludeProcGroups else None
-    if args.ABCD and (excludeGroup is None or "Fake" not in excludeGroup):
-        excludeGroup.append("Fake")
+
     logger.debug(f"Filtering these groups of processes: {args.filterProcGroups}")
     logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
 
-    datagroups = Datagroups(inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.ABCD)
+    datagroups = Datagroups(inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.ABCD, simultaneousABCD=args.ABCD)
 
     if not xnorm and (args.axlim or args.rebin or args.absval):
         datagroups.set_rebin_action(fitvar, args.axlim, args.rebin, args.absval)
@@ -208,13 +207,22 @@ def setup(args, inputFile, fitvar, xnorm=False):
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     if args.absolutePathInCard:
         cardTool.setAbsolutePathShapeInCard()
-    cardTool.setFitAxes(fitvar)
-    cardTool.setFakerateAxes(args.fakerateAxes)
+
     if wmass and args.ABCD:
         # In case of ABCD we need to have different fake processes for e and mu to have uncorrelated uncertainties
-        cardTool.setFakeName(datagroups.fakeName + (datagroups.flavor if datagroups.flavor else "")) 
+        cardTool.setFakeName(datagroups.fakeName + (datagroups.flavor if datagroups.flavor else ""))
         cardTool.unroll=True
-    
+
+        # add ABCD regions to fit
+        mtName = "mt" if "mt" in fitvar else common.passMTName
+        if common.passIsoName not in fitvar:
+            fitvar = [*fitvar, common.passIsoName]
+        if mtName not in fitvar:
+            fitvar = [*fitvar, mtName]
+
+    cardTool.setFitAxes(fitvar)
+    cardTool.setFakerateAxes(args.fakerateAxes)
+
     if args.sumChannels or xnorm or dilepton or (wmass and args.ABCD) or "charge" not in fitvar:
         cardTool.setWriteByCharge(False)
     else:
@@ -257,7 +265,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if not args.theoryAgnostic:
         logger.info(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
         
-    passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup and (filterGroup == None or args.qcdProcessName in filterGroup) and not xnorm
+    passSystToFakes = wmass and not args.ABCD and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup and (filterGroup == None or args.qcdProcessName in filterGroup) and not xnorm
 
     # TODO: move to a common place if it is  useful
     def assertSample(name, startsWith=["W", "Z"], excludeMatch=[]):
@@ -277,7 +285,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     cardTool.addProcessGroup("single_vmu_samples",    lambda x: assertSample(x, startsWith=[*WMatch, *ZMatch], excludeMatch=[*dibosonMatch, "tau"]))
     cardTool.addProcessGroup("signal_samples",        lambda x: assertSample(x, startsWith=signalMatch,        excludeMatch=[*dibosonMatch, "tau"]))
     cardTool.addProcessGroup("signal_samples_inctau", lambda x: assertSample(x, startsWith=signalMatch,        excludeMatch=[*dibosonMatch]))
-    cardTool.addProcessGroup("MCnoQCD", lambda x: x not in ["QCD", "Data"])
+    cardTool.addProcessGroup("MCnoQCD", lambda x: x not in ["QCD", "Data", "Fake"] if args.ABCD else ["QCD", "Data"] )
     # FIXME/FOLLOWUP: the following groups may actually not exclude the OOA when it is not defined as an independent process with specific name
     cardTool.addProcessGroup("signal_samples_noOutAcc",        lambda x: assertSample(x, startsWith=["W" if wmass else "Z"], excludeMatch=[*dibosonMatch, "tau"]))
     cardTool.addProcessGroup("signal_samples_inctau_noOutAcc", lambda x: assertSample(x, startsWith=["W" if wmass else "Z"], excludeMatch=[*dibosonMatch]))
@@ -293,6 +301,43 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if args.theoryAgnostic and not args.poiAsNoi:
         logger.error("Temporarily not using mass weights for Wtaunu. Please update when possible")
         signal_samples_forMass = ["signal_samples"]
+
+
+    if wmass and args.ABCD:
+        # Fakerate A/B = C/D
+        fakerate_axes = ["eta","pt","charge"]
+        fakerate_axes_syst = [f"_{n}" for n in fakerate_axes]
+        cardTool.addSystematic(
+            name="nominal",
+            rename=f"{cardTool.getFakeName()}Rate",
+            processes=cardTool.getFakeName(),
+            group=cardTool.getFakeName(),
+            systNamePrepend=f"{cardTool.getFakeName()}Rate",
+            noConstraint=True,
+            mirror=True,
+            systAxes=fakerate_axes_syst,
+            action=syst_tools.make_fakerate_variation,
+            actionArgs=dict(
+                fakerate_axes=fakerate_axes, 
+                fakerate_axes_syst=fakerate_axes_syst),
+        )
+        # Normalization parameters
+        fakenorm_axes = ["eta","pt","charge", mtName]
+        fakenorm_axes_syst = [f"_{n}" for n in fakenorm_axes]
+        cardTool.addSystematic(
+            name="nominal",
+            rename=f"{cardTool.getFakeName()}Norm",
+            processes=cardTool.getFakeName(),
+            group=cardTool.getFakeName(),
+            systNamePrepend=f"{cardTool.getFakeName()}Norm",
+            noConstraint=True,
+            mirror=True,
+            systAxes=fakenorm_axes_syst,
+            action=lambda h: 
+                hh.addHists(h,
+                    hh.expand_hist_by_duplicate_axes(h, fakenorm_axes, fakenorm_axes_syst),
+                    scale2=0.1)
+        )
 
     label = 'W' if wmass else 'Z'
     if not (args.doStatOnly and constrainMass):

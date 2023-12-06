@@ -1,6 +1,5 @@
 from collections import OrderedDict
 from wremnants import histselections as sel
-from wremnants.combine_helpers import setSimultaneousABCD
 from utilities import boostHistHelpers as hh, common, logging
 from utilities.io_tools import output_tools
 import narf
@@ -307,7 +306,7 @@ class CardTool(object):
         # Need to make an explicit copy of the array before appending
         procs_to_add = [x for x in (self.allMCProcesses() if processes is None else processes)]
         procs_to_add = self.expandProcesses(procs_to_add)
-        if passToFakes and self.getFakeName() not in procs_to_add and not self.ABCD:
+        if passToFakes and self.getFakeName() not in procs_to_add:
             procs_to_add.append(self.getFakeName())
 
         if not mirror and (mirrorDownVarEqualToUp or mirrorDownVarEqualToNomi):
@@ -504,7 +503,7 @@ class CardTool(object):
             hvar = systInfo["action"](hvar, **systInfo["actionArgs"])
         if self.outfile:
             self.outfile.cd() # needed to restore the current directory in case the action opens a new root file
-            
+
         axNames = systAxes[:]
         axLabels = systAxesLabels[:]
         if hvar.axes[-1].name == "mirror":
@@ -821,9 +820,7 @@ class CardTool(object):
             forceNonzero=forceNonzero,
             sumFakesPartial=not self.ABCD,
             fakerateIntegrationAxes=self.getFakerateIntegrationAxes())
-        if self.ABCD and not self.xnorm:
-            setSimultaneousABCD(self)
-        
+
         self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName, check_systs=check_systs)
         self.loadNominalCard()
 
@@ -848,6 +845,7 @@ class CardTool(object):
                 forceNonzero=forceNonzero and systName != "qcdScaleByHelicity",
                 preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"],
                 forceToNominal=forceToNominal,
+                sumFakesPartial=not self.ABCD,
                 scaleToNewLumi=self.lumiScale,
                 fakerateIntegrationAxes=self.getFakerateIntegrationAxes(),
             )
@@ -1070,10 +1068,10 @@ class CardTool(object):
         if self.fit_axes:
             axes = self.fit_axes[:]
             if self.ABCD and not self.xnorm:
-                if self.nameMT not in axes:
-                    axes.append(self.nameMT)
                 if common.passIsoName not in axes:
                     axes.append(common.passIsoName)
+                if self.nameMT not in axes:
+                    axes.append(self.nameMT)
             # don't project h into itself when axes to project are all axes
             if any (ax not in h.axes.name for ax in axes):
                 logger.error("Request to project some axes not present in the histogram")

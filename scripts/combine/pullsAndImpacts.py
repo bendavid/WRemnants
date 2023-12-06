@@ -355,7 +355,7 @@ def producePlots(fitresult, args, poi, group=False, normalize=False, fitresult_r
         df_ref = readFitInfoFromFile(fitresult_ref, args.referenceFile, poi, group, stat=args.stat/100., normalize=normalize, scale=scale)
         df = df.merge(df_ref, how="left", on="label", suffixes=("","_ref"))
     
-    if group and fitresult_ref:
+    if group and fitresult_ref and set(fitresult_ref["hsysts"]) != set(fitresult["hsysts"]):
         # add another group for the uncertainty from all systematics that are not common among the two groups; 
         # defined as err = sqrt( variance(total) - variance(common nuisances) )
         np_common = [s in fitresult_ref["hsysts"][...] for s in fitresult["hsysts"][...]]

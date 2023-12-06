@@ -1,4 +1,4 @@
-from wremnants.combine_helpers import setSimultaneousABCD, projectABCD
+from wremnants.combine_helpers import projectABCD
 from utilities import boostHistHelpers as hh, common, logging
 from utilities.io_tools import output_tools, combinetf_input
 
@@ -127,7 +127,7 @@ class HDF5Writer(object):
         if return_variances and (h.storage_type != hist.storage.Weight):
             raise RuntimeError(f"Sumw2 not filled for {h} but needed for binByBin uncertainties")
 
-        if chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.fit_axes):
+        if chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.fit_axes[:len(chanInfo.fakerateAxes)]):
             h = projectABCD(chanInfo, h, return_variances=return_variances)
         elif h.axes.name != axes:
             h = h.project(*axes)
@@ -180,17 +180,10 @@ class HDF5Writer(object):
                 procsToRead=dg.groups.keys(),
                 label=chanInfo.nominalName, 
                 scaleToNewLumi=chanInfo.lumiScale, 
-                forceNonzero=forceNonzero)
-
-            if not masked and chanInfo.ABCD:
-                setSimultaneousABCD(chanInfo)
-
-                if dg.fakeName not in bkgs:
-                    bkgs.append(dg.fakeName)
-                if chanInfo.nameMT not in axes:
-                    axes.append(chanInfo.nameMT)
-                if common.passIsoName not in axes:
-                    axes.append(common.passIsoName)
+                forceNonzero=forceNonzero,
+                sumFakesPartial=not chanInfo.ABCD,
+                fakerateIntegrationAxes=chanInfo.getFakerateIntegrationAxes()    
+            )
 
             procs_chan = chanInfo.predictedProcesses()
 
@@ -297,8 +290,9 @@ class HDF5Writer(object):
             
             # release original histograms in the proxy objects
             dg.release_results(chanInfo.nominalName)
-            for pseudoData in chanInfo.pseudoData:
-                dg.release_results(f"{chanInfo.nominalName}_{pseudoData}")
+            if chanInfo.pseudoData:
+                for pseudoData in chanInfo.pseudoData:
+                    dg.release_results(f"{chanInfo.nominalName}_{pseudoData}")
 
             # initialize dictionaties for systematics
             self.init_data_dicts_channel(chan, procs_chan)
@@ -371,7 +365,9 @@ class HDF5Writer(object):
                     # Needed to avoid always reading the variation for the fakes, even for procs not specified
                     forceToNominal=forceToNominal,
                     scaleToNewLumi=chanInfo.lumiScale,
-                    nominalIfMissing=not chanInfo.xnorm # for masked channels not all systematics exist (we can skip loading nominal since Fake does not exist)
+                    nominalIfMissing=not chanInfo.xnorm, # for masked channels not all systematics exist (we can skip loading nominal since Fake does not exist)
+                    sumFakesPartial=not chanInfo.ABCD,
+                    fakerateIntegrationAxes=chanInfo.getFakerateIntegrationAxes()
                 )
 
                 for proc in procs_syst:
@@ -428,7 +424,7 @@ class HDF5Writer(object):
                             logkdown_proc = None
 
                             self.book_logk_halfdiff(logkhalfdiff_proc, chan, proc, var_name)
-                        
+
                         self.book_logk_avg(logkavg_proc, chan, proc, var_name)
                         self.book_systematic(syst, var_name)
 

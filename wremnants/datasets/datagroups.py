@@ -204,6 +204,7 @@ class Datagroups(object):
         for result in self.results.values():
             if "output" not in result:
                 continue
+            res = result["output"]
             if histname in res:
                 res[histname].release()
 
@@ -257,16 +258,10 @@ class Datagroups(object):
                 raise RuntimeError(f"Group {procName} not known. Defined groups are {list(self.groups.keys())}.")
             group = self.groups[procName]
 
-            # Check if the histogram is already there and in case use it
-            if Datagroups.histName(baseName, procName, syst) in group.hists:
-                logger.debug(f"Existing histogram for proc {procName} base name {baseName} syst {syst} found.")
-                group.hists[label] = group.hists[Datagroups.histName(baseName, procName, syst)]
-                foundExact = True
-                continue
             group.hists[label] = None
 
             for i, member in enumerate(group.members):
-                if procName == self.fakeName and member.name in fakesMembersWithSyst:
+                if sumFakesPartial and procName == self.fakeName and member.name in fakesMembersWithSyst:
                     # if we are here this process has been already used to build the fakes when running for other groups
                     continue
                 logger.debug(f"Looking at group member {member.name}")
@@ -274,6 +269,7 @@ class Datagroups(object):
                 if member.name in forceToNominal:
                     read_syst = ""
                     logger.debug(f"Forcing group member {member.name} to read the nominal hist for syst {syst}")
+
                 try:
                     h = self.readHist(baseName, member, procName, read_syst)
                     foundExact = True

@@ -3,6 +3,7 @@ import numpy as np
 from functools import reduce
 import collections
 from utilities import common, logging
+import copy
 
 logger = logging.child_logger(__name__)
 
@@ -543,6 +544,37 @@ def set_flow(h, val="nearest"):
         slices = [slice(None) if a!=axis else 0 for a in h.axes.name]
         h.view(flow=True)[*slices] = h[{axis: 0}].view(flow=True) if val=="nearest" else val
     return h
+
+# For converting the helicity scale hist to variations, keeping the gen axis to be fit
+# If swap_axes = True, the new axis takes the place of the old gen axis in the ordering
+def expand_hist_by_duplicate_axis(href, ref_ax_name, new_ax_name, swap_axes=False):
+    if ref_ax_name not in href.axes.name:
+        raise ValueError(f"Did not find axis {ref_ax_name} in hist!")
+
+    axes = href.axes
+
+    ref_ax_idx = axes.name.index(ref_ax_name)
+    ref_ax = axes[ref_ax_name]
+    new_ax = copy.deepcopy(ref_ax)
+    new_ax._ax.metadata["name"] = new_ax_name
+
+    data = np.moveaxis(href.values(flow=True), ref_ax_idx, 0)
+    # Copy data from other axis along the diagnoal, off-diagonals will be zero
+
+    # data = np.broadcast_to(data, (data.shape[0], *data.shape))
+    exp_data = data*np.reshape(np.identity(data.shape[0]), (data.shape[0], data.shape[0], *(1 for i in data.shape[1:])))
+
+    new_axes = [new_ax, *href.axes]
+    if swap_axes:
+        new_axes[0], new_axes[ref_ax_idx+1] = new_axes[ref_ax_idx+1], new_axes[0]
+
+    hnew = hist.Hist(*new_axes, data=np.moveaxis(exp_data, 1, ref_ax_idx+1), storage=hist.storage.Double())
+    return hnew
+
+def expand_hist_by_duplicate_axes(href, ref_ax_names, new_ax_names, swap_axes=False):
+    for ax_name, new_ax_name in zip(ref_ax_names, new_ax_names):
+        href = expand_hist_by_duplicate_axis(href, ax_name, new_ax_name, swap_axes=swap_axes)
+    return href
 
 def swap_histogram_bins(histo, axis1, axis1_bin1, axis1_bin2, axis2=None, axis2_slice=None, flow=False, axis1_replace=None):
     # swap content from axis1: axis1_bin1 with axis1: axis1_bin2 
