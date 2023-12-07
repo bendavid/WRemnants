@@ -198,6 +198,7 @@ class TheoryHelper(object):
             self.card_tool.addSystematic(scale_hist,
                 actionMap=action_map,
                 actionArgs=action_args,
+                symmetrizeConservative = True,
                 processes=[sample_group],
                 group=group_name,
                 splitGroup={"QCDscale": ".*"},

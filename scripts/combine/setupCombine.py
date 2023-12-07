@@ -363,6 +363,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                     rename=f"{nuisanceBaseName}{sign}",
                                     **noi_args,
                                     mirror=False,
+                                    symmetrizeConservative = True,
                                     systAxes=poi_axes+["downUpVar"],
                                     processes=["signal_samples"],
                                     baseName=f"{nuisanceBaseName}{sign}_",
