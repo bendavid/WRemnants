@@ -372,7 +372,19 @@ class HDF5Writer(object):
 
                         if syst["mirror"]:
                             logkavg_proc = get_logk(var_name)
-                            logkhalfdiff_proc = np.zeros([nbinschan],dtype=self.dtype)
+                            logkhalfdiff_proc = np.zeros_like(logkavg_proc)
+                        elif syst["symmetrize"]:
+                            logkup_proc = get_logk(var_name, "Up")
+                            logkdown_proc = get_logk(var_name, "Down")
+
+                            if syst["symmetrizeConservative"]:
+                                # symmetrize by largest magnitude of up and down variations
+                                logkavg_proc = np.where(np.abs(logkup_proc) > np.abs(logkdown_proc), logkup_proc, -logkdown_proc)
+                            else:
+                                # symmetrize by average of up and down variations
+                                logkavg_proc = 0.5*(logkup_proc - logkdown_proc)
+
+                            logkhalfdiff_proc = np.zeros_like(logkavg_proc)
                         else:
                             logkup_proc = get_logk(var_name, "Up")
                             logkdown_proc = get_logk(var_name, "Down")
