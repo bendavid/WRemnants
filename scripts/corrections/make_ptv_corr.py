@@ -9,8 +9,9 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-i", "--inputFile", type=str, required=True)
 parser.add_argument("--outpath", type=str, default=f"{common.data_dir}/TheoryCorrections", help="Output path")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
-parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
+parser.add_argument("-p", "--postfix", type=str, default=None, help="Postfix for output file name")
 parser.add_argument("--proc", type=str, required=True, choices=["z", "w", ], help="Process")
+parser.add_argument("--axes", nargs="*", type=str, default=["ptll"], help="Use only specified axes in hist")
 args = parser.parse_args()
 
 logger = logging.setup_logger("make_ptv_corr", 4 if args.debug else 3)
@@ -28,17 +29,36 @@ datagroups.loadHistsForDatagroups(nominalName, syst=syst)
 datagroups.addSummedProc(syst, name=syst, rename="MC_sum")
 
 groups = datagroups.getDatagroups()
-ratio = hh.divideHists(*[groups[x].hists[hist_name].project("ptll") for x in ['Data', 'MC_sum']])
 
-pt_ax = ratio.axes["ptll"]
-pt_ax._ax.metadata['name'] = "ptVgen"
-charge_ax = hist.axis.Regular(*(1, -1, 1) if args.proc == 'z' else (2, -2, 2), name="chargeVgen", flow=False)
+datah, mch = [groups[x].hists[hist_name].project(*args.axes) for x in ['Data', 'MC_sum']]
 
-corrh = hist.Hist(hist.axis.Regular(1, 0, 13000, name="massVgen", flow=False), 
-                  hist.axis.Regular(1, 0, 10, name="absYVgen", underflow=False, overflow=True), 
-                  pt_ax, charge_ax, hist.axis.Regular(1, 0, 1, name="vars"))
+if "yll" in args.axes:
+    datah,mch = (hh.makeAbsHist(h, "yll") for h in (datah, mch))
+    args.axes[args.axes.index("yll")] = "absyll"
 
-corrh[...] = ratio.values(flow=True)[np.newaxis,np.newaxis,:,np.newaxis, np.newaxis]
+ratio = hh.divideHists(datah, mch)
+
+axes = {"massVgen" : hist.axis.Regular(1, 0, 13000, name="massVgen", flow=False), 
+        "absYVgen" : hist.axis.Regular(1, 0, 10, name="absYVgen", underflow=False, overflow=True), 
+        "ptVgen" : None,
+        "chargeVgen" : hist.axis.Regular(*(1, -1, 1) if args.proc == 'z' else (2, -2, 2), name="chargeVgen", flow=False),
+        "vars" : hist.axis.Regular(1, 0, 1, name="vars")
+}
+
+axis_rename = {"absyll" : "absYVgen", "ptll" : "ptVgen"}
+
+for ax_name in args.axes:
+    ax = ratio.axes[ax_name]
+    rename = axis_rename[ax_name]
+    ax._ax.metadata["name"] = rename
+    axes[rename] = ax
+
+ax_from_hist = [axis_rename[ax] for ax in args.axes]
+indices = tuple(slice(None) if ax in ax_from_hist else None for ax in axes.keys())
+
+corrh = hist.Hist(*axes.values())
+
+corrh[...] = ratio.values(flow=True)[indices]
 
 output_dict = {
     "MC_data_ratio" : corrh,
