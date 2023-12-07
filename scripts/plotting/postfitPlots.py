@@ -297,3 +297,6 @@ else:
         chi2 = None
 
     make_plots(hist_data, hist_inclusive, hist_stack, axes, colors=colors, labels=labels, chi2=chi2, saturated_chi2=True)
+
+if output_tools.is_eosuser_path(args.outpath) and args.eoscp:
+    output_tools.copy_to_eos(args.outpath, args.outfolder)
