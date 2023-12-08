@@ -194,7 +194,7 @@ jobs:
       - name: wmass combine unfolding plot xsec 
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE 
-          --fitresult $WREMNANTS_OUTDIR/WMass_eta_pt_charge_unfolding/fitresults_123456789.hdf5 -o $WEB_DIR -f $PLOT_DIR --debug --rrange 0.9 1.1 --logy
+          --fitresult $WREMNANTS_OUTDIR/WMass_eta_pt_charge_unfolding/fitresults_123456789.hdf5 -o $WEB_DIR -f $PLOT_DIR -v 4 --rrange 0.9 1.1 --logy
           -t 'utilities/styles/nuisance_translate.json' --grouping max
 
   w-theoryfit:
@@ -238,7 +238,7 @@ jobs:
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_plots.py 
           $HIST_FILE --fitresult $WREMNANTS_OUTDIR/WMass_qGen_ptGen_absEtaGen_theoryfit/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR 
-          -n xnorm --plots prefit postfit --addTauToSignal --debug --rrange 0.9 1.1 --lumi=$LUMI_SCALE
+          -n xnorm --plots prefit postfit --addTauToSignal -v 4 --rrange 0.9 1.1 --lumi=$LUMI_SCALE
 
 
   wlike-analysis:
@@ -329,7 +329,7 @@ jobs:
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py 
           $HIST_FILE --fitresult $WREMNANTS_OUTDIR/ZMassWLike_eta_pt_charge_unfolding/fitresults_123456789.hdf5 
-          -o $WEB_DIR -f $PLOT_DIR --debug --rrange 0.9 1.1
+          -o $WEB_DIR -f $PLOT_DIR -v 4 --rrange 0.9 1.1
           -t 'utilities/styles/nuisance_translate.json' --grouping min
 
 
@@ -377,7 +377,7 @@ jobs:
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_plots.py 
           $HIST_FILE --fitresult $WREMNANTS_OUTDIR/ZMassWLike_qGen_ptGen_absEtaGen_theoryfit/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR 
-          -n xnorm --plots prefit postfit --debug --rrange 0.9 1.1 --lumi=$LUMI_SCALE
+          -n xnorm --plots prefit postfit -v 4 --rrange 0.9 1.1 --lumi=$LUMI_SCALE
 
   dilepton:
     # The type of runner that the job will run on
@@ -485,7 +485,7 @@ jobs:
       - name: dilepton combine unfolding plot xsec 
         run: >- 
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE 
-          --fitresult $WREMNANTS_OUTDIR/ZMassDilepton_ptll_yll_unfolding/fitresults_123456789.hdf5 -o $WEB_DIR -f $PLOT_DIR --debug --rrange 0.9 1.1 --logy
+          --fitresult $WREMNANTS_OUTDIR/ZMassDilepton_ptll_yll_unfolding/fitresults_123456789.hdf5 -o $WEB_DIR -f $PLOT_DIR -v 4 --rrange 0.9 1.1 --logy
           -t 'utilities/styles/nuisance_translate.json' --grouping max
 
   copy-clean:

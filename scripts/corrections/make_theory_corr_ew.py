@@ -25,12 +25,12 @@ args = parser.parse_args()
 
 logger = logging.setup_logger("make_theory_corr_ew", 4 if args.debug else 3)
 
-procs = ['ZToMuMu', 'WplusToMuNu', 'WminusToMuNu']
-charge_dict = {'ZToMuMu': 0, 'WplusToMuNu': 1, 'WminusToMuNu': 0}
+procs = ['Zmumu', 'Wplusmunu', 'Wminusmunu']
+charge_dict = {'Zmumu': 0, 'Wplusmunu': 1, 'Wminusmunu': 0}
 
 procs_dict = {
-    "ZToMuMu": "ZmumuPostVFP",
-    "WminusToMuNu": "WminusmunuPostVFP",
+    "Zmumu": "ZmumuPostVFP",
+    "Wminusmunu": "WminusmunuPostVFP",
     "WplusToMuNu": "WplusmunuPostVFP",
 }
 
@@ -142,12 +142,12 @@ for proc in procs:
 
 for num, corrh in corrhs.items():
     outname = num.replace('-', '')
-    if 'ZToMuMu' in corrh:
+    if 'Zmumu' in corrh:
         outfile = f"{args.outpath}/{outname}"
-        output_tools.write_theory_corr_hist(outfile, 'Z', {f"{outname}_minnlo_ratio" : corrh['ZToMuMu']}, args)
+        output_tools.write_theory_corr_hist(outfile, 'Z', {f"{outname}_minnlo_ratio" : corrh['Zmumu']}, args)
 
-    if 'WplusToMuNu' in corrh and "WminusToMuNu" in corrh:
-        corrh['W'] = corrh['WplusToMuNu']+corrh['WminusToMuNu']
+    if 'Wplusmunu' in corrh and "Wminusmunu" in corrh:
+        corrh['W'] = corrh['Wplusmunu']+corrh['Wminusmunu']
         outfile = f"{args.outpath}/{outname}"
-        output_tools.write_theory_corr_hist(outfile, 'Z', {f"{outname}_minnlo_ratio" : corrh['ZToMuMu']}, args)
+        output_tools.write_theory_corr_hist(outfile, 'Z', {f"{outname}_minnlo_ratio" : corrh['Zmumu']}, args)
 

@@ -8,84 +8,84 @@ lumicsv_el = f"{common.data_dir}/lowPU/bylsoutput_HLT_HIEle20_Full.csv"
 BR_W_LEP = 3*0.1086 # PDG
 
 dataDictLowPU = {
-    "singleelectron" : { 'name' :"singleelectron",
+    "singleelectron" : {
                       'filepaths' : ["{BASE_PATH}/NanoAOD_v2/HighEGJet",],
                       'group': "Data",
                       "lumicsv": lumicsv_el,
                       "lumijson": lumijson
     },
-    "singlemuon" : { 'name' :"singlemuon",
+    "singlemuon" : {
                      'filepaths' : ["{BASE_PATH}/NanoAOD_v2/SingleMuon",],
                      'group': "Data",
                       "lumicsv": lumicsv_mu,
                       "lumijson": lumijson
     },
-    "Zee" : { 'name' :"Zee",
+    "Zee" : {
                      'filepaths' : ["{BASE_PATH}/NanoAOD_v3/DYJetsToEE_M-50_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"],
                      'xsec' : 2025.74,
                      'group': "Zee",
     },
-    "WplusJetsToENu" : { 'name' :"WplusJetsToENu",
+    "Wplusenu" : {
                      'filepaths' : ["{BASE_PATH}/NanoAOD_v3/WplusJetsToENu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"],
                      'xsec' : 11572.19,
                      'group': "Wenu",
     },
-    "WminusJetsToENu" : { 'name' :"WminusJetsToENu",
+    "Wminusenu" : {
                      'filepaths' : ["{BASE_PATH}/NanoAOD_v3/WminusJetsToENu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"],
                      'xsec' : 8677.3,
                      'group': "Wenu",
     },
-    "Zmumu" : { 'name' :"Zmumu",
+    "Zmumu" : {
                      'filepaths' : ["{BASE_PATH}/NanoAOD_v3/DYJetsToMuMu_M-50_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"],
                      'xsec' : 2025.74,
                      'group': "Zmumu",
     },
-    "WplusJetsToMuNu" : { 'name' :"WplusJetsToMuNu",
+    "Wplusmunu" : {
                      'filepaths' : ["{BASE_PATH}/NanoAOD_v3/WplusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"],
                      'xsec' : 11572.19,
                      'group': "Wmunu",
     },
-    "WminusJetsToMuNu" : { 'name' :"WminusJetsToMuNu",
+    "Wminusmunu" : {
                      'filepaths' : ["{BASE_PATH}/NanoAOD_v3/WminusJetsToMuNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"],
                      'xsec' : 8677.3,
                      'group': "Wmunu",
     },
-    "Ztautau" : { 'name' :"Ztautau",
+    "Ztautau" : {
                      'filepaths' : ["{BASE_PATH}/NanoAOD_v3/DYJetsToTauTau_M-50_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"],
                      'xsec' : 2025.74,
                      'group': "Ztautau",
     },
-    "WplusJetsToTauNu" : { 'name' :"WplusJetsToTauNu",
+    "Wplustaunu" : {
                      'filepaths' : ["{BASE_PATH}/NanoAOD_v3/WplusJetsToTauNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"],
                      'xsec' : 11572.19,
                      'group': "Wtaunu",
     },
-    "WminusJetsToTauNu" : { 'name' :"WminusJetsToTauNu",
+    "Wminustaunu" : {
                      'filepaths' : ["{BASE_PATH}/NanoAOD_v3/WminusJetsToTauNu_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"],
                      'xsec' : 8677.3,
                      'group': "Wtaunu",
     },
-    "WWTo2L2Nu" : { 'name' :"WWTo2L2Nu",
+    "WWTo2L2Nu" : {
                      'filepaths' : ["{BASE_PATH}/NanoAOD_v2/WWTo2L2Nu_TuneCP5_13TeV-powheg-pythia8"],
                      'xsec' : 118.7*BR_W_LEP*BR_W_LEP,
                      'group': "Diboson",
     },
-    "WZTo3LNu" : { 'name' :"WZTo3LNu",
+    "WZTo3LNu" : {
                      'filepaths' : ["{BASE_PATH}/NanoAOD_v2/WZTo3LNu_TuneCP5_13TeV-powheg-pythia8"],
                      'xsec' : 4.912,
                      'group': "Diboson",
     },
-    "ZZ" : { 'name' :"ZZ",
+    "ZZ" : {
                      'filepaths' : ["{BASE_PATH}/NanoAOD_v2/ZZ_TuneCP5_13TeV-pythia8"],
                      'xsec' : 16.523,
                      'group': "Diboson",
     },
-    "TTTo2L2Nu" : { 'name' :"TTTo2L2Nu",
+    "TTTo2L2Nu" : {
                      'filepaths' : ["{BASE_PATH}/NanoAOD_v2/TTTo2L2Nu_TuneCP5_13TeV-powheg-pythia8"],
                      'xsec' : 87.31483776,
                      'group': "Top",
     },
-    "TTToSemiLeptonic" : { 'name' :"TTToSemiLeptonic",
+    "TTToSemiLeptonic" : {
                      'filepaths' : ["{BASE_PATH}/NanoAOD_v2/TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8"],
                      'xsec' : 364.35,
                      'group': "Top",

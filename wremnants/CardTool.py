@@ -265,12 +265,22 @@ class CardTool(object):
     def allMCProcesses(self):
         return self.filteredProcesses(lambda x: self.isMC(x))
 
-    def addLnNSystematic(self, name, size, processes, group=None, groupFilter=None):
+    def precompile_splitGroupDict(self, group, splitGroup):
+        # precompile splitGroup expressions for better performance
+        splitGroupDict = {g: re.compile(v) for g, v in splitGroup.items()}
+        # add the group with everything if not there already
+        if group not in splitGroupDict:
+            splitGroupDict[group] = re.compile(".*")
+        return splitGroupDict
+
+    def addLnNSystematic(self, name, size, processes, group=None, groupFilter=None, splitGroup={}):
         if not self.isExcludedNuisance(name):
             self.lnNSystematics.update({name : {"size" : size,
                                                 "processes" : self.expandProcesses(processes),
                                                 "group" : group,
-                                                "groupFilter" : groupFilter}
+                                                "groupFilter" : groupFilter,
+                                                "splitGroup" : self.precompile_splitGroupDict(group, splitGroup) 
+                                                }
             })
 
     # action will be applied to the sum of all the individual samples contributing, actionMap should be used
@@ -318,12 +328,6 @@ class CardTool(object):
         if name == self.nominalName:
             logger.debug(f"Defining syst {rename} from nominal histogram")
         
-        # precompile splitGroup expressions for better performance
-        splitGroupDict = {g: re.compile(v) for g, v in splitGroup.items()}
-        # add the group with everything if not there already
-        if group not in splitGroupDict:
-            splitGroupDict[group] = re.compile(".*")
-
         self.systematics.update({
             name if not rename else rename : {
                 "outNames" : [] if not outNames else outNames,
@@ -335,7 +339,7 @@ class CardTool(object):
                 "group" : group,
                 "noi": noi,
                 "groupFilter" : groupFilter,
-                "splitGroup" : splitGroupDict, 
+                "splitGroup" : self.precompile_splitGroupDict(group, splitGroup), 
                 "scale" : scale,
                 "customizeNuisanceAttributes" : customizeNuisanceAttributes,
                 "mirror" : mirror,
@@ -714,18 +718,20 @@ class CardTool(object):
                 self.writeHist(var, proc, name, setZeroStatUnc=setZeroStatUnc,
                                decorrByBin=decorrelateByBin, hnomi=hnom)
 
-    def loadPseudodata(self):
+    def loadPseudodata(self, forceNonzero=True):
         datagroups = self.pseudodata_datagroups
-        processes = [x for x in datagroups.groups.keys() if x != self.getDataName()]
+        processes = [x for x in datagroups.groups.keys() if x != self.getDataName() and self.pseudoDataProcsRegexp.match(x)]
         processes = self.expandProcesses(processes)
-        processesFromNomi = [x for x in datagroups.groups.keys() if x != self.getDataName() and not self.pseudoDataProcsRegexp.match(x)]
 
+        processesFromNomi = [x for x in datagroups.groups.keys() if x != self.getDataName() and not self.pseudoDataProcsRegexp.match(x)]
         hdatas = []
         for idx, pseudoData in enumerate(self.pseudoData):
             datagroups.loadHistsForDatagroups(
                 baseName=self.nominalName, syst=pseudoData, label=pseudoData,
                 procsToRead=processes,
                 scaleToNewLumi=self.lumiScale, 
+                forceNonzero=forceNonzero,
+                sumFakesPartial=not self.ABCD,
                 fakerateIntegrationAxes=self.getFakerateIntegrationAxes())
             procDict = datagroups.getDatagroups()
             hists = [procDict[proc].hists[pseudoData] for proc in processes if proc not in processesFromNomi]
@@ -735,13 +741,17 @@ class CardTool(object):
                 logger.warning(f"These processes are taken from nominal datagroups: {processesFromNomi}")
                 datagroupsFromNomi = self.datagroups
                 datagroupsFromNomi.loadHistsForDatagroups(
-                    baseName=pseudoData, syst=self.nominalName, label=pseudoData, # CHECK: shouldn't it be syst=pseudoData?
-                    procsToRead=processesFromNomi,
+                    baseName=self.nominalName, syst=self.nominalName, # CHECK: shouldn't it be syst=pseudoData?
+                    procsToRead=processesFromNomi, 
+                    label=pseudoData,
                     scaleToNewLumi=self.lumiScale,
+                    forceNonzero=forceNonzero,
+                    sumFakesPartial=not self.ABCD,
                     fakerateIntegrationAxes=self.getFakerateIntegrationAxes())
                 procDictFromNomi = datagroupsFromNomi.getDatagroups()
                 hists.extend([procDictFromNomi[proc].hists[pseudoData] for proc in processesFromNomi])
             # done, now sum all histograms
+
             hdata = hh.sumHists(hists)
             if self.pseudoDataAxes[idx] is None:
                 extra_ax = [ax for ax in hdata.axes.name if ax not in self.fit_axes]

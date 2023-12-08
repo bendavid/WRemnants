@@ -62,7 +62,7 @@ pdfMap = {
     },
     "nnpdf30" : {
         "name" : "pdfNNPDF30",
-        "branch" : "LHEPdfWeightAltSet13",
+        "branch" : "LHEPdfWeightAltSet7",
         "combine" : "symHessian",
         "entries" : 101,
         "alphas" : ["LHEPdfWeightAltSet13[0]", "LHEPdfWeightAltSet15[0]", "LHEPdfWeightAltSet16[0]"],
@@ -130,7 +130,16 @@ pdfMap = {
         "alphas" : ["LHEPdfWeightAltSet20[0]", "LHEPdfWeightAltSet22[0]", "LHEPdfWeightAltSet23[0]"], # alphas 116-120
         "alphasRange" : "002",
     },
+    "herapdf20ext" : {
+        "name" : "pdfHERAPDF20ext",
+        "branch" : "LHEPdfWeightAltSet21",
+        "combine" : "symHessian",
+        "entries" : 14,
+        "alphas" : ["LHEPdfWeightAltSet20[0]", "LHEPdfWeightAltSet22[0]", "LHEPdfWeightAltSet23[0]"], # dummy AS
+        "alphasRange" : "002",
+    },
 }
+
 
 only_central_pdf_datasets = [
     "Wplusmunu_bugfix",
@@ -167,6 +176,7 @@ def define_prefsr_vars(df):
     df = df.Define("genV", "ROOT::Math::PxPyPzEVector(genl)+ROOT::Math::PxPyPzEVector(genlanti)")
     df = df.Define("ptVgen", "genV.pt()")
     df = df.Define("massVgen", "genV.mass()")
+    df = df.Define("ptqVgen", "genV.pt()/genV.mass()")
     df = df.Define("yVgen", "genV.Rapidity()")
     df = df.Define("phiVgen", "genV.Phi()")
     df = df.Define("absYVgen", "std::fabs(yVgen)")
@@ -558,4 +568,3 @@ def pdfBugfixMSHT20(df , tensorPDFName):
         f"auto& res = {tensorPDFName};"
         f"res(15) = {tensorPDFName}(0) - ({tensorPDFName}(15) - {tensorPDFName}(0));"
         "return res")
-        

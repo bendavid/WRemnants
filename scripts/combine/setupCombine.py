@@ -52,6 +52,7 @@ def make_parser(parser=None):
     parser.add_argument("--scaleTNP", default=5, type=float, help="Scale the TNP uncertainties by this factor")
     parser.add_argument("--scalePdf", default=1, type=float, help="Scale the PDF hessian uncertainties by this factor")
     parser.add_argument("--pdfUncFromCorr", action='store_true', help="Take PDF uncertainty from correction hist (Requires having run that correction)")
+    parser.add_argument("--massVariation", type=float, default=100, help="Variation of boson mass")
     parser.add_argument("--ewUnc", type=str, nargs="*", default=["default"], choices=["default","horacenloew", "winhacnloew", "virtual_ew", "virtual_ew_wlike"], help="Include EW uncertainty")
     parser.add_argument("--widthUnc", action='store_true', help="Include uncertainty on W and Z width")
     parser.add_argument("--skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
@@ -145,7 +146,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
             # creating the xnorm model (e.g. for the theory fit)
             if wmass:
                 # add gen charge as additional axis
-                datagroups.groups[base_group].add_member_axis("qGen", datagroups.results, 
+                datagroups.groups[base_group].add_member_axis("qGen",datagroups.results,
                     member_filters={-1: lambda x: x.name.startswith("Wminus"), 1: lambda x: x.name.startswith("Wplus")}, 
                     hist_filter=lambda x: x.startswith("xnorm"))
                 xnorm_axes = ["qGen", *datagroups.gen_axes]
@@ -170,15 +171,15 @@ def setup(args, inputFile, fitvar, xnorm=False):
                 hasSeparateOutOfAcceptanceSignal = True
                 if wmass:
                     # out of acceptance contribution
-                    datagroups.copyGroup(base_group, f"BkgWmunu", member_filter=lambda x: x.name.startswith("Bkg"))
-                    datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if m.name.startswith("Bkg")])
+                    datagroups.copyGroup(base_group, f"{base_group}OOA", member_filter=lambda x: x.name.endswith("OOA"))
+                    datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if m.name.endswith("OOA")])
                 else:
                     # out of acceptance contribution
-                    datagroups.copyGroup(base_group, f"BkgZmumu", member_filter=lambda x: x.name.startswith("Bkg"))
-                    datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if m.name.startswith("Bkg")])
+                    datagroups.copyGroup(base_group, f"{base_group}OOA", member_filter=lambda x: x.name.endswith("OOA"))
+                    datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if m.name.endswith("OOA")])
             # FIXME: at some point we should decide what name to use
-            if any(x in args.excludeProcGroups for x in ["BkgWmunu", "outAccWmunu"]) and hasSeparateOutOfAcceptanceSignal:
-                datagroups.deleteGroup("BkgWmunu") # remove out of acceptance signal
+            if any(x.endswith("OOA") for x in args.excludeProcGroups) and hasSeparateOutOfAcceptanceSignal:
+                datagroups.deleteGroup(f"{base_group}OOA") # remove out of acceptance signal
     elif args.unfolding or args.theoryAgnostic:
         constrainMass = False if args.theoryAgnostic else True
         datagroups.setGenAxes(args.genAxes)
@@ -186,14 +187,14 @@ def setup(args, inputFile, fitvar, xnorm=False):
         if wmass:
             # gen level bins, split by charge
             if "minus" in args.recoCharge:
-                datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen0", member_filter=lambda x: x.name.startswith("Wminus"))
+                datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen0", member_filter=lambda x: x.name.startswith("Wminus") and not x.name.endswith("OOA"))
             if "plus" in args.recoCharge:
-                datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen1", member_filter=lambda x: x.name.startswith("Wplus"))
+                datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen1", member_filter=lambda x: x.name.startswith("Wplus") and not x.name.endswith("OOA"))
         else:
-            datagroups.defineSignalBinsUnfolding(base_group, "Z", member_filter=lambda x: x.name.startswith(base_group))
+            datagroups.defineSignalBinsUnfolding(base_group, "Z", member_filter=lambda x: x.name.startswith(base_group) and not x.name.endswith("OOA"))
         
         # out of acceptance contribution
-        to_del = [m for m in datagroups.groups[base_group].members if not m.name.startswith("Bkg")]
+        to_del = [m for m in datagroups.groups[base_group].members if not m.name.endswith("OOA")]
         if len(datagroups.groups[base_group].members) == len(to_del):
             datagroups.deleteGroup(base_group)
         else:
@@ -296,16 +297,17 @@ def setup(args, inputFile, fitvar, xnorm=False):
 
     label = 'W' if wmass else 'Z'
     if not (args.doStatOnly and constrainMass):
-        cardTool.addSystematic(f"massWeight{label}",
-                            processes=signal_samples_forMass,
-                            group=f"massShift",
-                            noi=not constrainMass,
-                            skipEntries=massWeightNames(proc=label, exclude=100),
-                            mirror=False,
-                            noConstraint=not constrainMass,
-                            systAxes=["massShift"],
-                            passToFakes=passSystToFakes,
-        )
+        if args.massVariation != 0:
+            cardTool.addSystematic(f"massWeight{label}",
+                                processes=signal_samples_forMass,
+                                group=f"massShift",
+                                noi=not constrainMass,
+                                skipEntries=massWeightNames(proc=label, exclude=args.massVariation),
+                                mirror=False,
+                                noConstraint=not constrainMass,
+                                systAxes=["massShift"],
+                                passToFakes=passSystToFakes,
+            )
 
         if args.fitMassDiff:
             suffix = "".join([a.capitalize() for a in args.fitMassDiff.split("-")])
@@ -608,7 +610,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
         cardTool.addSystematic("luminosity",
                                 processes=['MCnoQCD'],
                                 outNames=["lumiDown", "lumiUp"],
-                                group="luminosity",
+                                group="luminosity", 
                                 systAxes=["downUpVar"],
                                 labelsByAxis=["downUpVar"],
                                 passToFakes=passSystToFakes)
@@ -704,7 +706,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                 cardTool.addSystematic(lepEff,
                     processes=cardTool.allMCProcesses(),
                     mirror = True,
-                    group="CMS_lepton_eff",
+                    group="CMS_lepton_eff", 
                     baseName=lepEff,
                     systAxes = ["tensor_axis_0"],
                     labelsByAxis = [""], 

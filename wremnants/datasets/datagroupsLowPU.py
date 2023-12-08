@@ -16,61 +16,54 @@ def make_datagroups_lowPU(dg, combine=False, excludeGroups=None, filterGroups=No
         fakeOp = None
 
     # data
+    dg.addGroup("Data",
+        members = dg.get_members_from_results(is_data=True),
+        selectOp = sigOp,
+    )
+    dg.addGroup("Ztautau",
+        members = dg.get_members_from_results(startswith="Ztautau"),
+        selectOp = sigOp,
+    )
+
     if dg.flavor == "mu" or dg.flavor == "mumu":  
-        dg.addGroup("Data",
-            members = list(filter(lambda y: y.name == "singlemuon", dg.datasets.values())),
-            selectOp = sigOp,
-        )
         dg.addGroup("Zmumu",
-            members = list(filter(lambda y: y.group == "Zmumu", dg.datasets.values())),
+            members = dg.get_members_from_results(startswith="Zmumu"),
             selectOp = sigOp,
         ) 
         if dg.mode == "lowpu_w":
             dg.addGroup("Wmunu",
-                members = list(filter(lambda y: y.group == "Wmunu", dg.datasets.values())),
+                members = dg.get_members_from_results(startswith=["Wplusmunu", "Wminusmunu"]),
                 selectOp = sigOp,
             )
 
     if dg.flavor == "e" or dg.flavor == "ee":  
-        dg.addGroup("Data",
-            members = list(filter(lambda y: y.name == "singleelectron", dg.datasets.values())),
-            selectOp = sigOp,
-        )
         dg.addGroup("Zee",
-            members = list(filter(lambda y: y.group == "Zee", dg.datasets.values())),
+            members = dg.get_members_from_results(startswith="Zee"),
             selectOp = sigOp,
         ) 
         if dg.mode == "lowpu_w":
             dg.addGroup("Wenu",
-                members = list(filter(lambda y: y.group == "Wenu", dg.datasets.values())),
+                members = dg.get_members_from_results(startswith=["Wplusenu", "Wminusenu"]),
                 selectOp = sigOp,
             )
 
-
-    dg.addGroup("Ztautau",
-        members = list(filter(lambda y: y.group == "Ztautau", dg.datasets.values())),
-        selectOp = sigOp,
-    )
-
-
     if dg.mode == "lowpu_w":
         dg.addGroup("Wtaunu",
-            members = list(filter(lambda y: y.group == "Wtaunu", dg.datasets.values())),
+            members = dg.get_members_from_results(startswith=["Wplustaunu", "Wminustaunu"]),
             selectOp = sigOp,
         )
         dg.addGroup("Top",
-            members = list(filter(lambda y: y.group == "Top", dg.datasets.values())),
+            members = dg.get_members_from_results(startswith=["Top", "SingleT", "TT"]),
             selectOp = sigOp,
         )
         dg.addGroup("Diboson",
-            members = list(filter(lambda y: y.group == "Diboson", dg.datasets.values())),
+            members = dg.get_members_from_results(startswith=["Diboson", "WW", "WZ", "ZZ"]),
             selectOp = sigOp,
         )
     else:
         dg.addGroup("Other",
-            members = [x for x in dg.datasets.values() if not x.is_data and x.group not in ["Zmumu", "Zee", "Ztautau", "QCD"]],
+            members = dg.get_members_from_results(not_startswith=["Zmumu", "Zee", "Ztautau", "QCD"]),
         )
-
 
     dg.filterGroups(filterGroups)
     dg.excludeGroups(excludeGroups)

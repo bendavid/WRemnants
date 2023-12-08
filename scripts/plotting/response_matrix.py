@@ -4,26 +4,21 @@ import mplhep as hep
 import matplotlib.pyplot as plt
 import numpy as np
 
-from wremnants import logging
+from wremnants import logging, common
 from wremnants import plot_tools
 from wremnants.datasets.datagroups import Datagroups
 from utilities import boostHistHelpers as hh
 from utilities.io_tools import output_tools
 
-parser = argparse.ArgumentParser()
+parser = common.plot_parser()
 parser.add_argument("infile", help="Output file of the analysis stage, containing ND boost histogrdams")
-parser.add_argument("--debug", action='store_true', help="Print debug output")
-parser.add_argument("-o", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
-parser.add_argument("-f", "--outfolder", type=str, default="test", help="Subfolder for output")
-parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name")
-parser.add_argument("--cmsDecor", default="Preliminary", type=str, help="CMS label")
 parser.add_argument("--procFilters", type=str, nargs="*", default="Zmumu", help="Filter to plot (default no filter, only specify if you want a subset")
 parser.add_argument("--axes", type=str, nargs="+", default=["pt-ptGen","abs(eta)-absEtaGen"], help="Define for which axes the response matrix to be plotted")
 parser.add_argument("-c", "--channels", type=str, nargs="+", choices=["plus", "minus", "all"], default=["all"], help="Select channel to plot")
 
 args = parser.parse_args()
 
-logger = logging.setup_logger("makeDataMCStackPlot", 4 if args.debug else 3)
+logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 outdir = output_tools.make_plot_dir(args.outpath, args.outfolder)
 

@@ -1,6 +1,7 @@
 from utilities import boostHistHelpers as hh, logging
 from wremnants import histselections as sel
 
+
 logger = logging.child_logger(__name__)
     
 def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelection=True, excludeGroups=None, filterGroups=None):
@@ -15,15 +16,15 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
         fakeOp = None
 
     dg.addGroup("Data",
-        members = dg.getSafeListFromDataset(["dataPostVFP"]),
+        members = dg.get_members_from_results(is_data=True),
         selectOp = sigOp,
     )
     dg.addGroup("Zmumu",
-        members = list(filter(lambda y: y.group == "Zmumu", dg.datasets.values())),
+        members = dg.get_members_from_results(startswith=["Zmumu"]),
         selectOp = sigOp,
     ) 
     dg.addGroup("Ztautau",
-        members = list(filter(lambda y: y.group == "Ztautau", dg.datasets.values())),
+        members = dg.get_members_from_results(startswith=["Ztautau"]),
         selectOp = sigOp,
     )
 
@@ -34,32 +35,32 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
         )
     if dg.mode in ["vgen", "wmass"]:
         dg.addGroup("Wmunu",
-            members = list(filter(lambda y: y.group == "Wmunu", dg.datasets.values())),
+            members = dg.get_members_from_results(startswith=["Wplusmunu", "Wminusmunu"]),
             selectOp = sigOp,
         )
         dg.addGroup("Wtaunu",
-            members = list(filter(lambda y: y.group == "Wtaunu", dg.datasets.values())),
+            members = dg.get_members_from_results(startswith=["Wplustaunu", "Wminustaunu"]),
             selectOp = sigOp,
         )
         dg.addGroup("DYlowMass",
-            members = list(filter(lambda y: y.group == "DYlowMass", dg.datasets.values())),
+            members = dg.get_members_from_results(startswith=["DYlowMass", "DYJetsToMuMuMass10to50"]),
             selectOp = sigOp,
         )
         dg.addGroup("Top",
-            members = list(filter(lambda y: y.group == "Top", dg.datasets.values())),
+            members = dg.get_members_from_results(startswith=["Top", "SingleT", "TT"]),
             selectOp = sigOp,
         )
         dg.addGroup("Diboson",
-            members = list(filter(lambda y: y.group == "Diboson", dg.datasets.values())),
+            members = dg.get_members_from_results(startswith=["Diboson", "WW", "WZ", "ZZ"]),
             selectOp = sigOp,
         )
         dg.addGroup("QCD",
-            members = list(filter(lambda y: y.group == "QCD", dg.datasets.values())),
+            members = dg.get_members_from_results(startswith=["QCD"]),
             selectOp = sigOp,
         )   
     else:
         dg.addGroup("Other",
-            members = [x for x in dg.datasets.values() if not x.is_data and x.group not in ["Zmumu", "Ztautau"] and x.group != "QCD"],
+            members = dg.get_members_from_results(not_startswith=["Zmumu", "Ztautau", "QCD"]),
         )
 
     dg.filterGroups(filterGroups)

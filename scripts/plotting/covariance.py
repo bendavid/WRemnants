@@ -9,7 +9,7 @@ import numpy as np
 import pandas as pd
 import hist
 import pdb
-from utilities import logging
+from utilities import logging, common
 from wremnants import plot_tools
 from utilities.io_tools import input_tools, output_tools
 from utilities.io_tools.combinetf_input import get_fitresult, load_covariance_pois, select_covariance_pois
@@ -17,24 +17,16 @@ from utilities.io_tools.combinetf_input import get_fitresult, load_covariance_po
 
 hep.style.use(hep.style.ROOT)
 
-parser = argparse.ArgumentParser()
+parser = common.plot_parser()
 parser.add_argument("infile", help="Combine fitresult .root or .hdf5 file")
-parser.add_argument("-o", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
-parser.add_argument("-f", "--outfolder", type=str, default="./test", help="Subfolder for output")
-parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name")
-parser.add_argument("--cmsDecor", default="Preliminary", type=str, choices=[None,"Preliminary", "Work in progress", "Internal"], help="CMS label")
-parser.add_argument("--lumi", type=float, default=16.8, help="Luminosity used in the fit, needed to get the absolute cross section")
-parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--flow", action='store_true', help="Show overflow/underflow pois")
-parser.add_argument("--scaleleg", type=float, default=1.0, help="Scale legend text")
 parser.add_argument("--plots", type=str, nargs="+", default=["covariance"], choices=["correlation", "covariance"], help="Define which plots to make")
 parser.add_argument("--poiType", type=str, default="mu", choices=["nois", "mu", "pmaskedexp", "pmaskedexpnorm", "sumpois", "sumpoisnorm",], help="Parameter type to make the covariance matrix")
 parser.add_argument("-c", "--channels", type=str, nargs="+", choices=["plus", "minus", "all"], default=["plus", "minus", "all"], help="Select channel to plot")
-parser.add_argument("--eoscp", action='store_true', help="Override use of xrdcp and use the mount instead")
 
 args = parser.parse_args()
 
-logger = logging.setup_logger("covariance", 4 if args.debug else 3, False)
+logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 outdir = output_tools.make_plot_dir(args.outpath, args.outfolder)
 
