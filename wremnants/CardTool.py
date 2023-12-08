@@ -290,7 +290,7 @@ class CardTool(object):
     # use doActionBeforeMirror to do something before it instead (so the mirroring will act on the modified histogram)
     # decorrelateByBin is to customize eta-pt decorrelation: pass dictionary with {axisName: [bin edges]}
     def addSystematic(self, name, systAxes=[], systAxesFlow=[], outNames=None, skipEntries=None, labelsByAxis=None, 
-                      baseName="", mirror=False, mirrorDownVarEqualToUp=False, mirrorDownVarEqualToNomi=False, symmetrize = True, symmetrizeConservative = False,
+                      baseName="", mirror=False, mirrorDownVarEqualToUp=False, mirrorDownVarEqualToNomi=False, symmetrize = "average",
                       scale=1, processes=None, group=None, noi=False, noConstraint=False, noProfile=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
@@ -346,7 +346,6 @@ class CardTool(object):
                 "mirrorDownVarEqualToUp" : mirrorDownVarEqualToUp,
                 "mirrorDownVarEqualToNomi" : mirrorDownVarEqualToNomi,
                 "symmetrize" : symmetrize,
-                "symmetrizeConservative" : symmetrizeConservative,
                 "action" : action,
                 "doActionBeforeMirror" : doActionBeforeMirror,
                 "actionMap" : actionMap,
@@ -733,8 +732,10 @@ class CardTool(object):
         logger.info(f"   {syst} for process {proc}")
         var_map = self.systHists(h, syst)
 
-        if systInfo and systInfo["symmetrize"] :
-                self.symmetrizeUpDown(var_map, hnom, conservative = systInfo["symmetrizeConservative"])
+        if systInfo and systInfo["symmetrize"] is not None:
+                if systInfo["symmetrize"] not in ["average", "conservative"]:
+                    raise ValueError("Invalid option for 'symmetrize'.  Valid options are 'average' and 'conservative'")
+                self.symmetrizeUpDown(var_map, hnom, conservative = systInfo["symmetrize"]=="conservative")
 
         if check_systs and syst != self.nominalName:
             self.checkSysts(var_map, proc,
