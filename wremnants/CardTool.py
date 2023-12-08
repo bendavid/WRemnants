@@ -119,7 +119,7 @@ class CardTool(object):
         self.fakerateAxes = fakerate_axes
         
     def getFakerateIntegrationAxes(self):
-        return [x for x in self.fit_axes if x not in self.fakerateAxes]
+        return [x for x in [*self.fit_axes, *self.datagroups.all_gen_axes] if x not in self.fakerateAxes]
 
     def setProcsNoStatUnc(self, procs, resetList=True):
         if self.skipHist:

@@ -261,7 +261,7 @@ class Datagroups(object):
             group.hists[label] = None
 
             for i, member in enumerate(group.members):
-                if procName == self.fakeName and member.name in fakesMembersWithSyst:
+                if sumFakesPartial and procName == self.fakeName and member.name in fakesMembersWithSyst:
                     # if we are here this process has been already used to build the fakes when running for other groups
                     continue
                 logger.debug(f"Looking at group member {member.name}")
@@ -295,13 +295,12 @@ class Datagroups(object):
                     logger.debug(f"Applying preOp to {member.name}/{procName} after loading")
                     h = preOpMap[member.name](h, **preOpArgs)
 
-                if self.gen_axes != None:
-                    # integrate over remaining gen axes 
-                    logger.debug(f"Integrate over gen axes {self.gen_axes}")
-                    projections = [a for a in h.axes.name if a not in self.gen_axes]
-                    if len(projections) < len(h.axes.name):
-                        h = h.project(*projections)
-                    logger.debug(f"Integrated, Hist axes are {h.axes.name}")
+                sum_axes = [x for x in self.sum_gen_axes if x in h.axes.name]
+                if len(sum_axes) > 0:
+                    # sum over remaining axes (avoid integrating over fit axes & fakerate axes)
+                    logger.debug(f"Sum over axes {sum_axes}")
+                    h = h.project(*[x for x in h.axes.name if x not in sum_axes])
+                    logger.debug(f"Hist axes are now {h.axes.name}")
 
                 if h_id == id(h):
                     logger.debug(f"Make explicit copy")
@@ -468,28 +467,25 @@ class Datagroups(object):
                 raise ValueError(f"In setSelectOp(): process {proc} not found")
             self.groups[proc].selectOp = op
 
-    def setGenAxes(self, gen_axes=None):
+    def setGenAxes(self, gen_axes=None, sum_gen_axes=None):
+        # gen_axes are the axes to be recognized as gen axes, e.g. for the unfolding
+        # sum_gen_axes are all gen axes that are potentially in the produced histogram and integrated over if not used
         if isinstance(gen_axes, str):
             gen_axes = [gen_axes]
+        if isinstance(sum_gen_axes, str):
+            sum_gen_axes = [sum_gen_axes]
 
-        self.gen_axes = None
+        # infer all gen axes from metadata
+        try:
+            args = self.getMetaInfo()["args"]
+        except ValueError as e:
+            logger.warning("No meta data found so no gen axes could be auto set")
+            return
 
-        if gen_axes != None:
-            self.gen_axes = list(gen_axes)
-        else:
-            # infer gen axes from metadata
-            try:
-                args = self.getMetaInfo()["args"]
-            except ValueError as e:
-                logger.warning("No meta data found so no gen axes could be auto set")
-                return
-            if args.get("unfolding", False) is False and args.get("theoryAgnostic", False) is False:
-                return
+        self.all_gen_axes = args.get("genVars", [])
 
-            if len(args.get("genVars", [])) > 0:
-                self.gen_axes = args["genVars"]
-            else:
-                logger.warning(f"Unknown gen axes!")
+        self.gen_axes = list(gen_axes) if gen_axes != None else self.all_gen_axes
+        self.sum_gen_axes = list(sum_gen_axes) if sum_gen_axes != None else self.all_gen_axes
 
         logger.debug(f"Gen axes are now {self.gen_axes}")
 

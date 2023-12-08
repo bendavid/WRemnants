@@ -215,14 +215,19 @@ def make_fakerate_variation(href, fakerate_axes, fakerate_axes_syst, variation_f
     # 3) apply the varied fakerate to the original histogram to get the veried bin contents, subtract the nominal histogram to only have the difference
     hvar = hist.Hist(*[a for a in href.axes], storage=hist.storage.Double(), data=-1*href.values(flow=flow))
     s = hist.tag.Slicer()
+
     # fail Iso, fail MT
-    hvar.values(flow=flow)[..., 0, failMT] += hh.multiplyHists(href[{common.passIsoName: s[::hist.sum], nameMT: failMT}], hRateFail).values(flow=flow)
+    slices = [failMT if n==nameMT else 0 if n==common.passIsoName else slice(None) for n in hvar.axes.name]
+    hvar.values(flow=flow)[*slices] += hh.multiplyHists(href[{common.passIsoName: s[::hist.sum], nameMT: failMT}], hRateFail).values(flow=flow)
     # pass Iso, fail MT
-    hvar.values(flow=flow)[..., 1, failMT] += hh.multiplyHists(href[{common.passIsoName: s[::hist.sum], nameMT: failMT}], hRatePass).values(flow=flow)
+    slices = [failMT if n==nameMT else 1 if n==common.passIsoName else slice(None) for n in hvar.axes.name]
+    hvar.values(flow=flow)[*slices] += hh.multiplyHists(href[{common.passIsoName: s[::hist.sum], nameMT: failMT}], hRatePass).values(flow=flow)
     # fail Iso, pass MT
-    hvar.values(flow=flow)[..., 0, passMT] += hh.multiplyHists(href[{common.passIsoName: s[::hist.sum], nameMT: passMT}], hRateFail).values(flow=flow)
+    slices = [passMT if n==nameMT else 0 if n==common.passIsoName else slice(None) for n in hvar.axes.name]
+    hvar.values(flow=flow)[*slices] += hh.multiplyHists(href[{common.passIsoName: s[::hist.sum], nameMT: passMT}], hRateFail).values(flow=flow)
     # pass Iso, pass MT
-    hvar.values(flow=flow)[..., 1, passMT] += hh.multiplyHists(href[{common.passIsoName: s[::hist.sum], nameMT: passMT}], hRatePass).values(flow=flow)
+    slices = [passMT if n==nameMT else 1 if n==common.passIsoName else slice(None) for n in hvar.axes.name]
+    hvar.values(flow=flow)[*slices] += hh.multiplyHists(href[{common.passIsoName: s[::hist.sum], nameMT: passMT}], hRatePass).values(flow=flow)
 
     # 4) expand the variations to be used as systematic axes
     hsyst = hh.expand_hist_by_duplicate_axes(hvar, fakerate_axes, fakerate_axes_syst)
