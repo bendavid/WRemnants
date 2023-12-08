@@ -229,28 +229,15 @@ class TheoryHelper(object):
             name_append = self.sample_label(sample_group)
             name_append += extra_name
 
-            sel_vars = ["renorm_fact_resum_transition_scale_max", "renorm_fact_resum_transition_scale_min"]
-
             # skip nominal
             skip_entries = []
             skip_entries.append({"vars" : "pdf0"})
-
 
             syst_axes = [pt_ax, "vars"]
             syst_ax_labels = ["PtV", "var"]
             format_with_values = ["edges", "center"]
 
-            # rename variations for Down and Up...
-            def action_func(h, *args, **kwargs):
-                out_var_names = [var.replace("_min","_Down").replace("_max", "_Up") for var in h.axes["vars"]]
-
-                out_var_axis = hist.axis.StrCategory(out_var_names, name="vars")
-
-                hsel = hist.Hist(*h.axes[:-1], out_var_axis, storage=h._storage_type())
-                hsel.view(flow=True)[...] = h.view(flow=True)
-
-                return syst_tools.hist_to_variations(hsel, *args, **kwargs)
-
+            action_func = syst_tools.hist_to_variations
             action_args = {}
             action_args["gen_axes"] = [pt_ax]
             action_args["rebin_axes"] = [pt_ax]
@@ -554,7 +541,7 @@ class TheoryHelper(object):
 
             name_append = self.sample_label(sample_group)
 
-            sel_vars = ["transition_points0.4_0.75_1.1", "transition_points0.2_0.45_0.7", "transition_points0.4_0.55_0.7", "transition_points0.2_0.65_1.1", "renorm_scale_pt20_max", "renorm_scale_pt20_min"]
+            sel_vars = ["transition_points0.2_0.35_1.0", "transition_points0.2_0.75_1.0", "renorm_scale_pt20_envelope_Down", "renorm_scale_pt20_envelope_Up"]
 
             self.card_tool.addSystematic(name=self.corr_hist_name,
                 processes=[sample_group],
@@ -563,6 +550,6 @@ class TheoryHelper(object):
                 systAxes=["vars"],
                 passToFakes=self.propagate_to_fakes,
                 preOp = lambda h: h[{"vars" : sel_vars}],
-                outNames=[f"resumTransitionSym{name_append}Up", f"resumTransitionSym{name_append}Down", f"resumTransitionAsym{name_append}Up", f"resumTransitionAsym{name_append}Down", f"resumFOScale{name_append}Up", f"resumFOScale{name_append}Down"],
+                outNames=[f"resumTransition{name_append}Down", f"resumTransition{name_append}Up", f"resumFOScale{name_append}Down", f"resumFOScale{name_append}Up"],
                 rename=f"resumTransitionFOScale{name_append}",
             )
