@@ -65,7 +65,7 @@ class HDF5Writer(object):
 
     def add_channel(self, cardTool, name=None):
         if name is None:
-            name = f"ch{len(self.channels)+1}"
+            name = f"ch{len(self.channels)}"
         if cardTool.xnorm and not self.theoryFit:
             name += "_masked"
         self.channels[name] = cardTool
