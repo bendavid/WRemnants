@@ -290,7 +290,7 @@ class CardTool(object):
     # use doActionBeforeMirror to do something before it instead (so the mirroring will act on the modified histogram)
     # decorrelateByBin is to customize eta-pt decorrelation: pass dictionary with {axisName: [bin edges]}
     def addSystematic(self, name, systAxes=[], systAxesFlow=[], outNames=None, skipEntries=None, labelsByAxis=None, 
-                      baseName="", mirror=False, mirrorDownVarEqualToUp=False, mirrorDownVarEqualToNomi=False,
+                      baseName="", mirror=False, mirrorDownVarEqualToUp=False, mirrorDownVarEqualToNomi=False, symmetrize = "average",
                       scale=1, processes=None, group=None, noi=False, noConstraint=False, noProfile=False,
                       action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
@@ -345,6 +345,7 @@ class CardTool(object):
                 "mirror" : mirror,
                 "mirrorDownVarEqualToUp" : mirrorDownVarEqualToUp,
                 "mirrorDownVarEqualToNomi" : mirrorDownVarEqualToNomi,
+                "symmetrize" : symmetrize,
                 "action" : action,
                 "doActionBeforeMirror" : doActionBeforeMirror,
                 "actionMap" : actionMap,
@@ -553,6 +554,32 @@ class CardTool(object):
 
         return {name : var for name,var in zip(systInfo["outNames"], variations) if name}
 
+    def symmetrizeUpDown(self, var_map, hnom, conservative = False):
+        logkepsilon = np.log(1e-3)
+
+        for var, hvar in var_map.items():
+            if var.endswith("Up"):
+                vardown = var.removesuffix("Up") + "Down"
+
+                hvarup = hvar
+                hvardown = var_map[vardown]
+
+                logkup = np.log(hvarup.values()/hnom.values())
+                logkup = np.where(np.equal(np.sign(hnom.values()*hvarup.values()),1), logkup, logkepsilon*np.ones_like(logkup))
+
+                logkdown = -np.log(hvardown.values()/hnom.values())
+                logkdown = np.where(np.equal(np.sign(hnom.values()*hvardown.values()),1), logkdown, -logkepsilon*np.ones_like(logkdown))
+
+                if conservative:
+                    # symmetrize by largest magnitude of up and down variations
+                    logk = np.where(np.abs(logkup) > np.abs(logkdown), logkup, logkdown)
+                else:
+                    # symmetrize by average of up and down variations
+                    logk = 0.5*(logkup + logkdown)
+
+                hvarup.values()[...] = hnom.values()*np.exp(logk)
+                hvardown.values()[...] = hnom.values()*np.exp(-logk)
+
     def variationName(self, proc, name):
         if name == self.nominalName:
             return f"{self.histName}_{proc}"
@@ -704,6 +731,12 @@ class CardTool(object):
                 decorrelateByBin = systInfo["decorrByBin"]
         logger.info(f"   {syst} for process {proc}")
         var_map = self.systHists(h, syst)
+
+        if systInfo and systInfo["symmetrize"] is not None:
+                if systInfo["symmetrize"] not in ["average", "conservative"]:
+                    raise ValueError("Invalid option for 'symmetrize'.  Valid options are 'average' and 'conservative'")
+                self.symmetrizeUpDown(var_map, hnom, conservative = systInfo["symmetrize"]=="conservative")
+
         if check_systs and syst != self.nominalName:
             self.checkSysts(var_map, proc,
                             skipSameSide=systInfo["mirrorDownVarEqualToUp"],
