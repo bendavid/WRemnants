@@ -55,31 +55,33 @@ class Recoil:
             recoil_model = f"{common.data_dir}/recoil/highPU_DeepMETReso/model_mc_data.tflite"
             self.recoilHelper, self.nstat = RecoilCalibrationHelper(recoil_model, args)
 
-            self.recoil_syst_bkg_para = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "syst_bkg_para")
-            self.recoil_syst_bkg_perp = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "syst_bkg_perp")
+            if args.recoilUnc:
+                self.recoil_syst_bkg_para = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "syst_bkg_para")
+                self.recoil_syst_bkg_perp = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "syst_bkg_perp")
 
-            self.recoil_pdf_data_para = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_data_para")
-            self.recoil_pdf_data_perp = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_data_perp")
-            self.recoil_pdf_mc_para = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_mc_para")
-            self.recoil_pdf_mc_perp = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_mc_perp")
-            self.recoil_pdf_gen_para = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_gen_para")
-            self.recoil_pdf_gen_perp = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_gen_perp")
-            
+                self.recoil_pdf_data_para = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_data_para")
+                self.recoil_pdf_data_perp = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_data_perp")
+                self.recoil_pdf_mc_para = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_mc_para")
+                self.recoil_pdf_mc_perp = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_mc_perp")
+                self.recoil_pdf_gen_para = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_gen_para")
+                self.recoil_pdf_gen_perp = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_gen_perp")
+
             self.met_xy_helper_data, self.met_xy_helper_mc = METXYCorrectionHelper(f"{common.data_dir}/recoil/highPU_DeepMETReso/met_xy_{self.flavor}.json")
             self.vpt_reweight_helper_mc_data = VPTReweightHelper(f"{common.data_dir}/recoil/highPU_DeepMETReso/vptrw_mc_data_mumu.json")
         elif self.met == "RawPFMET" and pu_type == "highPU":
             recoil_model = f"{common.data_dir}/recoil/highPU_RawPFMET/model_mc_data.tflite"
             self.recoilHelper, self.nstat = RecoilCalibrationHelper(recoil_model, args)
-            
-            self.recoil_syst_bkg_para = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "syst_bkg_para")
-            self.recoil_syst_bkg_perp = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "syst_bkg_perp")
 
-            self.recoil_pdf_data_para = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_data_para")
-            self.recoil_pdf_data_perp = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_data_perp")
-            self.recoil_pdf_mc_para = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_mc_para")
-            self.recoil_pdf_mc_perp = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_mc_perp")
-            self.recoil_pdf_gen_para = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_gen_para")
-            self.recoil_pdf_gen_perp = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_gen_perp")
+            if args.recoilUnc:
+                self.recoil_syst_bkg_para = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "syst_bkg_para")
+                self.recoil_syst_bkg_perp = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "syst_bkg_perp")
+
+                self.recoil_pdf_data_para = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_data_para")
+                self.recoil_pdf_data_perp = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_data_perp")
+                self.recoil_pdf_mc_para = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_mc_para")
+                self.recoil_pdf_mc_perp = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_mc_perp")
+                self.recoil_pdf_gen_para = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_gen_para")
+                self.recoil_pdf_gen_perp = ROOT.wrem.RecoilCalibrationUncertaintyHelper(recoil_model, "pdf_gen_perp")
 
             self.met_xy_helper_data, self.met_xy_helper_mc = METXYCorrectionHelper(f"{common.data_dir}/recoil/highPU_RawPFMET/met_xy_{self.flavor}.json")
             self.vpt_reweight_helper_mc_data = VPTReweightHelper(f"{common.data_dir}/recoil/highPU_RawPFMET/vptrw_mc_data_mumu.json")
@@ -247,8 +249,8 @@ class Recoil:
         else: raise Exception(f"MET type {self.met} not supported")
 
         # uncorrected MET
-        self.df = self.df.Alias("met_uncorr_pt", met_pt)
-        self.df = self.df.Alias("met_uncorr_phi", met_phi)
+        self.df = self.df.Define("met_uncorr_pt", f"return (std::isfinite({met_pt})) ? {met_pt} : 10000")
+        self.df = self.df.Define("met_uncorr_phi", f"return (std::isfinite({met_phi})) ? {met_phi} : 10000")
         self.df = self.df.Define("met_uncorr_x", "met_uncorr_pt*cos(met_uncorr_phi)")
         self.df = self.df.Define("met_uncorr_y", "met_uncorr_pt*sin(met_uncorr_phi)")
 
