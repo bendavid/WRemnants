@@ -40,7 +40,7 @@ datasets = getDatasets(maxFiles=args.maxFiles,
 
 logger.debug(f"Will process samples {[d.name for d in datasets]}")
 
-axis_massWgen = hist.axis.Variable([5., 13000.], name="massVgen", underflow=True, overflow=False)
+axis_massWgen = hist.axis.Variable([4., 13000.], name="massVgen", underflow=True, overflow=False)
 
 axis_massZgen = hist.axis.Regular(12, 60., 120., name="massVgen")
 
