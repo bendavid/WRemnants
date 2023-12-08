@@ -25,7 +25,7 @@ dataDictV9 = {
     'DYJetsToMuMuMass10to50PostVFP' : {
                    'filepaths' :
                     ["{BASE_PATH}/{BKG_PATH_TAG}/DYJetsToMuMu_M-10to50_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos",
-                     #"{BASE_PATH}/{BKG_PATH_TAG}/DYJetsToMuMu_M-10to50_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos_ext1"],
+                     "{BASE_PATH}/{BKG_PATH_TAG}/DYJetsToMuMu_M-10to50_H2ErratumFix_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos_ext1"],
                    'xsec' : common.xsec_ZmmMass10to50PostVFP,
                    'group': "DYlowMass",
     },
