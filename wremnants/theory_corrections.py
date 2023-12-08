@@ -96,10 +96,6 @@ def rebin_corr_hists(hists, ndim=-1, binning=None):
         return hists
 
     for i in range(ndims):
-        # This is a workaround for now for the fact that MiNNLO has mass binning up to
-        # Inf whereas SCETlib has 13 TeV
-        if all([h.axes[i].size == 1 for h in hists if h]):
-            continue
         hists = hh.rebinHistsToCommon(hists, i)
     return hists
 
