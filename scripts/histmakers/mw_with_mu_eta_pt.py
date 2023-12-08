@@ -74,7 +74,8 @@ datasets = getDatasets(maxFiles=args.maxFiles,
                        excl=args.excludeProcs, 
                        nanoVersion="v9", base_path=args.dataPath, oneMCfileEveryN=args.oneMCfileEveryN,
                        extended = "msht20an3lo" not in args.pdfs,
-                       era=era)
+                       era=era,
+                       bkgPathTag="BKGV9" if args.noCustomBkgNano else "")
 
 # transverse boson mass cut
 mtw_min = args.mtCut
@@ -279,24 +280,24 @@ def build_graph(df, dataset):
     df = muon_calibration.define_corrected_muons(df, cvh_helper, jpsi_helper, args, dataset, smearing_helper, bias_helper)
 
     df = muon_selections.select_veto_muons(df, nMuons=1)
-    df = muon_selections.select_good_muons(df, 24, 100, dataset.group, nMuons=1, use_trackerMuons=args.trackerMuons, use_isolation=False)
+    df = muon_selections.select_good_muons(df, 24, 100, dataset.group, nMuons=1, use_trackerMuons=args.trackerMuons, use_isolation=False, noCustomBkgNano=args.noCustomBkgNano)
 
     # the corrected RECO muon kinematics, which is intended to be used as the nominal
     df = muon_calibration.define_corrected_reco_muon_kinematics(df)
 
-    df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "goodMuons")
- 
+    df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "goodMuons", noCustomBkgNano=args.noCustomBkgNano)
+
     df = muon_selections.veto_electrons(df)
     df = muon_selections.apply_met_filters(df)
     if args.makeMCefficiency:
-        if dataset.group in common.background_MCprocs:
+        if dataset.group in common.background_MCprocs and args.noCustomBkgNano:
             df = df.Define("GoodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_pt,TrigObj_l1pt,TrigObj_l2pt,TrigObj_filterBits)")
         else:
             df = df.Define("GoodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_filterBits)")
         df = df.Define("passTrigger","(HLT_IsoTkMu24 || HLT_IsoMu24) && wrem::hasTriggerMatch(goodMuons_eta0,goodMuons_phi0,TrigObj_eta[GoodTrigObjs],TrigObj_phi[GoodTrigObjs])")
 
     else:
-        df = muon_selections.apply_triggermatching_muon(df, dataset, "goodMuons_eta0", "goodMuons_phi0")
+        df = muon_selections.apply_triggermatching_muon(df, dataset, "goodMuons_eta0", "goodMuons_phi0", noCustomBkgNano=args.noCustomBkgNano)
 
     # gen match to bare muons to select only prompt muons from MC processes, but also including tau decays
     # status flags in NanoAOD: https://cms-nanoaod-integration.web.cern.ch/autoDoc/NanoAODv9/2016ULpostVFP/doc_TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8_RunIISummer20UL16NanoAODv9-106X_mcRun2_asymptotic_v17-v1.html

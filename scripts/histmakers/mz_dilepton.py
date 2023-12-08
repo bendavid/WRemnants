@@ -35,12 +35,13 @@ thisAnalysis = ROOT.wrem.AnalysisType.Dilepton if args.useDileptonTriggerSelecti
 era = args.era
 
 datasets = getDatasets(maxFiles=args.maxFiles,
-                        filt=args.filterProcs,
-                        excl=args.excludeProcs, 
-                        nanoVersion="v9",
-                        base_path=args.dataPath,
-                        extended = "msht20an3lo" not in args.pdfs,
-                        era = era)
+                       filt=args.filterProcs,
+                       excl=args.excludeProcs, 
+                       nanoVersion="v9",
+                       base_path=args.dataPath,
+                       extended = "msht20an3lo" not in args.pdfs,
+                       era = era,
+                       bkgPathTag="BKGV9" if args.noCustomBkgNano else "")
 
 # dilepton invariant mass cuts
 mass_min = 60
@@ -192,20 +193,20 @@ def build_graph(df, dataset):
     df = muon_calibration.define_corrected_muons(df, cvh_helper, jpsi_helper, args, dataset, smearing_helper, bias_helper)
 
     df = muon_selections.select_veto_muons(df, nMuons=2)
-    df = muon_selections.select_good_muons(df, args.pt[1], args.pt[2], dataset.group, nMuons=2, use_trackerMuons=args.trackerMuons, use_isolation=True, isoDefinition=args.isolationDefinition)
+    df = muon_selections.select_good_muons(df, args.pt[1], args.pt[2], dataset.group, nMuons=2, use_trackerMuons=args.trackerMuons, use_isolation=True, isoDefinition=args.isolationDefinition, noCustomBkgNano=args.noCustomBkgNano)
 
     # for dilepton analysis we will call trigMuons (nonTrigMuons) those with charge plus (minus). In fact both might be triggering, naming scheme might be improved
     df = muon_selections.define_trigger_muons(df, what_analysis=thisAnalysis)
 
     df = muon_selections.select_z_candidate(df, mass_min, mass_max)
 
-    df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "trigMuons")
-    df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "nonTrigMuons")
+    df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "trigMuons", noCustomBkgNano=args.noCustomBkgNano)
+    df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "nonTrigMuons", noCustomBkgNano=args.noCustomBkgNano)
 
     if args.useDileptonTriggerSelection:
-        df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0", "nonTrigMuons_eta0", "nonTrigMuons_phi0")
+        df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0", "nonTrigMuons_eta0", "nonTrigMuons_phi0", noCustomBkgNano=args.noCustomBkgNano)
     else:
-        df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0")
+        df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0", noCustomBkgNano=args.noCustomBkgNano)
 
     df = df.Define("ptll", "ll_mom4.pt()")
     df = df.Define("yll", "ll_mom4.Rapidity()")

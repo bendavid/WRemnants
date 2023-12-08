@@ -92,17 +92,20 @@ def buildFileList(path):
     return buildFileListXrd(path) if path.startswith(xrdprefix) else buildFileListPosix(path)
 
 #TODO add the rest of the samples!
-def makeFilelist(paths, maxFiles=-1, base_path=None, nano_prod_tags=None, is_data=False, oneMCfileEveryN=None):
+def makeFilelist(paths, maxFiles=-1, base_path=None, nano_prod_tags=None, is_data=False, oneMCfileEveryN=None,
+                 bkgPathTag=""):
     filelist = []
+    expandedPaths = []
     for orig_path in paths:
         if maxFiles > 0 and len(filelist) >= maxFiles:
             break
         # try each tag in order until files are found
         fallback = False
         for prod_tag in nano_prod_tags:
-            format_args=dict(BASE_PATH=base_path, NANO_PROD_TAG=prod_tag)
+            format_args=dict(BASE_PATH=base_path, NANO_PROD_TAG=prod_tag, BKG_PATH_TAG=bkgPathTag)
 
             path = orig_path.format(**format_args)
+            expandedPaths.append(path)
             logger.debug(f"Reading files from path {path}")
 
             files = buildFileList(path)
@@ -128,8 +131,8 @@ def makeFilelist(paths, maxFiles=-1, base_path=None, nano_prod_tags=None, is_dat
                 tmplist.append(f)
         logger.warning(f"Using {len(tmplist)} files instead of {len(toreturn)}")
         toreturn = tmplist
-    
-    logger.debug(f"Length of list is {len(toreturn)} for paths {paths}")
+
+    logger.debug(f"Length of list is {len(toreturn)} for paths {expandedPaths}")
     return toreturn
 
 def selectProc(selection, datasets):
@@ -210,7 +213,7 @@ def is_zombie(file_path):
 
 def getDatasets(maxFiles=default_nfiles, filt=None, excl=None, mode=None, base_path=None, nanoVersion="v9",
                 data_tags=["TrackFitV722_NanoProdv3", "TrackFitV722_NanoProdv2"],
-                mc_tags=["TrackFitV722_NanoProdv3", "TrackFitV718_NanoProdv1"], oneMCfileEveryN=None, checkFileForZombie=False, era="2016PostVFP", extended=True):
+                mc_tags=["TrackFitV722_NanoProdv3", "TrackFitV718_NanoProdv1"], oneMCfileEveryN=None, checkFileForZombie=False, era="2016PostVFP", extended=True, bkgPathTag=""):
 
     if maxFiles is None or (isinstance(maxFiles, int) and maxFiles < -1):
         maxFiles=default_nfiles
@@ -250,8 +253,8 @@ def getDatasets(maxFiles=default_nfiles, filt=None, excl=None, mode=None, base_p
         nfiles = maxFiles
         if type(maxFiles) == dict:
             nfiles = maxFiles[sample] if sample in maxFiles else -1
-        paths = makeFilelist(info["filepaths"], nfiles, base_path=base_path, nano_prod_tags=prod_tags, is_data=is_data, oneMCfileEveryN=oneMCfileEveryN)
-            
+        paths = makeFilelist(info["filepaths"], nfiles, base_path=base_path, nano_prod_tags=prod_tags, is_data=is_data, oneMCfileEveryN=oneMCfileEveryN, bkgPathTag=bkgPathTag)
+
         if checkFileForZombie:
             paths = [p for p in paths if not is_zombie(p)]
 
@@ -261,7 +264,6 @@ def getDatasets(maxFiles=default_nfiles, filt=None, excl=None, mode=None, base_p
             logger.warning(f"Failed to find any files for dataset {sample}. Looking at {info['filepaths']}. Skipping!")
             continue
 
-        
         narf_info = dict(
             name=sample,
             filepaths=paths,
@@ -283,7 +285,7 @@ def getDatasets(maxFiles=default_nfiles, filt=None, excl=None, mode=None, base_p
                 )
             )
         narf_datasets.append(narf.Dataset(**narf_info))
-    
+
     narf_datasets = filterProcs(filt, narf_datasets)
     narf_datasets = excludeProcs(excl, narf_datasets)
 
