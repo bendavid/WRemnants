@@ -250,7 +250,7 @@ class Recoil:
 
         # uncorrected MET
         self.df = self.df.Define("met_uncorr_pt", f"return (std::isfinite({met_pt})) ? {met_pt} : 10000")
-        self.df = self.df.Define("met_uncorr_phi", f"return (std::isfinite({met_phi})) ? {met_phi} : 10000")
+        self.df = self.df.Define("met_uncorr_phi", f"return (std::isfinite({met_phi})) ? {met_phi} : 0")
         self.df = self.df.Define("met_uncorr_x", "met_uncorr_pt*cos(met_uncorr_phi)")
         self.df = self.df.Define("met_uncorr_y", "met_uncorr_pt*sin(met_uncorr_phi)")
 
