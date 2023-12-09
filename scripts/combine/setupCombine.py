@@ -46,7 +46,8 @@ def make_parser(parser=None):
     parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
     parser.add_argument("--minnloScaleUnc", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated", "none"], default="byHelicityPt",
             help="Decorrelation for QCDscale")
-    parser.add_argument("--resumUnc", default="tnp", type=str, choices=["scale", "tnp", "minnlo",  "none"], help="Include SCETlib uncertainties")
+    parser.add_argument("--resumUnc", default="tnp", type=str, choices=["scale", "tnp", "tnp_minnlo", "minnlo",  "none"], help="Include SCETlib uncertainties")
+    parser.add_argument("--noTransitionUnc", action="store_true", help="Do not include matching transition parameter variations.")
     parser.add_argument("--npUnc", default="Delta_Lambda", type=str, choices=combine_theory_helper.TheoryHelper.valid_np_models, help="Nonperturbative uncertainty model")
     parser.add_argument("--tnpMagnitude", default=1, type=float, help="Variation size for the TNP")
     parser.add_argument("--scaleTNP", default=12, type=float, help="Scale the TNP uncertainties by this factor")
@@ -563,6 +564,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     
     theory_helper = combine_theory_helper.TheoryHelper(cardTool, hasNonsigSamples=(wmass and not xnorm))
     theory_helper.configure(resumUnc=args.resumUnc, 
+        transitionUnc = not args.noTransitionUnc,
         propagate_to_fakes=to_fakes,
         np_model=args.npUnc,
         tnp_magnitude=args.tnpMagnitude,

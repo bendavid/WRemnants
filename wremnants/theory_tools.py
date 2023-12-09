@@ -423,7 +423,8 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
             res.append(unc_FlavDepNP)
 
         def is_pt_dependent_scale(var_label):
-            return var_label.startswith("renorm_fact_resum_transition_scale_envelope")
+            return var_label.startswith("renorm_fact_resum_transition_scale_envelope") \
+                    or var_label.startswith("renorm_fact_resum_scale_envelope")
 
         # special treatment for envelope of scale variations since they need to be decorrelated in pt
         if isinstance(var_axis, hist.axis.StrCategory) and any(is_pt_dependent_scale(var_label) for var_label in var_axis):
