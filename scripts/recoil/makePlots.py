@@ -348,3 +348,13 @@ if __name__ == "__main__":
         plotutils.stacked_plot_ratio(groups, "met_corr_xy_phi_qtrw", procs, outDir_, xMin=xMin, xMax=xMax, yMin=yMin, yMax=yMax, logY=True, xLabel="METPHI", dataNormProc=dataNormProc, labels=[met, "XY corrected", "q_{T} reweighted"], yRatio=1.06, charge="combined")
         plotutils.stacked_plot_ratio(groups, "met_corr_rec_phi", procs, outDir_, xMin=xMin, xMax=xMax, yMin=yMin, yMax=yMax, logY=True, xLabel="METPHI", dataNormProc=dataNormProc, labels=[met, "Recoil corrected"], yRatio=1.06, charge="combined")
         plotutils.stacked_plot_ratio(groups, "met_corr_rec_phi_qtrw", procs, outDir_, xMin=xMin, xMax=xMax, yMin=yMin, yMax=yMax, logY=True, xLabel="METPHI", dataNormProc=dataNormProc, labels=[met, "Recoil corrected", "q_{T} reweighted"], yRatio=1.06, charge="combined")
+
+        if analysis == "lowPU": xMin, xMax, yMin, yMax = -4, 4, 1e0, 1e9
+        else: xMin, xMax, yMin, yMax = 0, 100, 0, 1e7
+        outDir_ = f"{outDir}/recoil_magn"
+        plotutils.stacked_plot_ratio(groups, "recoil_uncorr_magn", procs, outDir_, xMin=xMin, xMax=xMax, yMin=yMin, yMax=yMax, logY=False, xLabel="UMAGN", dataNormProc=dataNormProc, labels=[met, "Uncorrected"], yRatio=1.06, charge="combined")
+        plotutils.stacked_plot_ratio(groups, "recoil_corr_lep_magn", procs, outDir_, xMin=xMin, xMax=xMax, yMin=yMin, yMax=yMax, logY=False, xLabel="UMAGN", dataNormProc=dataNormProc, labels=[met, "Lepton corrected"], yRatio=1.06, charge="combined")
+        plotutils.stacked_plot_ratio(groups, "recoil_corr_xy_magn", procs, outDir_, xMin=xMin, xMax=xMax, yMin=yMin, yMax=yMax, logY=False, xLabel="UMAGN", dataNormProc=dataNormProc, labels=[met, "XY corrected"], yRatio=1.06, charge="combined")
+        plotutils.stacked_plot_ratio(groups, "recoil_corr_xy_magn_qtrw", procs, outDir_, xMin=xMin, xMax=xMax, yMin=yMin, yMax=yMax, logY=False, xLabel="UMAGN", dataNormProc=dataNormProc, labels=[met, "XY corrected", "q_{T} reweighted"], yRatio=1.06, charge="combined")
+        plotutils.stacked_plot_ratio(groups, "recoil_corr_rec_magn", procs, outDir_, xMin=xMin, xMax=xMax, yMin=yMin, yMax=yMax, logY=False, xLabel="UMAGN", dataNormProc=dataNormProc, labels=[met, "Recoil corrected"], yRatio=1.06, charge="combined")
+        plotutils.stacked_plot_ratio(groups, "recoil_corr_rec_magn_qtrw", procs, outDir_, xMin=xMin, xMax=xMax, yMin=yMin, yMax=yMax, logY=False, xLabel="UMAGN", dataNormProc=dataNormProc, labels=[met, "Recoil corrected", "q_{T} reweighted"], yRatio=1.06, charge="combined")

@@ -100,7 +100,7 @@ class HDF5Writer(object):
 
     def add_channel(self, cardTool, name=None):
         if name is None:
-            name = f"ch{len(self.channels)+1}"
+            name = f"ch{len(self.channels)}"
         if cardTool.xnorm and not self.theoryFit:
             name += "_masked"
         self.channels[name] = cardTool
@@ -413,6 +413,19 @@ class HDF5Writer(object):
 
                         if syst["mirror"]:
                             logkavg_proc = get_logk(var_name)
+                        elif syst["symmetrize"] is not None:
+                            if syst["symmetrize"] not in ["average", "conservative"]:
+                                raise ValueError("Invalid option for 'symmetrize'.  Valid options are 'average' and 'conservative'")
+
+                            logkup_proc = get_logk(var_name, "Up")
+                            logkdown_proc = get_logk(var_name, "Down")
+
+                            if syst["symmetrize"] == "conservative":
+                                # symmetrize by largest magnitude of up and down variations
+                                logkavg_proc = np.where(np.abs(logkup_proc) > np.abs(logkdown_proc), logkup_proc, -logkdown_proc)
+                            else:
+                                # symmetrize by average of up and down variations
+                                logkavg_proc = 0.5*(logkup_proc - logkdown_proc)
                         else:
                             logkup_proc = get_logk(var_name, "Up")
                             logkdown_proc = get_logk(var_name, "Down")
