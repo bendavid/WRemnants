@@ -258,7 +258,8 @@ else:
         }
     elif analysis=="WMass":
         all_axes = {
-            "pt": hist.axis.Regular(30, 26, 56, name = "pt", overflow=False, underflow=False),
+            # "pt": hist.axis.Regular(30, 26, 56, name = "pt", overflow=False, underflow=False),
+            "pt": hist.axis.Regular(31, 26, 57, name = "pt", overflow=False, underflow=False),
             "eta": hist.axis.Regular(48, -2.4, 2.4, name = "eta", overflow=False, underflow=False),
             "charge": common.axis_charge,
             "passIso": common.axis_passIso,

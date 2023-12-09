@@ -143,7 +143,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
         datagroups.globalAction = None # reset global action in case of rebinning or such
         if not args.unfolding:
             # creating the xnorm model (e.g. for the theory fit)
-            if wmass and "qGen" in fitvar:
+            if wmass:
                 # add gen charge as additional axis
                 datagroups.groups[base_group].add_member_axis("qGen",datagroups.results,
                     member_filters={-1: lambda x: x.name.startswith("Wminus"), 1: lambda x: x.name.startswith("Wplus")}, 
@@ -182,7 +182,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     elif args.unfolding or args.theoryAgnostic:
         constrainMass = False if args.theoryAgnostic else True
         datagroups.setGenAxes(args.genAxes)
-        if wmass and "qGen" in args.genAxes:
+        if wmass:
             # gen level bins, split by charge
             if "minus" in args.recoCharge:
                 datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen0", member_filter=lambda x: x.name.startswith("Wminus") and not x.name.endswith("OOA"))
