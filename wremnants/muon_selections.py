@@ -18,20 +18,17 @@ def select_veto_muons(df, nMuons=1):
 
     return df
 
-def select_good_muons(df, ptLow, ptHigh, datasetGroup, nMuons=1, use_trackerMuons=False, use_isolation=False, isoDefinition="iso04", isoThreshold=0.15, noCustomBkgNano=False):
+def select_good_muons(df, ptLow, ptHigh, datasetGroup, nMuons=1, use_trackerMuons=False, use_isolation=False, isoDefinition="iso04", isoThreshold=0.15):
 
     if use_trackerMuons:
-        if datasetGroup in bkgMCprocs and noCustomBkgNano:
-            df = df.Define("Muon_category", "Muon_isTracker && Muon_highPurity")
-        else:
-            df = df.Define("Muon_category", "Muon_isTracker && Muon_innerTrackOriginalAlgo != 13 && Muon_innerTrackOriginalAlgo != 14 && Muon_highPurity")
+        df = df.Define("Muon_category", "Muon_isTracker && Muon_innerTrackOriginalAlgo != 13 && Muon_innerTrackOriginalAlgo != 14 && Muon_highPurity")
     else:
         df = df.Define("Muon_category", "Muon_isGlobal && Muon_highPurity")
 
     goodMuonsSelection = f"Muon_correctedPt > {ptLow} && Muon_correctedPt < {ptHigh} && vetoMuons && Muon_mediumId && Muon_category"
     if use_isolation:
         # for w like we directly require isolated muons, for w we need non-isolated for qcd estimation
-        if isoDefinition == "iso04" or (datasetGroup in bkgMCprocs and noCustomBkgNano):
+        if isoDefinition == "iso04":
             isoBranch = "Muon_pfRelIso04_all"
         elif isoDefinition == "iso04vtxAgn":
             isoBranch = "Muon_vtxAgnPfRelIso04_all"
@@ -100,11 +97,8 @@ def select_z_candidate(df, mass_min=60, mass_max=120):
 
     return df
 
-def apply_triggermatching_muon(df, dataset, muon_eta, muon_phi, otherMuon_eta=None, otherMuon_phi=None, noCustomBkgNano=False):
-    if dataset.group in bkgMCprocs and noCustomBkgNano:
-        df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_pt,TrigObj_l1pt,TrigObj_l2pt,TrigObj_filterBits)")
-    else:
-        df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_filterBits)")
+def apply_triggermatching_muon(df, dataset, muon_eta, muon_phi, otherMuon_eta=None, otherMuon_phi=None):
+    df = df.Define("goodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_filterBits)")
     if otherMuon_eta is not None:
         # implement OR of trigger matching condition (for dilepton), also create corresponding flags
         # FIXME: should find a better way to pass the variables' name prefix
@@ -123,16 +117,11 @@ def veto_electrons(df):
     
     return df
 
-def select_standalone_muons(df, dataset, use_trackerMuons=False, muons="goodMuons", idx=0, noCustomBkgNano=False):
+def select_standalone_muons(df, dataset, use_trackerMuons=False, muons="goodMuons", idx=0):
 
     from utilities.common import muonEfficiency_standaloneNumberOfValidHits as nHitsSA
 
-    #standalone quantities, only available in custom NanoAOD
-    if dataset.group in bkgMCprocs and noCustomBkgNano:
-        df = df.Alias(f"{muons}_SApt{idx}",  f"{muons}_pt{idx}")
-        df = df.Alias(f"{muons}_SAeta{idx}", f"{muons}_eta{idx}")
-        df = df.Alias(f"{muons}_SAphi{idx}", f"{muons}_phi{idx}")
-    elif use_trackerMuons:
+    if use_trackerMuons:
         # try to use standalone variables when possible
         df = df.Define(f"{muons}_SApt{idx}",  f"Muon_isStandalone[{muons}][{idx}] ? Muon_standalonePt[{muons}][{idx}] : {muons}_pt{idx}")
         df = df.Define(f"{muons}_SAeta{idx}", f"Muon_isStandalone[{muons}][{idx}] ? Muon_standaloneEta[{muons}][{idx}] : {muons}_eta{idx}")
@@ -145,7 +134,7 @@ def select_standalone_muons(df, dataset, use_trackerMuons=False, muons="goodMuon
     # the next cuts are mainly needed for consistency with the reco efficiency measurement for the case with global muons
     # note, when SA does not exist this cut is still fine because of how we define these variables
     df = df.Filter(f"{muons}_SApt{idx} > 15.0 && wrem::deltaR2({muons}_SAeta{idx}, {muons}_SAphi{idx}, {muons}_eta{idx}, {muons}_phi{idx}) < 0.09")
-    if nHitsSA > 0 and not use_trackerMuons and not (dataset.group in bkgMCprocs and noCustomBkgNano):
+    if nHitsSA > 0 and not use_trackerMuons:
         df = df.Filter(f"Muon_standaloneNumberOfValidHits[{muons}][{idx}] >= {nHitsSA}")
 
     return df

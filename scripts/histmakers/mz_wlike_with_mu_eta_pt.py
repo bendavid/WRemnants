@@ -39,8 +39,7 @@ datasets = getDatasets(maxFiles=args.maxFiles,
                        excl=args.excludeProcs, 
                        nanoVersion="v9", base_path=args.dataPath,
                        extended = "msht20an3lo" not in args.pdfs,
-                       era=era,
-                       bkgPathTag="BKGV9" if args.noCustomBkgNano else "")
+                       era=era)
 
 # dilepton invariant mass cuts
 mass_min = 60
@@ -167,16 +166,16 @@ def build_graph(df, dataset):
     df = muon_calibration.define_corrected_muons(df, cvh_helper, jpsi_helper, args, dataset, smearing_helper, bias_helper)
 
     df = muon_selections.select_veto_muons(df, nMuons=2)
-    df = muon_selections.select_good_muons(df, template_minpt, template_maxpt, dataset.group, nMuons=2, use_trackerMuons=args.trackerMuons, use_isolation=True, isoDefinition=args.isolationDefinition, noCustomBkgNano=args.noCustomBkgNano)
+    df = muon_selections.select_good_muons(df, template_minpt, template_maxpt, dataset.group, nMuons=2, use_trackerMuons=args.trackerMuons, use_isolation=True, isoDefinition=args.isolationDefinition)
 
     df = muon_selections.define_trigger_muons(df, what_analysis=thisAnalysis)
 
     df = muon_selections.select_z_candidate(df, mass_min, mass_max)
 
-    df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "trigMuons", noCustomBkgNano=args.noCustomBkgNano)
-    df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "nonTrigMuons", noCustomBkgNano=args.noCustomBkgNano)
+    df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "trigMuons")
+    df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "nonTrigMuons")
 
-    df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0", noCustomBkgNano=args.noCustomBkgNano)
+    df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0")
 
     if dataset.is_data:
         df = df.DefinePerSample("nominal_weight", "1.0")
