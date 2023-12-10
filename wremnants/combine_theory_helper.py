@@ -513,6 +513,7 @@ class TheoryHelper(object):
             preOpMap=operation,
             scale=pdfInfo.get("scale", 1)*scale,
             systAxes=[pdf_ax],
+            symmetrize="conservative",
         )
         if from_corr:
             self.card_tool.addSystematic(pdf_hist, 
@@ -535,6 +536,7 @@ class TheoryHelper(object):
                     preOpMap=operation,
                     scale=pdfInfo.get("scale", 1)*scale,
                     systAxes=[pdf_ax],
+                    symmetrize="conservative",
                 )
 
         asRange = pdfInfo['alphasRange']
@@ -548,6 +550,7 @@ class TheoryHelper(object):
             systAxes=["vars" if from_corr else "alphasVar"],
             scale=0.75 if asRange == "002" else 1.5,
             passToFakes=self.propagate_to_fakes,
+            symmetrize="conservative",
         )
         if from_corr:
             as_args["outNames"] = ['', "pdfAlphaSDown", "pdfAlphaSUp"]
