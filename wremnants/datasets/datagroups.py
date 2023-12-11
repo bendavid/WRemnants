@@ -484,6 +484,9 @@ class Datagroups(object):
 
         self.all_gen_axes = args.get("genVars", [])
 
+        if self.mode in ["wmass", "lowpu_w"]:
+            self.all_gen_axes = ["qGen", *self.all_gen_axes]
+
         self.gen_axes = list(gen_axes) if gen_axes != None else self.all_gen_axes
         self.sum_gen_axes = list(sum_gen_axes) if sum_gen_axes != None else self.all_gen_axes
 

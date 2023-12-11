@@ -254,7 +254,7 @@ else:
         all_axes = {
             "pt": hist.axis.Regular(34, 26, 60, name = "pt", overflow=False, underflow=False),
             "eta": hist.axis.Regular(48, -2.4, 2.4, name = "eta", overflow=False, underflow=False),
-            "charge": common.axis_charge
+            "charge": common.axis_charge,
             "ptGen": hist.axis.Regular(33, 27, 60, name = "ptGen", overflow=False, underflow=False),
             "absEtaGen": hist.axis.Regular(differential.eta_binning, name = "absEtaGen", overflow=False, underflow=False),
             "qGen": common.axis_charge,

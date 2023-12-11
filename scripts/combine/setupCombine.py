@@ -181,12 +181,12 @@ def setup(args, inputFile, fitvar, xnorm=False):
     elif args.unfolding or args.theoryAgnostic:
         constrainMass = False if args.theoryAgnostic else True
         datagroups.setGenAxes(args.genAxes)
-        if wmass:
+        if wmass and "qGen" in datagroups.gen_axes:
             # gen level bins, split by charge
             if "minus" in args.recoCharge:
-                datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen0", member_filter=lambda x: x.name.startswith("Wminus") and not x.name.endswith("OOA"))
+                datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen0", member_filter=lambda x: x.name.startswith("Wminus") and not x.name.endswith("OOA"), axesToRead=[ax for ax in datagroups.gen_axes if ax!="qGen"])
             if "plus" in args.recoCharge:
-                datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen1", member_filter=lambda x: x.name.startswith("Wplus") and not x.name.endswith("OOA"))
+                datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen1", member_filter=lambda x: x.name.startswith("Wplus") and not x.name.endswith("OOA"), axesToRead=[ax for ax in datagroups.gen_axes if ax!="qGen"])
         else:
             datagroups.defineSignalBinsUnfolding(base_group, base_group[0], member_filter=lambda x: not x.name.endswith("OOA"))
         
@@ -240,7 +240,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     # define sumGroups for integrated cross section
     if args.unfolding and not args.poiAsNoi:
         # TODO: make this less hardcoded to filter the charge (if the charge is not present this will duplicate things)
-        if wmass:
+        if wmass and "qGen" in datagroups.gen_axes:
             if "plus" in args.recoCharge:
                 cardTool.addPOISumGroups(genCharge="qGen1")
             if "minus" in args.recoCharge:
