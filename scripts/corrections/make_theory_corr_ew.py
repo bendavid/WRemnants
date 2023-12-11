@@ -14,6 +14,7 @@ parser = argparse.ArgumentParser()
 parser.add_argument("-i", "--input", nargs="+", type=str, default=["w_z_gen_dists_scetlib_dyturboCorr_ewinput.hdf5"], help="File containing EW hists")
 parser.add_argument("--nums", nargs="+", type=str, default=["horace-nlo"], help="Numerators")
 parser.add_argument("--den", type=str, default="horace-lo-photos", help="Denominatos")
+parser.add_argument("-p", "--postfix", type=str, help="Postfix for plots and correction files")
 parser.add_argument("--normalize", action="store_true", default=False, help="Normalize distributions before computing ratio")
 parser.add_argument("--noSmoothing", action="store_true", default=False, help="Disable smoothing of corrections")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
@@ -110,28 +111,21 @@ for proc in procs:
         hcharge = hist.Hist(*hratio.axes, axis_charge, storage=hratio._storage_type())
         hcharge.view(flow=True)[...,charge_dict[proc]] = hratio.view(flow=True)
 
-        # Variations: 0=original MiNNLO, 1=Horace NLO, 2=mirrored (doubled)
+        # Variations: 0=original MiNNLO, 1=Horace NLO
         hones = hist.Hist(*hcharge.axes, storage=hist.storage.Double())
         hones.values(flow=True)[...,charge_dict[proc]] = np.ones(hratio.values(flow=True).shape)
-        hmirror = hist.Hist(*hcharge.axes, storage=hist.storage.Double())
-        hmirror.values(flow=True)[...] = 2*hcharge.values(flow=True) - hones.values(flow=True)
-        if args.normalize:
-            mirrorscale = np.sum(h2.values(flow=True)) / np.sum(h2.values(flow=True)*hmirror.values(flow=True)[...,0,charge_dict[proc]])
-            logger.info(f'{proc} mirrorscale = {mirrorscale}')
-            hmirror = hh.scaleHist(hmirror, mirrorscale)
 
         # Add syst axis
         if name not in corrh:
             corrh[name] = {}
-        corrh[name][proc] = hist.Hist(*hcharge.axes, hist.axis.Regular(3, 0, 3, underflow=False, overflow=False, name="systIdx"), storage=hist.storage.Double())
+        corrh[name][proc] = hist.Hist(*hcharge.axes, hist.axis.Regular(2, 0, 2, underflow=False, overflow=False, name="systIdx"), storage=hist.storage.Double())
         corrh[name][proc].values(flow=True)[...,0] = hones.values(flow=True)
         corrh[name][proc].values(flow=True)[...,1] = hcharge.values(flow=True)
-        corrh[name][proc].values(flow=True)[...,2] = hmirror.values(flow=True)
 
         corrhs[name] = corrh[name]
 
     for num, hnum in zip(nums, hnums):
-       
+
         make_correction(hnum, hden, f"{num}ew")
 
         for ax in project:
@@ -149,5 +143,5 @@ for num, corrh in corrhs.items():
     if 'Wplusmunu' in corrh and "Wminusmunu" in corrh:
         corrh['W'] = corrh['Wplusmunu']+corrh['Wminusmunu']
         outfile = f"{args.outpath}/{outname}"
-        output_tools.write_theory_corr_hist(outfile, 'Z', {f"{outname}_minnlo_ratio" : corrh['Zmumu']}, args)
+        output_tools.write_theory_corr_hist(outfile, 'W', {f"{outname}_minnlo_ratio" : corrh['W']}, args)
 

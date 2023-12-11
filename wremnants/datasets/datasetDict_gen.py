@@ -1,17 +1,17 @@
 from utilities.common import xsec_ZmmPostVFP,xsec_WpmunuPostVFP,xsec_WmmunuPostVFP
 
 # winhac cross sections from: https://gitlab.cern.ch/cms-wmass/private/issue-tracking/-/issues/34#note_7052239
-xsec_winhac_WplusToMuNu_LO = 10.10450380
-xsec_winhac_WplusToMuNu_NLOEW = 10.11709477
-xsec_winhac_WminusToMuNu_LO = 7.57405974
-xsec_winhac_WminusToMuNu_NLOEW = 7.58516621
+xsec_winhac_WplusToMuNu_LO = 10104.50380
+xsec_winhac_WplusToMuNu_NLOEW = 10117.09477
+xsec_winhac_WminusToMuNu_LO = 7574.05974
+xsec_winhac_WminusToMuNu_NLOEW = 7585.16621
 
-xsec_powheg_ZToMuMu_LO = 2.0004267556051570
-xsec_powheg_ZToMuMu_NLOEW = 2.0263829240506323
-xsec_powheg_WplusToMuNu_LO = 11.690260441335342  
-xsec_powheg_WplusToMuNu_NLOEW = 11.657708788022124 
-xsec_powheg_WminusToMuNu_LO = 8.6875312426956061
-xsec_powheg_WminusToMuNu_NLOEW = 8.6641686115643297
+xsec_powheg_ZToMuMu_LO = 2000.4267556051570
+xsec_powheg_ZToMuMu_NLOEW = 2026.3829240506323
+xsec_powheg_WplusToMuNu_LO = 11690.260441335342  
+xsec_powheg_WplusToMuNu_NLOEW = 11657.708788022124 
+xsec_powheg_WminusToMuNu_LO = 8687.5312426956061
+xsec_powheg_WminusToMuNu_NLOEW = 8664.1686115643297
 
 horace_v1 = False
 horace_v2 = False
