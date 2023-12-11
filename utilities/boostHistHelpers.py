@@ -217,16 +217,14 @@ def addSystAxis(h, size=1, offset=0):
 def addGenericAxis(h, axis, idx=None, add_trailing=True, flow=True):
     axes = [*h.axes, axis] if add_trailing else [axis, *h.axes]
     hnew = hist.Hist(*axes, storage=h.storage_type())
-
     if idx != None:
         # add old histogram only in single bin 
-        slices = [idx if ax==axis else slice(None) for ax in h.axes]
+        slices = [idx if ax==axis else slice(None) for ax in hnew.axes]
         hnew.view(flow=flow)[*slices] = h.view(flow=flow)
     else:
         # Broadcast to new shape
-        slices = [np.newaxis if ax==axis else slice(None) for ax in h.axes]
+        slices = [np.newaxis if ax==axis else slice(None) for ax in hnew.axes]
         hnew.view(flow=flow)[...] = hnew.view(flow=flow)+h.view(flow=flow)[*slices]
-
     return hnew
 
 def clipNegativeVals(h, clipValue=0, createNew=False):

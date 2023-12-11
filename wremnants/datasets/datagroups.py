@@ -492,9 +492,9 @@ class Datagroups(object):
 
         logger.debug(f"Gen axes are now {self.gen_axes}")
 
-    def getGenBinIndices(self, h, axesToRead=[]):
+    def getGenBinIndices(self, h, axesToRead=None):
         gen_bins = []
-        for gen_axis in (axesToRead if len(axesToRead) else self.gen_axes):
+        for gen_axis in (self.gen_axes if axesToRead is None else axesToRead):
             if gen_axis not in h.axes.name:
                 raise RuntimeError(f"Gen axis '{gen_axis}' not found in histogram axes '{h.axes.name}'!")
 
@@ -506,10 +506,11 @@ class Datagroups(object):
             gen_bins.append(gen_bin_list)
         return gen_bins
 
-    def defineSignalBinsUnfolding(self, group_name, new_name=None, member_filter=None, histToReadAxes="xnorm", axesToRead=[]):
+    def defineSignalBinsUnfolding(self, group_name, new_name=None, member_filter=None, histToReadAxes="xnorm", axesToRead=None):
         if group_name not in self.groups.keys():
             raise RuntimeError(f"Base group {group_name} not found in groups {self.groups.keys()}!")
-
+        if axesToRead is None:
+            axesToRead = self.gen_axes
         base_members = self.groups[group_name].members[:]
         if member_filter is not None:
             base_members = [m for m in filter(lambda x, f=member_filter: f(x), base_members)]            
