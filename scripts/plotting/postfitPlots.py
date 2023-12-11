@@ -8,7 +8,7 @@ import numpy as np
 import argparse
 import pandas as pd
 
-from utilities import common, logging, boostHistHelpers as hh
+from utilities import common, logging, differential, boostHistHelpers as hh
 from utilities.styles import styles
 from wremnants import plot_tools, histselections as sel
 from utilities.io_tools import output_tools, combinetf_input, combinetf2_input
@@ -255,6 +255,9 @@ else:
             "pt": hist.axis.Regular(34, 26, 60, name = "pt", overflow=False, underflow=False),
             "eta": hist.axis.Regular(48, -2.4, 2.4, name = "eta", overflow=False, underflow=False),
             "charge": common.axis_charge
+            "ptGen": hist.axis.Regular(33, 27, 60, name = "ptGen", overflow=False, underflow=False),
+            "absEtaGen": hist.axis.Regular(differential.eta_binning, name = "absEtaGen", overflow=False, underflow=False),
+            "qGen": common.axis_charge,
         }
     elif analysis=="WMass":
         all_axes = {
@@ -264,9 +267,11 @@ else:
             "charge": common.axis_charge,
             "passIso": common.axis_passIso,
             "passMT": common.axis_passMT,
+            "ptGen": hist.axis.Regular(29, 27, 56, name = "ptGen", overflow=False, underflow=False),
+            "absEtaGen": hist.axis.Regular(differential.eta_binning, name = "absEtaGen", overflow=False, underflow=False),
+            "qGen": common.axis_charge,
         }
-    axes_names = [part for part in filename_parts[-2].split("_") if part in ["pt", "eta", "charge", "ptll", "yll", "mll", "passIso", "passMT"]]
-    axes = [all_axes[a] for a in axes_names]
+    axes = [all_axes[part] for part in filename_parts[-2].split("_") if part in all_axes.keys()]
     shape = [len(a) for a in axes]
 
     hist_data = fitresult["obs;1"].to_hist()

@@ -74,8 +74,8 @@ class Datagroups(object):
 
         make_datagroups(self, **kwargs)
 
-        if "Data" in self.groups:
-            self.lumi = sum([m.lumi for m in self.groups["Data"].members if m.is_data])
+        self.lumi = sum([value.get("lumi", 0) for key, value in self.results.items()])
+        if self.lumi > 0:
             logger.info(f"Integrated luminosity from data: {self.lumi}/fb")
         else:
             self.lumi = 1
