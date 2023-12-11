@@ -207,35 +207,25 @@ def extendHistByMirror(hvar, hnom, downAsUp=False, downAsNomi=False):
     
     return hnew
 
+# add new axis and set values of old histogram to idx
+def addGenChargeAxis(h, idx):
+    return addGenericAxis(h, hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "qGen"), idx, add_trailing=False, flow=True)
+    
 def addSystAxis(h, size=1, offset=0):
+    return addGenericAxis(h, hist.axis.Regular(size,offset,size+offset, name="systIdx"))
 
-    if h.storage_type == hist.storage.Double:
-        hnew = hist.Hist(*h.axes,hist.axis.Regular(size,offset,size+offset, name="systIdx"))
-        # Broadcast to new shape
-        newvals = hnew.values()+h.values()[...,np.newaxis]
-        hnew[...] = newvals
+def addGenericAxis(h, axis, idx=None, add_trailing=True, flow=True):
+    axes = [*h.axes, axis] if add_trailing else [axis, *h.axes]
+    hnew = hist.Hist(*axes, storage=h.storage_type())
+
+    if idx != None:
+        # add old histogram only in single bin 
+        slices = [idx if ax==axis else slice(None) for ax in h.axes]
+        hnew.view(flow=flow)[*slices] = h.view(flow=flow)
     else:
-        hnew = hist.Hist(*h.axes,hist.axis.Regular(size,offset,size+offset, name="systIdx"), storage=hist.storage.Weight())
         # Broadcast to new shape
-        newvals = hnew.values()+h.values()[...,np.newaxis]
-        newvars = hnew.variances()+h.variances()[...,np.newaxis]
-        hnew[...] = np.stack((newvals, newvars), axis=-1)
-
-    return hnew
-
-def addGenericAxis(h, axis):
-
-    if h.storage_type == hist.storage.Double:
-        hnew = hist.Hist(*h.axes,axis)
-        # Broadcast to new shape
-        newvals = hnew.values()+h.values()[...,np.newaxis]
-        hnew[...] = newvals
-    else:
-        hnew = hist.Hist(*h.axes,axis, storage=hist.storage.Weight())
-        # Broadcast to new shape
-        newvals = hnew.values()+h.values()[...,np.newaxis]
-        newvars = hnew.variances()+h.variances()[...,np.newaxis]
-        hnew[...] = np.stack((newvals, newvars), axis=-1)
+        slices = [np.newaxis if ax==axis else slice(None) for ax in h.axes]
+        hnew.view(flow=flow)[...] = hnew.view(flow=flow)+h.view(flow=flow)[*slices]
 
     return hnew
 

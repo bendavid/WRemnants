@@ -143,11 +143,10 @@ def setup(args, inputFile, fitvar, xnorm=False):
         datagroups.globalAction = None # reset global action in case of rebinning or such
         if not args.unfolding:
             # creating the xnorm model (e.g. for the theory fit)
-            if wmass:
+            if wmass and "qGen" in fitvar:
                 # add gen charge as additional axis
-                datagroups.groups[base_group].add_member_axis("qGen",datagroups.results,
-                    member_filters={-1: lambda x: x.name.startswith("Wminus"), 1: lambda x: x.name.startswith("Wplus")}, 
-                    hist_filter=lambda x: x.startswith("xnorm"))
+                datagroups.groups[base_group].memberOp = [ (lambda h, m=member: hh.addGenChargeAxis(h, 
+                    idx=0 if "minus" in m.name else 1)) for member in datagroups.groups[base_group].members]
                 xnorm_axes = ["qGen", *datagroups.gen_axes]
             else:
                 xnorm_axes = datagroups.gen_axes[:]
