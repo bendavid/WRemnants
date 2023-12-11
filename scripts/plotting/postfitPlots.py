@@ -256,19 +256,20 @@ else:
             "eta": hist.axis.Regular(48, -2.4, 2.4, name = "eta", overflow=False, underflow=False),
             "charge": common.axis_charge,
             "ptGen": hist.axis.Regular(33, 27, 60, name = "ptGen", overflow=False, underflow=False),
-            "absEtaGen": hist.axis.Regular(differential.eta_binning, name = "absEtaGen", overflow=False, underflow=False),
+            "absEtaGen": hist.axis.Variable(differential.eta_binning, name = "absEtaGen", overflow=False, underflow=False),
             "qGen": common.axis_charge,
         }
     elif analysis=="WMass":
         all_axes = {
             # "pt": hist.axis.Regular(30, 26, 56, name = "pt", overflow=False, underflow=False),
-            "pt": hist.axis.Regular(31, 26, 57, name = "pt", overflow=False, underflow=False),
+            # "pt": hist.axis.Regular(31, 26, 57, name = "pt", overflow=False, underflow=False),
+            "pt": hist.axis.Regular(29, 27, 56, name = "ptGen", overflow=False, underflow=False),
             "eta": hist.axis.Regular(48, -2.4, 2.4, name = "eta", overflow=False, underflow=False),
             "charge": common.axis_charge,
             "passIso": common.axis_passIso,
             "passMT": common.axis_passMT,
             "ptGen": hist.axis.Regular(29, 27, 56, name = "ptGen", overflow=False, underflow=False),
-            "absEtaGen": hist.axis.Regular(differential.eta_binning, name = "absEtaGen", overflow=False, underflow=False),
+            "absEtaGen": hist.axis.Variable(differential.eta_binning, name = "absEtaGen", overflow=False, underflow=False),
             "qGen": common.axis_charge,
         }
     axes = [all_axes[part] for part in filename_parts[-2].split("_") if part in all_axes.keys()]

@@ -523,7 +523,7 @@ class Datagroups(object):
         for indices in itertools.product(*gen_bin_indices):
 
             proc_name = group_name if new_name is None else new_name
-            for idx, var in zip(indices, self.gen_axes):
+            for idx, var in zip(indices, axesToRead):
                 if idx == hist.underflow:
                     idx_str = "U"
                 elif idx == hist.overflow:
@@ -532,9 +532,10 @@ class Datagroups(object):
                     idx_str = str(idx)
                 proc_name += f"_{var}{idx_str}"
 
+
             self.copyGroup(group_name, proc_name, member_filter=member_filter)
 
-            memberOp = lambda x, indices=indices, genvars=self.gen_axes: x[{var : i for var, i in zip(genvars, indices)}]
+            memberOp = lambda x, indices=indices, genvars=axesToRead: x[{var : i for var, i in zip(genvars, indices)}]
             self.groups[proc_name].memberOp = [memberOp for m in base_members]
 
             self.unconstrainedProcesses.append(proc_name)
