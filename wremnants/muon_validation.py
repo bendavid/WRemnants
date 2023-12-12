@@ -160,8 +160,8 @@ def make_reco_over_gen_hists(df, results):
     nominal_cols_gen_smeared_over_gen = [
         "goodMuons_pt0_gen_smeared_over_gen",
     ]
-    axis_pt_reco_over_gen = hist.axis.Regular(1000, 0.9, 1.1, underflow=True, overflow=True, name = "reco_pt_over_gen")
-    axis_qop_reco_over_gen = hist.axis.Regular(1000, 0.9, 1.1, underflow=True, overflow=True, name = "reco_qop_over_gen")
+    axis_pt_reco_over_gen = hist.axis.Regular(1000, 0.9, 1.1, underflow=True, overflow=True, name = "reco_pt_over_gen", metadata="gen")
+    axis_qop_reco_over_gen = hist.axis.Regular(1000, 0.9, 1.1, underflow=True, overflow=True, name = "reco_qop_over_gen", metadata="gen")
     crctd_over_gen =  df.HistoBoost("crctd_over_gen", [axis_pt_reco_over_gen], [*nominal_cols_crctd_over_gen, "nominal_weight"], storage=hist.storage.Double())
     cvh_over_gen =  df.HistoBoost("cvh_over_gen", [axis_pt_reco_over_gen], [*nominal_cols_cvh_over_gen, "nominal_weight"], storage=hist.storage.Double())
     uncrct_over_gen = df.HistoBoost("uncrct_over_gen", [axis_pt_reco_over_gen], [*nominal_cols_uncrct_over_gen, "nominal_weight"], storage=hist.storage.Double())
@@ -187,7 +187,7 @@ def make_hists_for_event_weights_perse(
     ):
     df = df.Define(f"weights_{method}_dn", f"{weights_col}(0,0)/{nominal_weight_col}")
     df = df.Define(f"weights_{method}_up", f"{weights_col}(0,1)/{nominal_weight_col}")
-    axis_weights = hist.axis.Regular(1000, 0.99, 1.01, underflow=True, overflow=True, name = "weights")
+    axis_weights = hist.axis.Regular(1000, 0.99, 1.01, underflow=True, overflow=True, name = "weights", metadata="gen")
     weights_dn = df.HistoBoost(
         f"weights_{method}_dn", 
         [*nominal_axes, axis_weights],

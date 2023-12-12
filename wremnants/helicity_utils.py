@@ -8,7 +8,7 @@ import hist
 import pickle
 import lz4.frame
 from .correctionsTensor_helper import makeCorrectionsTensor
-from .theory_tools import axis_helicity, moments_to_angular_coeffs
+from .theory_tools import moments_to_angular_coeffs
 from utilities import common, logging
 from utilities import boostHistHelpers as hh
 import numpy as np
@@ -23,7 +23,7 @@ narf.clingutils.Declare('#include "syst_helicity_utils.h"')
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
 #UL, A0...A4
-axis_helicity_multidim = hist.axis.Integer(-1, 8, name="helicitySig", overflow=False, underflow=False)
+axis_helicity_multidim = hist.axis.Integer(-1, 8, name="helicitySig", overflow=False, underflow=False, metadata="gen")
 
 #creates the helicity weight tensor
 def makehelicityWeightHelper(is_w_like = False, filename=None):
@@ -65,7 +65,7 @@ def make_muon_eff_stat_helpers_helicity(helper_stat, nhelicity=6):
     return helper_stat, tensor_axes
 
 #1D tensor
-# axis_all = hist.axis.Integer(0, 5, underflow = False, overflow = False, name = "reco-tracking-idip-trigger-iso")
+# axis_all = hist.axis.Integer(0, 5, underflow = False, overflow = False, name = "reco-tracking-idip-trigger-iso", metadata="reco")
 def make_muon_eff_syst_helper_helicity(helper_syst, nhelicity=6):
     nsize=helper_syst.tensor_axes[0].size
     nvars=helper_syst.tensor_axes[1].size

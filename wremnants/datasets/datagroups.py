@@ -66,6 +66,7 @@ class Datagroups(object):
         self.fakeName = "Fake"
         self.dataName = "Data"
         self.setGenAxes()
+        self.fakerate_axes = ["pt", "eta", "charge"]
 
         if "lowpu" in self.mode:
             from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU as make_datagroups
@@ -206,7 +207,7 @@ class Datagroups(object):
     ## baseName takes values such as "nominal"
     def loadHistsForDatagroups(self, 
         baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
-        applySelection=True, fakerateIntegrationAxes=[], forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=1, 
+        applySelection=True, forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=1, 
         excludeProcs=None, forceToNominal=[], sumFakesPartial=True
     ):
         logger.debug("Calling loadHistsForDatagroups()")
@@ -364,8 +365,8 @@ class Datagroups(object):
                     logger.warning(f"Selection requested for process {procName} but applySelection=False, thus it will be ignored")
                 elif label in group.hists.keys():
                     logger.debug(f"Apply selection for process {procName}")
-                    if procName == self.fakeName and "fakerate_integration_axes" not in group.selectOpArgs and len(fakerateIntegrationAxes):
-                        opArgs = {**group.selectOpArgs, "fakerate_integration_axes": fakerateIntegrationAxes}
+                    if procName == self.fakeName and "fakerate_axes" not in group.selectOpArgs and len(self.fakerate_axes):
+                        opArgs = {**group.selectOpArgs, "fakerate_axes": self.fakerate_axes}
                     else:
                         opArgs = group.selectOpArgs
                     if group.hists[label]:
@@ -427,11 +428,11 @@ class Datagroups(object):
 
     def addSummedProc(self, refname, name, label=None, color=None, exclude=["Data"], relabel=None, 
             procsToRead=None, reload=False, rename=None, action=None, preOpMap={}, preOpArgs={}, 
-            fakerateIntegrationAxes=[], forceNonzero=True):
+            forceNonzero=True):
         if reload:
             self.loadHistsForDatagroups(refname, syst=name, excludeProcs=exclude,
                 procsToRead=procsToRead, preOpMap=preOpMap, preOpArgs=preOpArgs, 
-                fakerateIntegrationAxes=fakerateIntegrationAxes, forceNonzero=forceNonzero)
+                forceNonzero=forceNonzero)
 
         if not rename:
             rename = name

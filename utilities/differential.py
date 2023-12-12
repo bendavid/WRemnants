@@ -9,10 +9,10 @@ def get_pt_eta_axes(n_bins_pt, min_pt, max_pt, n_bins_eta=0, flow_pt=True, flow_
 
     # gen axes for differential measurement
     if n_bins_eta > 0:
-        axis_absEtaGen = hist.axis.Regular(n_bins_eta, 0, 2.4, underflow=False, overflow=flow_eta, name = "absEtaGen")
+        axis_absEtaGen = hist.axis.Regular(n_bins_eta, 0, 2.4, underflow=False, overflow=flow_eta, name = "absEtaGen", metadata="gen")
     else:
-        axis_absEtaGen = hist.axis.Variable(eta_binning, underflow=False, overflow=flow_eta, name = "absEtaGen")
-    axis_ptGen = hist.axis.Regular(n_bins_pt, min_pt, max_pt, underflow=flow_pt, overflow=flow_pt, name = "ptGen")    
+        axis_absEtaGen = hist.axis.Variable(eta_binning, underflow=False, overflow=flow_eta, name = "absEtaGen", metadata="gen")
+    axis_ptGen = hist.axis.Regular(n_bins_pt, min_pt, max_pt, underflow=flow_pt, overflow=flow_pt, name = "ptGen", metadata="gen")    
 
     axes = [axis_ptGen, axis_absEtaGen]
     cols = ["ptGen", "absEtaGen"]
@@ -26,8 +26,7 @@ def get_pt_eta_charge_axes(n_bins_pt, min_pt, max_pt, n_bins_eta=0, flow_pt=True
 
     axes, cols = get_pt_eta_axes(n_bins_pt, min_pt, max_pt, n_bins_eta, flow_pt, flow_eta)
 
-    axis_qGen = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "qGen")
-
+    axis_qGen = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "qGen", metadata="gen")
     axes.append(axis_qGen)
     cols.append("qGen")
 
@@ -52,7 +51,7 @@ def get_dilepton_axes(gen_vars, gen_axes, add_out_of_acceptance_axis=False):
         selections.append("absYVGen < {0}".format(gen_axes["absYVGen"].edges[-1]))
 
     if add_out_of_acceptance_axis:
-        axes.append(hist.axis.Boolean(name = "acceptance"))
+        axes.append(hist.axis.Boolean(name = "acceptance", metadata="gen"))
         cols.append("acceptance")
 
     return axes, cols, selections
@@ -65,12 +64,12 @@ def get_theoryAgnostic_axes(ptV_bins=[], absYV_bins=[], ptV_flow=False, absYV_fl
     # Note that the helicity axis is defined elsewhere, and must not be added to the list of axes returned here
     axis_ptVgen = hist.axis.Variable(
         ptV_bins_init,
-        name = "ptVgenSig", underflow=False, overflow=ptV_flow
+        name = "ptVgenSig", underflow=False, overflow=ptV_flow, metadata="gen"
     )
 
     axis_absYVgen = hist.axis.Variable(
         absYV_bins_init,
-        name = "absYVgenSig", underflow=False, overflow=absYV_flow
+        name = "absYVgenSig", underflow=False, overflow=absYV_flow, metadata="gen"
     )
 
     axes = [axis_ptVgen, axis_absYVgen]

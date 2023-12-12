@@ -17,15 +17,23 @@ hist_map = {
     "ptll_mll" : "nominal",
 }
 
-def fakeHistABCD(h, thresholdMT=40.0, fakerate_integration_axes=[], axis_name_mt="mt", integrateLowMT=True, integrateHighMT=False):
+def fakeHistABCD(h, thresholdMT=40.0, fakerate_axes=[], axis_name_mt="mt", integrateLowMT=True, integrateHighMT=False):
     # integrateMT=False keeps the mT axis in the returned histogram (can be used to have fakes vs mT)
 
     nameMT, failMT, passMT = get_mt_selection(h, thresholdMT, axis_name_mt, integrateLowMT, integrateHighMT)
 
-    if any(a in h.axes.name for a in fakerate_integration_axes):
-        fakerate_axes = [n for n in h.axes.name if n not in [*fakerate_integration_axes, common.passIsoName, nameMT]]
-        hPassIsoFailMT = h[{**common.passIso, nameMT: failMT}].project(*fakerate_axes)
-        hFailIsoFailMT = h[{**common.failIso, nameMT: failMT}].project(*fakerate_axes)
+    if any([ax.metadata is None or ax.metadata not in ["reco","gen","syst"] for ax in h.axes]):
+        axes = [ax.name for ax in h.axes if ax.metadata is None or ax.metadata not in ["reco","gen","syst"]]
+        raise ValueError(f"Missing or unknown metadata for axes {axes}; undefined behaviour for fakerate computation")
+
+    # compute fakerate in fakerate axes and systematic axes (separately for each systematic)
+    syst_axes = [ax.name for ax in h.axes if ax.metadata == "syst"]
+    if any([a not in [*fakerate_axes, common.passIsoName, nameMT, *syst_axes] for a in h.axes.name]):
+        logger.error(f"Integrate out {[a for a in h.axes.name if a not in [*fakerate_axes, common.passIsoName, nameMT, *syst_axes]]} in fakerate computation")
+        import pdb
+        pdb.set_trace()
+        hPassIsoFailMT = h[{**common.passIso, nameMT: failMT}].project(*fakerate_axes, *syst_axes)
+        hFailIsoFailMT = h[{**common.failIso, nameMT: failMT}].project(*fakerate_axes, *syst_axes)
     else:
         hPassIsoFailMT = h[{**common.passIso, nameMT: failMT}]
         hFailIsoFailMT = h[{**common.failIso, nameMT: failMT}]

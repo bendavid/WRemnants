@@ -92,7 +92,7 @@ class HDF5Writer(object):
         if return_variances and (h.storage_type != hist.storage.Weight):
             raise RuntimeError(f"Sumw2 not filled for {h} but needed for binByBin uncertainties")
 
-        if chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.fit_axes):
+        if chanInfo.ABCD and set(chanInfo.getFakerateAxes()) != set(chanInfo.fit_axes):
             h = projectABCD(chanInfo, h, return_variances=return_variances)
         elif h.axes.name != axes:
             h = h.project(*axes)

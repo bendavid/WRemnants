@@ -44,28 +44,27 @@ for d in datasets: logger.info(f"Dataset {d.name}")
 
 
 # standard regular axes
-axis_eta = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
-axis_pt = hist.axis.Regular(29, 26., 55., name = "pt")
-axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge")
-#axis_mll = hist.axis.Regular(60, 60., 120., underflow=False, overflow=False, name = "mll")
-axis_yll = hist.axis.Regular(50, -2.5, 2.5, name = "yll")
-axis_ptll = hist.axis.Regular(300, 0, 300,  name = "ptll")
+axis_eta = hist.axis.Regular(48, -2.4, 2.4, name = "eta", metadata="reco")
+axis_pt = hist.axis.Regular(29, 26., 55., name = "pt", metadata="reco")
+#axis_mll = hist.axis.Regular(60, 60., 120., underflow=False, overflow=False, name = "mll", metadata="reco")
+axis_yll = hist.axis.Regular(50, -2.5, 2.5, name = "yll", metadata="reco")
+axis_ptll = hist.axis.Regular(300, 0, 300,  name = "ptll", metadata="reco")
 
-axis_ptl = hist.axis.Regular(100, 0., 200., name = "ptl")
-axis_etal = hist.axis.Regular(50, -2.5, 2.5, name = "etal")
+axis_ptl = hist.axis.Regular(100, 0., 200., name = "ptl", metadata="reco")
+axis_etal = hist.axis.Regular(50, -2.5, 2.5, name = "etal", metadata="reco")
 
 
 bins_mll = [60, 65, 70, 72, 74, 76, 78] + list(range(80, 100, 1)) + [100, 102, 104, 106, 108, 110, 115, 120]
-axis_mll = hist.axis.Variable(bins_mll, name = "mll") 
-axis_lin = hist.axis.Regular(5, 0, 5, name = "lin")
+axis_mll = hist.axis.Variable(bins_mll, name = "mll", metadata="reco") 
+axis_lin = hist.axis.Regular(5, 0, 5, name = "lin", metadata="reco")
 
 qcdScaleByHelicity_helper = wremnants.theory_corrections.make_qcd_uncertainty_helper_by_helicity(is_w_like = True)
 axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
 axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
 
 gen_axes = {
-    "ptVGen": hist.axis.Variable([0, 8, 14, 20, 30, 40, 50, 60, 75, 90, 150], name = "ptVGen", underflow=False, overflow=False),
-    "absYVGen": hist.axis.Regular(10, 0, 2.5, name = "absYVGen", underflow=False, overflow=False),  
+    "ptVGen": hist.axis.Variable([0, 8, 14, 20, 30, 40, 50, 60, 75, 90, 150], name = "ptVGen", underflow=False, overflow=False, metadata="gen"),
+    "absYVGen": hist.axis.Regular(10, 0, 2.5, name = "absYVGen", underflow=False, overflow=False, metadata="gen"),  
 }
 
 if args.unfolding:
@@ -74,14 +73,14 @@ if args.unfolding:
     
 # axes for final cards/fitting
 nominal_axes = [
-    hist.axis.Variable([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 25, 30, 40, 50, 60, 75, 90, 150], name = "ptll", underflow=False, overflow=True),
-    hist.axis.Regular(20, -2.5, 2.5, name = "yll", overflow=True, underflow=True), 
-    axis_charge]
+    hist.axis.Variable([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 25, 30, 40, 50, 60, 75, 90, 150], name = "ptll", underflow=False, overflow=True, metadata="reco"),
+    hist.axis.Regular(20, -2.5, 2.5, name = "yll", overflow=True, underflow=True, metadata="reco"), 
+    common.axis_charge]
 
 # corresponding columns
 nominal_cols = ["ptll", "yll", "TrigLep_charge"]
 
-axis_mt = hist.axis.Regular(200, 0., 200., name = "mt", underflow=False)
+axis_mt = hist.axis.Regular(200, 0., 200., name = "mt", underflow=False, metadata="reco")
 axes_mT = [axis_mt]
 cols_mT = ["transverseMass"]
 

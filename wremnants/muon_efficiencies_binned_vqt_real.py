@@ -34,12 +34,12 @@ def make_muon_efficiency_helpers_binned_vqt_real(filename = data_dir + "/muonSF/
     axis_pt_eff = None
     # categorical axes in python bindings always have an overflow bin, so use a regular
     # axis for the charge
-    axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "SF charge")
-    axis_charge_inclusive = hist.axis.Regular(1, -2., 2., underflow=False, overflow=False, name = "SF charge") # for isolation and effStat only
+    axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "SF charge", metadata="syst")
+    axis_charge_inclusive = hist.axis.Regular(1, -2., 2., underflow=False, overflow=False, name = "SF charge", metadata="syst") # for isolation and effStat only
     isoEff_types = ["iso", "isonotrig", "antiiso", "antiisonotrig"]
     allEff_types = ["reco", "tracking", "idip", "trigger"] + isoEff_types
-    axis_allEff_type = hist.axis.StrCategory(allEff_types, name = "allEff_type")
-    axis_nom_syst = hist.axis.Integer(0, 2, underflow = False, overflow =False, name = "nom-syst") # only one syst for now (and the nominal in the first bin)
+    axis_allEff_type = hist.axis.StrCategory(allEff_types, name = "allEff_type", metadata="syst")
+    axis_nom_syst = hist.axis.Integer(0, 2, underflow = False, overflow =False, name = "nom-syst", metadata="syst") # only one syst for now (and the nominal in the first bin)
     
     charges = { -1. : "minus", 1. : "plus" }
     chargeDependentSteps = common.muonEfficiency_chargeDependentSteps
@@ -86,7 +86,7 @@ def make_muon_efficiency_helpers_binned_vqt_real(filename = data_dir + "/muonSF/
                         axis_eta_eff = hist_hist.axes[0]
                         axis_pt_eff = hist_hist.axes[1]
                         # store all systs (currently only 1) with the nominal, for all efficiency steps
-                        axis_eff_type = hist.axis.StrCategory(effSyst_manager[effSystKey]["axisLabels"], name = f"{effSystKey}_eff_type")
+                        axis_eff_type = hist.axis.StrCategory(effSyst_manager[effSystKey]["axisLabels"], name = f"{effSystKey}_eff_type", metadata="syst")
                         effSyst_manager[effSystKey]["boostHist"] = hist.Hist(axis_eta_eff, axis_pt_eff, axis_charge, axis_eff_type, axis_nom_syst, name = effSystKey, storage = hist.storage.Weight())
                     # could use max_pt to remove some of the pt bins for the input histogram
                     effSyst_manager[effSystKey]["boostHist"].view(flow=True)[:, :, axis_charge.index(charge), axis_eff_type.index(eff_type), nomiAltId] = hist_hist.view(flow=True)[:,:]
@@ -144,7 +144,7 @@ def make_muon_efficiency_helpers_binned_vqt_real(filename = data_dir + "/muonSF/
                                                                )
 
     # define axis for syst variations with all steps
-    axis_all = hist.axis.Integer(0, 5, underflow = False, overflow = False, name = "reco-tracking-idip-trigger-iso")
+    axis_all = hist.axis.Integer(0, 5, underflow = False, overflow = False, name = "reco-tracking-idip-trigger-iso", metadata="syst")
     helper_syst.tensor_axes = [axis_all]
 
 
@@ -211,7 +211,7 @@ def make_muon_efficiency_helpers_binned_vqt_real(filename = data_dir + "/muonSF/
                 if effStat_manager[effStatKey]["boostHist"] is None:
                     axis_eta_eff = hist_hist.axes[0]
                     axis_pt_eff = hist_hist.axes[1]
-                    axis_eff_type = hist.axis.StrCategory(effStat_manager[effStatKey]["axisLabels"], name = f"{effStatKey}_eff_type")
+                    axis_eff_type = hist.axis.StrCategory(effStat_manager[effStatKey]["axisLabels"], name = f"{effStatKey}_eff_type", metadata="syst")
                     effStat_manager[effStatKey]["nCharges"] = 2 if eff_type in chargeDependentSteps else 1
                     effStat_manager[effStatKey]["boostHist"] = hist.Hist(axis_eta_eff,
                                                                          axis_pt_eff,
@@ -243,14 +243,14 @@ def make_muon_efficiency_helpers_binned_vqt_real(filename = data_dir + "/muonSF/
 
         # make new versions of these axes without overflow/underflow to index the tensor
         if isinstance(axis_eta_eff, bh.axis.Regular):
-            axis_eta_eff_tensor = hist.axis.Regular(axis_eta_eff.size, axis_eta_eff.edges[0], axis_eta_eff.edges[-1], name = axis_eta_eff.name, overflow = False, underflow = False)
+            axis_eta_eff_tensor = hist.axis.Regular(axis_eta_eff.size, axis_eta_eff.edges[0], axis_eta_eff.edges[-1], name = axis_eta_eff.name, overflow = False, underflow = False, metadata="syst")
         elif isinstance(axis_eta_eff, bh.axis.Variable):
-            axis_eta_eff_tensor = hist.axis.Variable(axis_eta_eff.edges, name = axis_eta_eff.name, overflow = False, underflow = False)
+            axis_eta_eff_tensor = hist.axis.Variable(axis_eta_eff.edges, name = axis_eta_eff.name, overflow = False, underflow = False, metadata="syst")
         # for pt need to additionally remove the out of range bins if any
         if isinstance(axis_pt_eff, bh.axis.Regular):
-            axis_pt_eff_tensor = hist.axis.Regular(axis_pt_eff.size, axis_pt_eff.edges[0], axis_pt_eff.edges[-1], name = "nPtBins", overflow = False, underflow = False)
+            axis_pt_eff_tensor = hist.axis.Regular(axis_pt_eff.size, axis_pt_eff.edges[0], axis_pt_eff.edges[-1], name = "nPtBins", overflow = False, underflow = False, metadata="syst")
         elif isinstance(axis_pt_eff, bh.axis.Variable):
-            axis_pt_eff_tensor = hist.axis.Variable(axis_pt_eff.edges[:nptbins+1], name = "nPtBins", overflow = False, underflow = False)
+            axis_pt_eff_tensor = hist.axis.Variable(axis_pt_eff.edges[:nptbins+1], name = "nPtBins", overflow = False, underflow = False, metadata="syst")
 
         #print(f"{effStatKey} nPtBins-tensor = {axis_pt_eff_tensor.size}")
         helper_stat.tensor_axes = [axis_eta_eff_tensor, axis_pt_eff_tensor, axis_charge_def]
