@@ -23,6 +23,7 @@ narf.clingutils.Declare('#include "syst_helicity_utils.h"')
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
 #UL, A0...A4
+axis_helicity = hist.axis.Integer(-1, 8, name="helicity", overflow=False, underflow=False)
 axis_helicity_multidim = hist.axis.Integer(-1, 8, name="helicitySig", overflow=False, underflow=False)
 
 #creates the helicity weight tensor

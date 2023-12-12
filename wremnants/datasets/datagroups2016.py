@@ -10,7 +10,7 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
 
     if dg.mode == "wmass" and applySelection:
         sigOp = sel.signalHistWmass
-        fakeOp = sel.fakeHistABCD,
+        fakeOp = sel.fakeHistABCD
         fakeOpArgs = {"fakerate_integration_axes":[]}
     else:
         sigOp = None

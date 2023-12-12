@@ -318,7 +318,10 @@ class CardTool(object):
 
         if mirrorDownVarEqualToUp and mirrorDownVarEqualToNomi:
             raise ValueError("mirrorDownVarEqualToUp and mirrorDownVarEqualToNomi cannot be both True")
-        
+
+        if symmetrize not in ["average", "conservative"]:
+            raise ValueError("Invalid option for 'symmetrize'.  Valid options are 'average' and 'conservative'")
+
         # protection when the input list is empty because of filters but the systematic is built reading the nominal
         # since the nominal reads all filtered processes regardless whether a systematic is passed to them or not
         # this can happen when creating new systs by scaling of the nominal histogram
@@ -720,9 +723,7 @@ class CardTool(object):
         var_map = self.systHists(h, syst)
 
         if systInfo and systInfo["symmetrize"] is not None:
-                if systInfo["symmetrize"] not in ["average", "conservative"]:
-                    raise ValueError("Invalid option for 'symmetrize'.  Valid options are 'average' and 'conservative'")
-                self.symmetrizeUpDown(var_map, hnom, conservative = systInfo["symmetrize"]=="conservative")
+            self.symmetrizeUpDown(var_map, hnom, conservative = systInfo["symmetrize"]=="conservative")
 
         if check_systs and syst != self.nominalName:
             self.checkSysts(var_map, proc,

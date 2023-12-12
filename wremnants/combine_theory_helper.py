@@ -143,7 +143,7 @@ class TheoryHelper(object):
         base_name = f"{group_name}{extra_name}"
 
         skip_entries = []
-        action_map = {}
+        preop_map = {}
 
         # skip nominal
         skip_entries.append({"vars" : "nominal"})
@@ -154,8 +154,8 @@ class TheoryHelper(object):
         logger.debug(f"using {scale_hist} histogram for QCD scale systematics")
         logger.debug(f"expanded_samples: {expanded_samples}")
 
-        action_map = {}
-        action_args = {}
+        preop_map = {}
+        preop_args = {}
 
         if pt_binned:
             signal_samples = self.card_tool.procGroups['signal_samples']
@@ -184,10 +184,10 @@ class TheoryHelper(object):
                     skip_entries.extend([{pt_ax : complex(0, x)} for x in binning[:pt_idx]])
 
             func = syst_tools.hist_to_variations
-            action_map = {proc : func for proc in expanded_samples}
-            action_args["gen_axes"] = [pt_ax]
-            action_args["rebin_axes"] = [pt_ax]
-            action_args["rebin_edges"] = [binning]
+            preop_map = {proc : func for proc in expanded_samples}
+            preop_args["gen_axes"] = [pt_ax]
+            preop_args["rebin_axes"] = [pt_ax]
+            preop_args["rebin_edges"] = [binning]
 
         # Skip MiNNLO unc. 
         if self.resumUnc and not (pt_binned or helicity):
@@ -196,8 +196,8 @@ class TheoryHelper(object):
             #FIXME Maybe put W and Z nuisances in the same group
             group_name += f"MiNNLO"
             self.card_tool.addSystematic(scale_hist,
-                actionMap=action_map,
-                actionArgs=action_args,
+                preOpMap=preop_map,
+                preOpArgs=preop_args,
                 symmetrize = "conservative",
                 processes=[sample_group],
                 group=group_name,
@@ -253,7 +253,6 @@ class TheoryHelper(object):
             passToFakes=self.propagate_to_fakes,
             systNameReplace=name_replace,
             action=lambda h: h[{self.syst_ax : [central_var, *selected_tnp_nuisances]}],
-            doActionBeforeMirror=True,
             mirror=mirror,
             scale=scale,
             skipEntries=[{self.syst_ax : central_var},],
@@ -340,8 +339,8 @@ class TheoryHelper(object):
             splitGroup={"resum": ".*"},
             passToFakes=to_fakes,
             skipEntries=[{syst_ax : x} for x in both_exclude+tnp_nuisances],
-            systAxes=["downUpVar"], # Is added by the actionMap
-            actionMap={s : lambda h: hh.syst_min_and_max_env_hist(h, obs, "vars", resumscale_nuisances) for s in expanded_samples},
+            systAxes=["downUpVar"], # Is added by the preOpMap
+            preOpMap={s : lambda h: hh.syst_min_and_max_env_hist(h, obs, "vars", resumscale_nuisances) for s in expanded_samples},
             outNames=[f"scetlibResumScale{name_append}Up", f"scetlibResumScale{name_append}Down"],
             rename=f"resumScale{name_append}",
             systNamePrepend=f"resumScale{name_append}_",
@@ -353,7 +352,7 @@ class TheoryHelper(object):
             splitGroup={"resum": ".*"},
             passToFakes=to_fakes,
             systAxes=["vars"],
-            actionMap={s : lambda h: h[{"vars" : ["kappaFO0.5-kappaf2.", "kappaFO2.-kappaf0.5", "mufdown", "mufup",]}] for s in expanded_samples},
+            preOpMap={s : lambda h: h[{"vars" : ["kappaFO0.5-kappaf2.", "kappaFO2.-kappaf0.5", "mufdown", "mufup",]}] for s in expanded_samples},
             outNames=[f"scetlib_kappa{name_append}Up", f"scetlib_kappa{name_append}Down", f"scetlib_muF{name_append}Up", f"scetlib_muF{name_append}Down"],
             rename=f"resumFOScale{name_append}",
             systNamePrepend=f"resumScale{name_append}_",
@@ -384,27 +383,27 @@ class TheoryHelper(object):
                 else:
                     raise ValueError(f"Failed to find all vars {vals} for var {label} in hist {self.np_hist_name}")
 
+
+        binned = "binned" in self.np_model
+        gen_axes = ["absYVgenNP", "chargeVgenNP"]
+        sum_axes = [] if binned else ["absYVgenNP"]
+        syst_axes = ["absYVgenNP", "chargeVgenNP", self.syst_ax] if binned else ["chargeVgenNP", self.syst_ax]
+        action=lambda h,entries: syst_tools.hist_to_variations(h[{self.syst_ax : [central_var, *entries]}], gen_axes=gen_axes, sum_axes=sum_axes)
         for sample_group in self.samples:
             if not self.card_tool.procGroups.get(sample_group, None):
                 continue
             label = self.sample_label(sample_group)
             for nuisance,vals in np_map.items():
                 entries = [nuisance+v for v in vals]
-                binned = "binned" in self.np_model
-
-                gen_axes = ["absYVgenNP", "chargeVgenNP"]
-                sum_axes = [] if binned else ["absYVgenNP"]
-
-                action=lambda h,e=entries: syst_tools.hist_to_variations(h[{self.syst_ax : [central_var, *e]}], gen_axes=gen_axes, sum_axes=sum_axes)
-
                 rename = f"scetlibNP{label}{nuisance}"
                 self.card_tool.addSystematic(name=self.np_hist_name,
                     processes=[sample_group],
                     group="resumNonpert",
                     splitGroup={"resum": ".*"},
-                    systAxes=["chargeVgenNP", self.syst_ax] if not binned else ["absYVgenNP", "chargeVgenNP", self.syst_ax],
+                    systAxes=syst_axes,
                     passToFakes=self.propagate_to_fakes,
                     action=action,
+                    actionArgs={"entries": entries},
                     # outNames=[f"{rename}Down", f"{rename}Up"] if not binned else None,
                     systNameReplace=[(entries[1], f"{rename}Up"), (entries[0], f"{rename}Down"), ],
                     skipEntries=[{self.syst_ax : central_var}],
@@ -437,7 +436,7 @@ class TheoryHelper(object):
             group=pdfName,
             splitGroup={f"{pdfName}NoAlphaS": '.*'},
             passToFakes=self.propagate_to_fakes,
-            actionMap=action,
+            preOpMap=action,
             scale=pdfInfo.get("scale", 1)*scale,
             systAxes=[pdf_ax],
         )
@@ -459,7 +458,7 @@ class TheoryHelper(object):
                     group=pdfName,
                     splitGroup={f"{pdfName}NoAlphaS": '.*'},
                     passToFakes=self.propagate_to_fakes,
-                    actionMap=action,
+                    preOpMap=action,
                     scale=pdfInfo.get("scale", 1)*scale,
                     systAxes=[pdf_ax],
                 )
@@ -502,7 +501,7 @@ class TheoryHelper(object):
                 systAxes=["vars"],
                 passToFakes=self.propagate_to_fakes,
                 # NOTE: I don't actually remember why this used no_flow=ptVgen previously, I don't think there's any harm in not using it...
-                # actionMap={s : lambda h: hh.syst_min_and_max_env_hist(h, obs, self.syst_ax,
+                # preOpMap={s : lambda h: hh.syst_min_and_max_env_hist(h, obs, self.syst_ax,
                     # [x for x in h.axes["vars"] if "transition_point" in x]) for s in expanded_samples},
                 action = lambda h: h[{"vars" : transition_vars}],
                 outNames=[f"resumTransitionSym{name_append}Up", f"resumTransitionSym{name_append}Down", f"resumTransitionAsym{name_append}Up", f"resumTransitionAsym{name_append}Down"],

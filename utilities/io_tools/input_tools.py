@@ -91,7 +91,7 @@ def read_scetlib_hist(path, nonsing="none", flip_y_sign=False, charge=None):
     if type(f["hist"]) == hist.Hist:
         scetlibh = f["hist"]
     else:
-        var_axis = hist.axis.Integer(f["bins"][0][0], f["bins"][0][-1], name="vars", flow=False,)
+        var_axis = hist.axis.Integer(f["bins"][0][0], f["bins"][0][-1], name="vars", flow=False)
         mass_axis = hist.axis.Variable(f["bins"][1], name="Q", flow=False)
         y_axis = hist.axis.Variable(f["bins"][2], name="Y", flow=False)
         

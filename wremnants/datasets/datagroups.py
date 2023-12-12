@@ -173,8 +173,8 @@ class Datagroups(object):
             logger.warning(f"Excluded all groups using '{excludes}'. Continue without any group.")
 
     def setFakerateIntegrationAxes(self, axes=[]):
-        for group in self.groups:
-            if "fakerate_integration_axes" in group.selectOpArgs:
+        for group in self.groups.values():
+            if group.selectOpArgs is not None and "fakerate_integration_axes" in group.selectOpArgs:
                 logger.info(f"Set fakerate_integration_axes={axes} for {group.name}")
                 group.selectOpArgs["fakerate_integration_axes"] = axes
 
@@ -369,7 +369,7 @@ class Datagroups(object):
 
             if action and type(action) != dict:
                 logger.debug(f"Applying action={action}     actionArgs={actionArgs}")
-                h = action(group.hists[label], **actionArgs)
+                group.hists[label] = action(group.hists[label], **actionArgs)
 
             if group.selectOp:
                 if not applySelection:

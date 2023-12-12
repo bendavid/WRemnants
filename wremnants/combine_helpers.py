@@ -75,11 +75,11 @@ def setSimultaneousABCD(cardTool,
     cardTool.datagroups.groups[fakename].hists[f"{cardTool.nominalName}"] = hist_fake
 
     # axes in low MT
-    if any(ax not in hist_fake.axes.name for ax in cardTool.fakerateAxes):
-        logger.warning(f"Not all desired fakerate axes found in histogram. Fakerate axes are {cardTool.fakerateAxes}, and histogram axes are {hist_fake.axes.name}")
+    if any(ax not in hist_fake.axes.name for ax in cardTool.getFakerateAxes()):
+        logger.warning(f"Not all desired fakerate axes found in histogram. Fakerate axes are {cardTool.getFakerateAxes()}, and histogram axes are {hist_fake.axes.name}")
 
-    fakerate_axes = [ax.name for ax in hist_fake.axes if ax.name in cardTool.fakerateAxes]
-    fakerate_bin_sizes = [ax.size for ax in hist_fake.axes if ax.name in cardTool.fakerateAxes]
+    fakerate_axes = [ax.name for ax in hist_fake.axes if ax.name in cardTool.getFakerateAxes()]
+    fakerate_bin_sizes = [ax.size for ax in hist_fake.axes if ax.name in cardTool.getFakerateAxes()]
 
     if any(a in hist_fake.axes.name for a in cardTool.getFakerateIntegrationAxes()):
         hist_failMT_failIso = hist_fake[{**common.failIso, nameMT: failMT}].project(*fakerate_axes)
@@ -204,10 +204,10 @@ def setSimultaneousABCD(cardTool,
 def projectABCD(cardTool, h, return_variances=False, dtype="float64"):
     # in case the desired axes are different at low MT and high MT we need to project each seperately, and then concatenate
 
-    if any(ax not in h.axes.name for ax in cardTool.fakerateAxes):
-        logger.warning(f"Not all desired fakerate axes found in histogram. Fakerate axes are {cardTool.fakerateAxes}, and histogram axes are {h.axes.name}")
+    if any(ax not in h.axes.name for ax in cardTool.getFakerateAxes()):
+        logger.warning(f"Not all desired fakerate axes found in histogram. Fakerate axes are {cardTool.getFakerateAxes()}, and histogram axes are {h.axes.name}")
 
-    fakerate_axes = [n for n in h.axes.name if n in cardTool.fakerateAxes]
+    fakerate_axes = [n for n in h.axes.name if n in cardTool.getFakerateAxes()]
 
     lowMT_axes = [n for n in h.axes.name if n in fakerate_axes]
     highMT_failIso_axes = [n for n in h.axes.name if n in [*fakerate_axes, *cardTool.fit_axes]]
