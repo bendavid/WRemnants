@@ -144,7 +144,7 @@ def add_xnorm_histograms(results, df, args, dataset_name, corr_helpers, qcdScale
 
     df_xnorm = df_xnorm.Define("xnorm", "0.5")
 
-    axis_xnorm = hist.axis.Regular(1, 0., 1., name = "count", underflow=False, overflow=False, metadata="gen")
+    axis_xnorm = hist.axis.Regular(1, 0., 1., name = "count", underflow=False, overflow=False, metadata={"type":"gen"})
 
     xnorm_axes = [axis_xnorm, *unfolding_axes]
     xnorm_cols = ["xnorm", *unfolding_cols]

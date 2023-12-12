@@ -71,7 +71,6 @@ class CardTool(object):
         self.ABCD = ABCD
         self.real_data = real_data
         self.absolutePathShapeFileInCard = False
-        self.fakerateIntegrationAxes = []
         self.excludeProcessForChannel = {} # can be used to exclue some POI when runnig a specific name (use case, force gen and reco charges to match)
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : "q1"},
                              "plus"  : {"val" : 1., "id" : "q1", "badId" : "q0"},

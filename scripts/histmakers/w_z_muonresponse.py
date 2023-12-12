@@ -35,10 +35,10 @@ datasets = getDatasets(maxFiles=args.maxFiles,
 era = args.era
 
 
-axis_genPt = hist.axis.Regular(45, 9., 81., name = "genPt", metadata="gen")
-axis_genEta = hist.axis.Regular(50, -2.5, 2.5, name = "genEta", metadata="gen")
-axis_genCharge =  hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "genCharge", metadata="gen")
-axis_qopr = hist.axis.Regular(1001, 0., 2.0, name = "qopr", metadata="gen")
+axis_genPt = hist.axis.Regular(45, 9., 81., name = "genPt", metadata={"type":"gen"})
+axis_genEta = hist.axis.Regular(50, -2.5, 2.5, name = "genEta", metadata={"type":"gen"})
+axis_genCharge =  hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "genCharge", metadata={"type":"gen"})
+axis_qopr = hist.axis.Regular(1001, 0., 2.0, name = "qopr", metadata={"type":"gen"})
 
 response_axes = [axis_genPt, axis_genEta, axis_genCharge, axis_qopr]
 

@@ -62,8 +62,8 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/muonSF/allSmooth
     axis_pt_eff = None
     # categorical axes in python bindings always have an overflow bin, so use a regular
     # axis for the charge
-    axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "SF charge", metadata="syst")
-    axis_charge_inclusive = hist.axis.Regular(1, -2., 2., underflow=False, overflow=False, name = "SF charge", metadata="syst") # for isolation and effStat only
+    axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "SF charge", metadata={"type":"syst"})
+    axis_charge_inclusive = hist.axis.Regular(1, -2., 2., underflow=False, overflow=False, name = "SF charge", metadata={"type":"syst"}) # for isolation and effStat only
     isoEff_types = ["iso", "isonotrig", "antiiso", "isoantitrig"]
     trigEff_types = ["trigger", "antitrigger"] # antitrigger is P(failTrigger|IDIP), SF obtained from trigger SF as (1-SF*effMC)/(1-effMC), similarly to antiiso
     allEff_types = ["reco", "tracking", "idip"] + trigEff_types + isoEff_types
@@ -71,12 +71,12 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/muonSF/allSmooth
     eff_types_2D = [x for x in allEff_types if x not in eff_types_3D]
     logger.info(f"SF steps in 2D (eta-pt): {eff_types_2D}")
     logger.info(f"SF steps in 3D (eta-pt-ut): {eff_types_3D}")
-    axis_allEff_type = hist.axis.StrCategory(allEff_types, name = "allEff_type", metadata="syst")
-    axis_eff_type_2D = hist.axis.StrCategory(eff_types_2D, name = "eff_types_2D_etapt", metadata="syst")
-    axis_eff_type_3D = hist.axis.StrCategory(eff_types_3D, name = "eff_types_3D_etaptut", metadata="syst")
+    axis_allEff_type = hist.axis.StrCategory(allEff_types, name = "allEff_type", metadata={"type":"syst"})
+    axis_eff_type_2D = hist.axis.StrCategory(eff_types_2D, name = "eff_types_2D_etapt", metadata={"type":"syst"})
+    axis_eff_type_3D = hist.axis.StrCategory(eff_types_3D, name = "eff_types_3D_etaptut", metadata={"type":"syst"})
     effSyst_decorrEtaEdges = [round(-2.4 + 0.1*i,1) for i in range(49)]
     Nsyst = 1 + (len(effSyst_decorrEtaEdges) - 1) # 1 inclusive variation + all decorrelated bins
-    axis_nom_syst = hist.axis.Integer(0, 1+Nsyst, underflow = False, overflow =False, name = "nom-systs", metadata="syst") # nominal in first bin
+    axis_nom_syst = hist.axis.Integer(0, 1+Nsyst, underflow = False, overflow =False, name = "nom-systs", metadata={"type":"syst"}) # nominal in first bin
 
     charges = { -1. : "minus", 1. : "plus" }
     chargeDependentSteps = common.muonEfficiency_chargeDependentSteps
@@ -239,8 +239,8 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/muonSF/allSmooth
                                                            )
         helper_syst = ROOT.wrem.muon_efficiency_smooth3D_helper_syst[templateAnalysisArg, Nsyst, type(sf_syst_2D_pyroot), type(sf_syst_3D_pyroot)]( helper )
         # define axis for syst variations with all steps
-        axis_all = hist.axis.Integer(0, 5, underflow = False, overflow = False, name = "reco-tracking-idip-trigger-iso", metadata="syst")
-        axis_nsyst = hist.axis.Integer(0, Nsyst, underflow = False, overflow = False, name = "n_syst_variations", metadata="syst")
+        axis_all = hist.axis.Integer(0, 5, underflow = False, overflow = False, name = "reco-tracking-idip-trigger-iso", metadata={"type":"syst"})
+        axis_nsyst = hist.axis.Integer(0, Nsyst, underflow = False, overflow = False, name = "n_syst_variations", metadata={"type":"syst"})
         helper_syst.tensor_axes = [axis_all, axis_nsyst]
         #
 
@@ -251,8 +251,8 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/muonSF/allSmooth
         helper = ROOT.wrem.muon_efficiency_smooth_helper[templateAnalysisArg, Nsyst, type(sf_syst_2D_pyroot)]( ROOT.std.move(sf_syst_2D_pyroot) )
         helper_syst = ROOT.wrem.muon_efficiency_smooth_helper_syst[templateAnalysisArg, Nsyst, type(sf_syst_2D_pyroot)]( helper )
         # define axis for syst variations with all steps
-        axis_all = hist.axis.Integer(0, 5, underflow = False, overflow = False, name = "reco-tracking-idip-trigger-iso", metadata="syst")
-        axis_nsyst = hist.axis.Integer(0, Nsyst, underflow = False, overflow = False, name = "n_syst_variations", metadata="syst")
+        axis_all = hist.axis.Integer(0, 5, underflow = False, overflow = False, name = "reco-tracking-idip-trigger-iso", metadata={"type":"syst"})
+        axis_nsyst = hist.axis.Integer(0, Nsyst, underflow = False, overflow = False, name = "n_syst_variations", metadata={"type":"syst"})
         helper_syst.tensor_axes = [axis_all, axis_nsyst]
         #
                        
@@ -368,13 +368,13 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/muonSF/allSmooth
                 if nom_up_effStat_axis is None:
                     effStat_manager[effStatKey]["nPtEigenBins"] = nPtEigenBins
                     effStat_manager[effStatKey]["nCharges"] = 2 if eff_type in chargeDependentSteps else 1
-                    nom_up_effStat_axis = hist.axis.Regular(int(1+nPtEigenBins), -0.5, 0.5+nPtEigenBins, underflow=False, overflow=False, name = "nomUpVar", metadata="syst")
+                    nom_up_effStat_axis = hist.axis.Regular(int(1+nPtEigenBins), -0.5, 0.5+nPtEigenBins, underflow=False, overflow=False, name = "nomUpVar", metadata={"type":"syst"})
 
                 if effStat_manager[effStatKey]["boostHist"] is None:
                     axis_eta_eff = cloneAxis(hist_hist.axes[0], overflow=True, underflow=True, newName="SF eta", metadata=hist_hist.axes[0])
                     axis_pt_eff = cloneAxis(hist_hist.axes[1], overflow=True, underflow=True, newName="SF pt", metadata=hist_hist.axes[1])
-                    axis_ut_eff = cloneAxis(hist_hist.axes[2], overflow=True, underflow=True, newName="SF ut", metadata=hist_hist.axes[2]) if is3D else hist.axis.Regular(1, -1e6, 1e6, name = "SF ut", metadata="syst")
-                    axis_eff_type = hist.axis.StrCategory(effStat_manager[effStatKey]["axisLabels"], name = f"{effStatKey}_eff_type", metadata="syst")
+                    axis_ut_eff = cloneAxis(hist_hist.axes[2], overflow=True, underflow=True, newName="SF ut", metadata=hist_hist.axes[2]) if is3D else hist.axis.Regular(1, -1e6, 1e6, name = "SF ut", metadata={"type":"syst"})
+                    axis_eff_type = hist.axis.StrCategory(effStat_manager[effStatKey]["axisLabels"], name = f"{effStatKey}_eff_type", metadata={"type":"syst"})
                     if smooth3D:
                         effStat_manager[effStatKey]["boostHist"] = hist.Hist(axis_eta_eff, axis_pt_eff, axis_charge_def,
                                                                              axis_eff_type,
@@ -433,10 +433,10 @@ def make_muon_efficiency_helpers_smooth(filename = data_dir + "/muonSF/allSmooth
                 helper_stat = ROOT.wrem.muon_efficiency_smooth_helper_stat[templateAnalysisArg, netabins, nPtEigenBins, ncharges, type(sf_stat_pyroot)]( ROOT.std.move(sf_stat_pyroot) )
         # make new versions of these axes without overflow/underflow to index the tensor
         if isinstance(axis_eta_eff, bh.axis.Regular):
-            axis_eta_eff_tensor = hist.axis.Regular(axis_eta_eff.size, axis_eta_eff.edges[0], axis_eta_eff.edges[-1], name = axis_eta_eff.name, overflow = False, underflow = False, metadata="syst")
+            axis_eta_eff_tensor = hist.axis.Regular(axis_eta_eff.size, axis_eta_eff.edges[0], axis_eta_eff.edges[-1], name = axis_eta_eff.name, overflow = False, underflow = False, metadata={"type":"syst"})
         elif isinstance(axis_eta_eff, bh.axis.Variable):
-            axis_eta_eff_tensor = hist.axis.Variable(axis_eta_eff.edges, name = axis_eta_eff.name, overflow = False, underflow = False, metadata="syst")
-        axis_ptEigen_eff_tensor = hist.axis.Integer(0, effStat_manager[effStatKey]["nPtEigenBins"], underflow = False, overflow =False, name = "nPtEigenBins", metadata="syst")    
+            axis_eta_eff_tensor = hist.axis.Variable(axis_eta_eff.edges, name = axis_eta_eff.name, overflow = False, underflow = False, metadata={"type":"syst"})
+        axis_ptEigen_eff_tensor = hist.axis.Integer(0, effStat_manager[effStatKey]["nPtEigenBins"], underflow = False, overflow =False, name = "nPtEigenBins", metadata={"type":"syst"})    
         effStatTensorAxes = [axis_eta_eff_tensor, axis_ptEigen_eff_tensor, axis_charge_def]
         helper_stat.tensor_axes = effStatTensorAxes
         effStat_manager[effStatKey]["helper"] = helper_stat

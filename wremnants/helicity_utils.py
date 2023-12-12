@@ -23,7 +23,7 @@ narf.clingutils.Declare('#include "syst_helicity_utils.h"')
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
 #UL, A0...A4
-axis_helicity_multidim = hist.axis.Integer(-1, 8, name="helicitySig", overflow=False, underflow=False, metadata="gen")
+axis_helicity_multidim = hist.axis.Integer(-1, 8, name="helicitySig", overflow=False, underflow=False, metadata={"type":"gen"})
 
 #creates the helicity weight tensor
 def makehelicityWeightHelper(is_w_like = False, filename=None):
@@ -65,7 +65,7 @@ def make_muon_eff_stat_helpers_helicity(helper_stat, nhelicity=6):
     return helper_stat, tensor_axes
 
 #1D tensor
-# axis_all = hist.axis.Integer(0, 5, underflow = False, overflow = False, name = "reco-tracking-idip-trigger-iso", metadata="reco")
+# axis_all = hist.axis.Integer(0, 5, underflow = False, overflow = False, name = "reco-tracking-idip-trigger-iso", metadata={"type":"reco"})
 def make_muon_eff_syst_helper_helicity(helper_syst, nhelicity=6):
     nsize=helper_syst.tensor_axes[0].size
     nvars=helper_syst.tensor_axes[1].size

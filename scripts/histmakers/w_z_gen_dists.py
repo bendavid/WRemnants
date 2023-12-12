@@ -40,9 +40,9 @@ datasets = getDatasets(maxFiles=args.maxFiles,
 
 logger.debug(f"Will process samples {[d.name for d in datasets]}")
 
-axis_massWgen = hist.axis.Variable([5., 13000.], name="massVgen", underflow=True, overflow=False, metadata="gen")
+axis_massWgen = hist.axis.Variable([5., 13000.], name="massVgen", underflow=True, overflow=False, metadata={"type":"gen"})
 
-axis_massZgen = hist.axis.Regular(12, 60., 120., name="massVgen", metadata="gen")
+axis_massZgen = hist.axis.Regular(12, 60., 120., name="massVgen", metadata={"type":"gen"})
 
 theoryAgnostic_axes, _ = get_theoryAgnostic_axes()
 axis_ptV_thag = theoryAgnostic_axes[0]
@@ -51,15 +51,15 @@ axis_yV_thag = theoryAgnostic_axes[1]
 if not args.useTheoryAgnosticBinning:
     axis_absYVgen = hist.axis.Variable(
         [0., 0.25, 0.5, 0.75, 1., 1.25, 1.5, 1.75, 2., 2.25, 2.5, 2.75, 3., 3.25, 3.5, 4., 5.], # this is the same binning as hists from theory corrections
-        name = "absYVgen", underflow=False, metadata="gen"
+        name = "absYVgen", underflow=False, metadata={"type":"gen"}
     )
 else:
     axis_absYVgen = hist.axis.Variable(
         axis_yV_thag.edges, #same axis as theory agnostic norms
-        name = "absYVgen", underflow=False, metadata="gen"
+        name = "absYVgen", underflow=False, metadata={"type":"gen"}
     )
 
-axis_ygen = hist.axis.Regular(10, -5., 5., name="y", metadata="gen")
+axis_ygen = hist.axis.Regular(10, -5., 5., name="y", metadata={"type":"gen"})
 axis_rapidity = axis_ygen if args.signedY else axis_absYVgen
 col_rapidity =  "yVgen" if args.signedY else "absYVgen"
 
@@ -67,30 +67,30 @@ if not args.useTheoryAgnosticBinning:
     axis_ptVgen = hist.axis.Variable(
      list(range(0,151))+[160., 190.0, 220.0, 250.0, 300.0, 400.0, 500.0, 800.0, 13000.0], 
     #common.ptV_binning,
-    name = "ptVgen", underflow=False, metadata="gen",
+    name = "ptVgen", underflow=False, metadata={"type":"gen"},
 )
 else:
     axis_ptVgen = hist.axis.Variable(
     axis_ptV_thag.edges, #same axis as theory agnostic norms, 
     #common.ptV_binning,
-    name = "ptVgen", underflow=False, metadata="gen",
+    name = "ptVgen", underflow=False, metadata={"type":"gen"},
 )
 
 axis_ptqVgen = hist.axis.Variable(
     [round(x, 4) for x in list(np.arange(0, 0.1 + 0.0125, 0.0125))]+[round(x, 4) for x in list(np.arange(0.1+0.025, 0.5 + 0.025, 0.025))], 
-    name = "ptqVgen", underflow=False, metadata="gen"
+    name = "ptqVgen", underflow=False, metadata={"type":"gen"}
 )
 
 axis_chargeWgen = hist.axis.Regular(
-    2, -2, 2, name="chargeVgen", underflow=False, overflow=False, metadata="gen"
+    2, -2, 2, name="chargeVgen", underflow=False, overflow=False, metadata={"type":"gen"}
 )
 
 axis_chargeZgen = hist.axis.Integer(
-    0, 1, name="chargeVgen", underflow=False, overflow=False, metadata="gen"
+    0, 1, name="chargeVgen", underflow=False, overflow=False, metadata={"type":"gen"}
 )
 
-axis_l_eta_gen = hist.axis.Regular(48, -2.4, 2.4, name = "eta", metadata="gen")
-axis_l_pt_gen = hist.axis.Regular(29, 26., 55., name = "pt", metadata="gen")
+axis_l_eta_gen = hist.axis.Regular(48, -2.4, 2.4, name = "eta", metadata={"type":"gen"})
+axis_l_pt_gen = hist.axis.Regular(29, 26., 55., name = "pt", metadata={"type":"gen"})
 
 corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theoryCorr)
 
@@ -148,25 +148,25 @@ def build_graph(df, dataset):
             massBins = theory_tools.make_ew_binning(mass = 91.1535, width = 2.4932, initialStep=0.010, bin_edges_low=[0,50,60], bin_edges_high=[120])
         else:
             massBins = theory_tools.make_ew_binning(mass = 80.3815, width = 2.0904, initialStep=0.010)
-        axis_ewMll = hist.axis.Variable(massBins, name = "ewMll", underflow=False, metadata="gen")
-        axis_ewLogDeltaM = hist.axis.Regular(90, -5, 4, name = "ewLogDeltaM", metadata="gen")
-        axis_ewPtll = hist.axis.Variable(common.ptV_binning, underflow=False, name = "ewPTll", metadata="gen") # hist.axis.Regular(100, 0, 100, name = "ewPtll")
+        axis_ewMll = hist.axis.Variable(massBins, name = "ewMll", underflow=False, metadata={"type":"gen"})
+        axis_ewLogDeltaM = hist.axis.Regular(90, -5, 4, name = "ewLogDeltaM", metadata={"type":"gen"})
+        axis_ewPtll = hist.axis.Variable(common.ptV_binning, underflow=False, name = "ewPTll", metadata={"type":"gen"}) # hist.axis.Regular(100, 0, 100, name = "ewPtll")
 
         results.append(df.HistoBoost("nominal_ew", [axis_ewMll, axis_ewLogDeltaM], ['ewMll', 'ewLogDeltaM', "nominal_weight"], storage=hist.storage.Weight()))
         results.append(df.HistoBoost("nominal_ewMllPTll", [axis_ewMll, axis_ewPtll], ["ewMll", "ewPTll", "nominal_weight"], storage=hist.storage.Weight()))
         if args.auxiliaryHistograms:
-            axis_ewMlly = hist.axis.Variable(massBins, name = "ewMlly", metadata="gen")
+            axis_ewMlly = hist.axis.Variable(massBins, name = "ewMlly", metadata={"type":"gen"})
             results.append(df.HistoBoost("nominal_ewMlly", [axis_ewMlly], ["ewMlly", "nominal_weight"], storage=hist.storage.Weight()))
             # coarse binning
-            axis_Mll = hist.axis.Regular(100, 50, 150, name = "Mll", metadata="gen")
+            axis_Mll = hist.axis.Regular(100, 50, 150, name = "Mll", metadata={"type":"gen"})
             results.append(df.HistoBoost("nominal_Mll", [axis_Mll], ["ewMll", "nominal_weight"], storage=hist.storage.Weight()))
             axis_Mlly = hist.axis.Regular(100, 50, 150, name = "Mlly")
             results.append(df.HistoBoost("nominal_Mlly", [axis_Mlly], ["ewMlly", "nominal_weight"], storage=hist.storage.Weight()))
 
-            axis_PTll =  hist.axis.Regular(100, 0, 100, name = "PTll", metadata="gen")
-            axis_PTlly = hist.axis.Regular(100, 0, 100, name = "PTlly", metadata="gen")
-            axis_Yll =  hist.axis.Regular(100, -5, 5, name = "Yll", metadata="gen")
-            axis_Ylly = hist.axis.Regular(100, -5, 5, name = "Ylly", metadata="gen")
+            axis_PTll =  hist.axis.Regular(100, 0, 100, name = "PTll", metadata={"type":"gen"})
+            axis_PTlly = hist.axis.Regular(100, 0, 100, name = "PTlly", metadata={"type":"gen"})
+            axis_Yll =  hist.axis.Regular(100, -5, 5, name = "Yll", metadata={"type":"gen"})
+            axis_Ylly = hist.axis.Regular(100, -5, 5, name = "Ylly", metadata={"type":"gen"})
             results.append(df.HistoBoost("nominal_PTll",  [axis_PTll],  ["ewPTll", "nominal_weight"], storage=hist.storage.Weight()))
             results.append(df.HistoBoost("nominal_PTlly", [axis_PTlly], ["ewPTlly", "nominal_weight"], storage=hist.storage.Weight()))
             results.append(df.HistoBoost("nominal_Yll",  [axis_Yll],  ["ewYll", "nominal_weight"], storage=hist.storage.Weight()))
@@ -187,10 +187,10 @@ def build_graph(df, dataset):
                     df = df.Define('ewLepEta1', 'ewLeptons[0].mass() == 0 ? ewLeptons[1].eta() : ewLeptons[0].eta()')
                     df = df.Define('ewLepEta2', 'ewLeptons[0].mass() == 0 ? ewLeptons[0].eta() : ewLeptons[1].eta()')
                 
-                axis_ewLepPt = hist.axis.Regular(100, 0, 100, name = "pt", metadata="gen")
+                axis_ewLepPt = hist.axis.Regular(100, 0, 100, name = "pt", metadata={"type":"gen"})
                 results.append(df.HistoBoost("nominal_ewLepPt1", [axis_ewLepPt], ["ewLepPt1", "nominal_weight"], storage=hist.storage.Weight()))
                 results.append(df.HistoBoost("nominal_ewLepPt2", [axis_ewLepPt], ["ewLepPt2", "nominal_weight"], storage=hist.storage.Weight()))
-                axis_ewLepEta = hist.axis.Regular(100, -5, 5, name = "eta", metadata="gen")
+                axis_ewLepEta = hist.axis.Regular(100, -5, 5, name = "eta", metadata={"type":"gen"})
                 results.append(df.HistoBoost("nominal_ewLepEta1", [axis_ewLepEta], ["ewLepEta1", "nominal_weight"], storage=hist.storage.Weight()))
                 results.append(df.HistoBoost("nominal_ewLepEta2", [axis_ewLepEta], ["ewLepEta2", "nominal_weight"], storage=hist.storage.Weight()))
 
@@ -204,11 +204,11 @@ def build_graph(df, dataset):
                 df = df.Define('trailPhotonPt', 'ewPhotons.size() > 2 ? log10(ewPhotons[2].pt()) : -99')
                 df = df.Define('trailPhotonEta', 'ewPhotons.size() > 2 ? ewPhotons[2].eta() : -99')
 
-                axis_ewNPhotons = hist.axis.Regular(5, 0, 5, name = "n", metadata="gen")
+                axis_ewNPhotons = hist.axis.Regular(5, 0, 5, name = "n", metadata={"type":"gen"})
                 results.append(df.HistoBoost("nominal_ewPhotons", [axis_ewNPhotons], ["nPhotons", "nominal_weight"], storage=hist.storage.Weight()))
 
-                axis_photonPt = hist.axis.Regular(100, -5, 5, name = "pt", metadata="gen")
-                axis_photonEta = hist.axis.Regular(100, -5, 5, name = "eta", metadata="gen")
+                axis_photonPt = hist.axis.Regular(100, -5, 5, name = "pt", metadata={"type":"gen"})
+                axis_photonEta = hist.axis.Regular(100, -5, 5, name = "eta", metadata={"type":"gen"})
                 results.append(df.HistoBoost("nominal_leadPhoton", [axis_photonPt, axis_photonEta], ["leadPhotonPt", "leadPhotonEta", "nominal_weight"], storage=hist.storage.Weight()))
                 results.append(df.HistoBoost("nominal_sublPhoton", [axis_photonPt, axis_photonEta], ["sublPhotonPt", "sublPhotonEta", "nominal_weight"], storage=hist.storage.Weight()))
                 results.append(df.HistoBoost("nominal_trailPhoton", [axis_photonPt, axis_photonEta], ["trailPhotonPt", "trailPhotonEta", "nominal_weight"], storage=hist.storage.Weight()))

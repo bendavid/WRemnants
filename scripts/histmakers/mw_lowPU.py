@@ -45,23 +45,23 @@ mtw_min=40 # for Wmass (roughly half the boson mass)
 
 
 # axes used in fakerate calculation
-axis_fakerate_pt = hist.axis.Variable([26., 27., 28., 29., 30., 32., 34., 37., 40., 44., 49., 56.], name = "pt", underflow=False, metadata="reco")
-axis_fakerate_eta = hist.axis.Regular(12, -2.4, 2.4, name = "eta", underflow=False, overflow=False, metadata="reco")
+axis_fakerate_pt = hist.axis.Variable([26., 27., 28., 29., 30., 32., 34., 37., 40., 44., 49., 56.], name = "pt", underflow=False, metadata={"type":"reco"})
+axis_fakerate_eta = hist.axis.Regular(12, -2.4, 2.4, name = "eta", underflow=False, overflow=False, metadata={"type":"reco"})
 
 # standard regular axes
-axis_eta = hist.axis.Regular(args.eta[0], args.eta[1], args.eta[2], name = "eta", underflow=False, overflow=False, metadata="reco")
-axis_pt = hist.axis.Regular(args.pt[0], args.pt[1], args.pt[2], name = "pt", underflow=False, metadata="reco")
+axis_eta = hist.axis.Regular(args.eta[0], args.eta[1], args.eta[2], name = "eta", underflow=False, overflow=False, metadata={"type":"reco"})
+axis_pt = hist.axis.Regular(args.pt[0], args.pt[1], args.pt[2], name = "pt", underflow=False, metadata={"type":"reco"})
 axis_phi = hist.axis.Regular(50, -4, 4, name = "phi")
-axis_iso = hist.axis.Regular(50, 0, 1, underflow=False, overflow=True, name = "iso", metadata="reco")
+axis_iso = hist.axis.Regular(50, 0, 1, underflow=False, overflow=True, name = "iso", metadata={"type":"reco"})
 
-axis_lin = hist.axis.Regular(5, 0, 5, name = "lin", metadata="reco")
+axis_lin = hist.axis.Regular(5, 0, 5, name = "lin", metadata={"type":"reco"})
 
 qcdScaleByHelicity_helper = wremnants.theory_corrections.make_qcd_uncertainty_helper_by_helicity()
 axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
 axis_chargeVgen = qcdScaleByHelicity_helper.hist.axes["chargeVgen"]
 
 gen_axes = {
-    "ptVGen": hist.axis.Variable([0, 8, 14, 20, 30, 40, 50, 60, 75, 90, 150], name = "ptVGen", underflow=False, overflow=False, metadata="gen"),
+    "ptVGen": hist.axis.Variable([0, 8, 14, 20, 30, 40, 50, 60, 75, 90, 150], name = "ptVGen", underflow=False, overflow=False, metadata={"type":"gen"}),
 }
 
 groups_to_aggregate = args.aggregateGroups
@@ -74,14 +74,14 @@ if args.unfolding:
 # axes for final cards/fitting
 nominal_axes = [
     axis_fakerate_pt, axis_fakerate_eta, common.axis_charge, 
-    hist.axis.Variable([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 25, 30, 40, 50, 60, 75, 90, 150], name = "ptW", underflow=False, overflow=True, metadata="reco"),    
+    hist.axis.Variable([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 25, 30, 40, 50, 60, 75, 90, 150], name = "ptW", underflow=False, overflow=True, metadata={"type":"reco"}),    
     common.axis_passIso, common.axis_passMT]
 
 # corresponding columns
 nominal_cols = ["lep_pt", "lep_eta", "lep_charge", "ptW", "passIso",  "passMT"]
 
 # mt final cards/fitting
-axis_mT = hist.axis.Variable([0] + list(range(40, 100, 1)) + [100, 102, 104, 106, 108, 112, 116, 120, 130, 150, 200], name = "mt",underflow=False, overflow=True, metadata="reco")
+axis_mT = hist.axis.Variable([0] + list(range(40, 100, 1)) + [100, 102, 104, 106, 108, 112, 116, 120, 130, 150, 200], name = "mt",underflow=False, overflow=True, metadata={"type":"reco"})
 # axis_mT = hist.axis.Regular(100, 0, 200, name = "mt", underflow=False)
 
 axes_mT = [axis_fakerate_pt, axis_fakerate_eta, common.axis_charge, axis_mT, common.axis_passIso]
@@ -314,7 +314,7 @@ def build_graph(df, dataset):
         # nweights = 21
         # mag = 1.e-4
         # df = df.Define(f"muonScaleDummy{netabins}Bins", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor_unscaled, Lep_abs_eta, {mag})")
-        # scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False, metadata="reco")
+        # scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False, metadata={"type":"reco"})
         # dummyMuonScaleSyst = df.HistoBoost("mT_corr_rec_muonScaleSyst", [*axes_mT, common.axis_charge, common.axis_passMT, common.axis_passIso], [cols_mT, "Lep_charge", "passMT", "passIso", f"muonScaleDummy{netabins}Bins"], tensor_axes=[common.down_up_axis, scale_etabins_axis])
         # results.append(dummyMuonScaleSyst)
 

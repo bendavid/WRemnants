@@ -78,7 +78,7 @@ def read_corr(procName, generator, corr_files):
             if "Y" in h.axes.name:
                 h = hh.makeAbsHist(h, "Y")
 
-        vars_ax = h.axes["vars"] if "vars" in h.axes.name else hist.axis.StrCategory(["central"], name="vars") 
+        vars_ax = h.axes["vars"] if "vars" in h.axes.name else hist.axis.StrCategory(["central"], name="vars", metadata={"type":"syst"}) 
         hnD = hist.Hist(*h.axes, vars_ax)
         # Leave off the overflow, we won't use it anyway
         hnD[...] = np.reshape(h.values(), hnD.shape)

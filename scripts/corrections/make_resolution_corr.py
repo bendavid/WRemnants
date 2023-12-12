@@ -46,8 +46,8 @@ centers_flat = [np.reshape(center, [-1]) for center in smearingrel.axes.centers]
 neta_smooth = 96
 npt_smooth = 240
 
-axis_eta_fine = hist.axis.Regular(neta_smooth, -2.4, 2.4, underflow=True, overflow=True, name="eta")
-axis_pt_fine = hist.axis.Regular(npt_smooth, 25., 85., underflow=True, overflow=True, name="pt")
+axis_eta_fine = hist.axis.Regular(neta_smooth, -2.4, 2.4, underflow=True, overflow=True, name="eta", metadata={"type":"reco"})
+axis_pt_fine = hist.axis.Regular(npt_smooth, 25., 85., underflow=True, overflow=True, name="pt", metadata={"type":"reco"})
 
 smearingrel_smooth = hist.Hist(axis_eta_fine, axis_pt_fine)
 
@@ -117,7 +117,7 @@ smearing_variations_values = np.reshape(vscaled, [*smearingrel.values().shape, n
 
 # print(smearing_variations)
 
-axis_var = hist.axis.Integer(0, neig, underflow=False, overflow=False, name="smearing_variation")
+axis_var = hist.axis.Integer(0, neig, underflow=False, overflow=False, name="smearing_variation", metadata={"type":"syst"})
 
 smearing_variations = hist.Hist(*smearingrel.axes, axis_var)
 smearing_variations.values()[...] = smearing_variations_values

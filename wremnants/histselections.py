@@ -22,12 +22,12 @@ def fakeHistABCD(h, thresholdMT=40.0, fakerate_axes=[], axis_name_mt="mt", integ
 
     nameMT, failMT, passMT = get_mt_selection(h, thresholdMT, axis_name_mt, integrateLowMT, integrateHighMT)
 
-    if any([ax.metadata is None or ax.metadata not in ["reco","gen","syst"] for ax in h.axes]):
-        axes = [ax.name for ax in h.axes if ax.metadata is None or ax.metadata not in ["reco","gen","syst"]]
+    if any([type(ax.metadata) != dict or "type" not in ax.metadata for ax in h.axes]):
+        axes = [ax.name for ax in h.axes if type(ax.metadata) != dict or "type" not in ax.metadata]
         raise ValueError(f"Missing or unknown metadata for axes {axes}; undefined behaviour for fakerate computation")
 
     # compute fakerate in fakerate axes and systematic axes (separately for each systematic)
-    syst_axes = [ax.name for ax in h.axes if ax.metadata == "syst"]
+    syst_axes = [ax.name for ax in h.axes if ax.metadata["type"] == "syst"]
     if any([a not in [*fakerate_axes, common.passIsoName, nameMT, *syst_axes] for a in h.axes.name]):
         logger.info(f"Integrate out {[a for a in h.axes.name if a not in [*fakerate_axes, common.passIsoName, nameMT, *syst_axes]]} in fakerate computation")
         hPassIsoFailMT = h[{**common.passIso, nameMT: failMT}].project(*fakerate_axes, *syst_axes)

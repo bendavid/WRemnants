@@ -45,7 +45,7 @@ def read_ew_corrections_from_csv(filename, proc):
     def ew_df_to_axis(df, name):
         axis_name = preFSR_dict[name]
         edges = np.array(sorted(set(np.append(df[f"{name}_min"], df[f"{name}_max"]))))
-        opts = dict(name=axis_name, overflow=name in overflow_axes, underflow=name in underflow_axes)
+        opts = dict(name=axis_name, overflow=name in overflow_axes, underflow=name in underflow_axes, metadata={"type":"gen"})
         if len(edges) == max(df[f"{name}_max"])+1-min(df[f"{name}_min"]) and all(edges == np.arange(min(edges), max(edges)+1)):
             axis = hist.axis.Regular(len(edges)-1, int(min(edges)), int(max(edges)), **opts)
         else:
@@ -61,14 +61,14 @@ def read_ew_corrections_from_csv(filename, proc):
 
     # charge axis
     if proc[0] == 'W':
-        axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge")
+        axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge", metadata={"type":"gen"})
     elif proc[0] == 'Z':
-        axis_charge = hist.axis.Regular(1, -1., 1., underflow=False, overflow=False, name = "charge")
+        axis_charge = hist.axis.Regular(1, -1., 1., underflow=False, overflow=False, name = "charge", metadata={"type":"gen"})
 
     charge_idx = charge_dict[proc]
 
     # syst axis
-    axis_syst = hist.axis.Regular(3, 0, 3, underflow=False, overflow=False, name="systIdx")
+    axis_syst = hist.axis.Regular(3, 0, 3, underflow=False, overflow=False, name="systIdx", metadata={"type":"syst"})
 
     # fill final histogram
     hsyst = hist.Hist(*hratio.axes, axis_charge, axis_syst, storage=hratio.storage_type())
