@@ -75,10 +75,10 @@ ptV_corr_binning = ptV_binning[:-4]+list(range(30,110,10))
 absYV_binning = [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4]
 
 # categorical axes in python bindings always have an overflow bin, so use a regular axis for the charge
-axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge", metadata={"type":"reco"})
+axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge")
 
-down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar", metadata={"type":"syst"})
-down_nom_up_axis = hist.axis.Regular(3, -1.5, 1.5, underflow=False, overflow=False, name = "downNomUpVar", metadata={"type":"syst"})
+down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar")
+down_nom_up_axis = hist.axis.Regular(3, -1.5, 1.5, underflow=False, overflow=False, name = "downNomUpVar")
 
 passIsoName = "passIso"
 passMTName = "passMT"
@@ -88,8 +88,8 @@ failIso = {passIsoName: False}
 passMT = {passMTName: True}
 failMT = {passMTName: False}
 
-axis_passIso = hist.axis.Boolean(name = passIsoName, metadata={"type":"reco"})
-axis_passMT = hist.axis.Boolean(name = passMTName, metadata={"type":"reco"})
+axis_passIso = hist.axis.Boolean(name = passIsoName)
+axis_passMT = hist.axis.Boolean(name = passMTName)
     
 # following list is used in other scripts to track what steps are charge dependent
 # but assumes the corresponding efficiencies were made that way

@@ -104,9 +104,9 @@ for proc in procs:
 
         # Add charge axis
         if proc[0] == 'W':
-            axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge", metadata={"type":"gen"})
+            axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge")
         elif proc[0] == 'Z':
-            axis_charge = hist.axis.Regular(1, -1., 1., underflow=False, overflow=False, name = "charge", metadata={"type":"gen"})
+            axis_charge = hist.axis.Regular(1, -1., 1., underflow=False, overflow=False, name = "charge")
         hcharge = hist.Hist(*hratio.axes, axis_charge, storage=hratio._storage_type())
         hcharge.view(flow=True)[...,charge_dict[proc]] = hratio.view(flow=True)
 
@@ -123,7 +123,7 @@ for proc in procs:
         # Add syst axis
         if name not in corrh:
             corrh[name] = {}
-        corrh[name][proc] = hist.Hist(*hcharge.axes, hist.axis.Regular(3, 0, 3, underflow=False, overflow=False, name="systIdx"), storage=hist.storage.Double(), metadata={"type":"syst"})
+        corrh[name][proc] = hist.Hist(*hcharge.axes, hist.axis.Regular(3, 0, 3, underflow=False, overflow=False, name="systIdx"), storage=hist.storage.Double())
         corrh[name][proc].values(flow=True)[...,0] = hones.values(flow=True)
         corrh[name][proc].values(flow=True)[...,1] = hcharge.values(flow=True)
         corrh[name][proc].values(flow=True)[...,2] = hmirror.values(flow=True)

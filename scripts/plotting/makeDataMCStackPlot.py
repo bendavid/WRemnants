@@ -108,6 +108,7 @@ else:
     applySelection=True
 
 fake_int_axes = list(set([x for h in args.hists for x in h.split("-") if x not in ["pt", "eta", "charge"]]))
+groups.setFakerateIntegrationAxes(fake_int_axes)
 
 if not args.nominalRef:
     nominalName = args.baseName.rsplit("_", 1)[0]

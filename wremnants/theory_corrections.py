@@ -55,10 +55,10 @@ def make_corr_helper_fromnp(filename=f"{common.data_dir}/N3LLCorrections/inclusi
         axis_charge =  common.axis_chargeZgen
 
     axis_syst = hist.axis.Regular(len(bins[0]) - 1, bins[0][0], bins[0][-1], 
-                    name="systIdx", overflow=False, underflow=False, metadata={"type":"syst"})
-    axis_mass = hist.axis.Variable(bins[1], name="mass", metadata={"type":"gen"})
-    axis_y = hist.axis.Variable(bins[2], name="y", metadata={"type":"gen"})
-    axis_pt = hist.axis.Regular(len(bins[-1]) - 1, bins[-1][0], bins[-1][-1], name="pT", underflow=False, metadata={"type":"gen"})
+                    name="systIdx", overflow=False, underflow=False)
+    axis_mass = hist.axis.Variable(bins[1], name="mass")
+    axis_y = hist.axis.Variable(bins[2], name="y")
+    axis_pt = hist.axis.Regular(len(bins[-1]) - 1, bins[-1][0], bins[-1][-1], name="pT", underflow=False)
 
     corrh = hist.Hist(axis_mass, axis_y, axis_pt, axis_charge, axis_syst)
     if isW:
@@ -142,8 +142,8 @@ def make_corr_by_helicity(ref_helicity_hist, target_sigmaul, target_sigma4, coef
 
     ref_coeffs = theory_tools.moments_to_angular_coeffs(ref_helicity_hist)
 
-    corr_ax = hist.axis.Boolean(name="corr", metadata={"type":"syst"})
-    vars_ax = target_sigmaul.axes["vars"] if target_sigmaul else hist.axis.Regular(1 ,0, 1, name="vars", metadata={"type":"syst"})
+    corr_ax = hist.axis.Boolean(name="corr")
+    vars_ax = target_sigmaul.axes["vars"] if target_sigmaul else hist.axis.Regular(1 ,0, 1, name="vars")
     corr_coeffs = hist.Hist(*ref_coeffs.axes, corr_ax, vars_ax)
     # Corr = False is the uncorrected coeffs, corrected coeffs have the new A4
     # NOTE: the corrected coeffs are multiplied through by the sigmaUL correction, so that the 
@@ -187,7 +187,7 @@ def make_qcd_uncertainty_helper_by_helicity(is_w_like = False, filename=None):
     moments_max = np.max(moments_flat, axis=-1)
 
     # build variation histogram in the format expected by the corrector
-    corr_ax = hist.axis.Boolean(name="corr", metadata={"type":"syst"})
+    corr_ax = hist.axis.Boolean(name="corr")
 
     def get_names(ihel):
         base_name = f"helicity_{ihel}"
@@ -198,7 +198,7 @@ def make_qcd_uncertainty_helper_by_helicity(is_w_like = False, filename=None):
     for ihel in range(-1, 8):
         var_names.extend(get_names(ihel))
 
-    vars_ax = hist.axis.StrCategory(var_names, name="vars", metadata={"type":"syst"})
+    vars_ax = hist.axis.StrCategory(var_names, name="vars")
 
     axes_no_scale = moments.axes[:-2]
     corr_coeffs = hist.Hist(*axes_no_scale, corr_ax, vars_ax)
@@ -234,8 +234,8 @@ def make_helicity_test_corrector(is_w_like = False, filename = None):
 
     coeffs_nom = coeffs[{"muRfact" : 1.j, "muFfact" : 1.j}].values()
 
-    corr_ax = hist.axis.Boolean(name="corr", metadata={"type":"syst"})
-    vars_ax = hist.axis.StrCategory(["test_ai", "test_sigmaUL","test_all"], name="vars", metadata={"type":"syst"})
+    corr_ax = hist.axis.Boolean(name="corr")
+    vars_ax = hist.axis.StrCategory(["test_ai", "test_sigmaUL","test_all"], name="vars")
 
     axes_no_scale = coeffs.axes[:-2]
     corr_coeffs = hist.Hist(*axes_no_scale, corr_ax, vars_ax)
@@ -320,7 +320,7 @@ def read_corr(generator, corr_files, charge, axes=[]):
         elif generator == "dyturbo":
             h = input_tools.read_dyturbo_hist(corr_files, axes=axes, charge=charge)
 
-        vars_ax = h.axes["vars"] if "vars" in h.axes.name else hist.axis.StrCategory(["central"], name="vars", metadata={"type":"syst"}) 
+        vars_ax = h.axes["vars"] if "vars" in h.axes.name else hist.axis.StrCategory(["central"], name="vars") 
         hnD = hist.Hist(*h.axes, vars_ax)
         # Leave off the overflow, we won't use it anyway
         hnD[...] = np.reshape(h.values(), hnD.shape)

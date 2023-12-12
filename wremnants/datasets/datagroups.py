@@ -67,6 +67,7 @@ class Datagroups(object):
         self.dataName = "Data"
         self.setGenAxes()
         self.fakerate_axes = ["pt", "eta", "charge"]
+        self.fakerate_integration_axes = []
 
         if "lowpu" in self.mode:
             from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU as make_datagroups
@@ -170,7 +171,13 @@ class Datagroups(object):
         
         if len(self.groups) == 0:
             logger.warning(f"Excluded all groups using '{excludes}'. Continue without any group.")
-    
+
+    def setFakerateIntegrationAxes(self, axes=[]):
+        for group in self.groups:
+            if "fakerate_integration_axes" in group.selectOpArgs:
+                logger.info(f"Set fakerate_integration_axes={axes} for {group.name}")
+                group.selectOpArgs["fakerate_integration_axes"] = axes
+
     def setGlobalAction(self, action):
         # To be used for applying a selection, rebinning, etc.
         if self.globalAction is None:
@@ -207,8 +214,8 @@ class Datagroups(object):
     ## baseName takes values such as "nominal"
     def loadHistsForDatagroups(self, 
         baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
-        applySelection=True, forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=1, 
-        excludeProcs=None, forceToNominal=[], sumFakesPartial=True
+        applySelection=True, forceNonzero=True, action=None, actionArgs=None, preOpMap=None, preOpArgs=None, 
+        scaleToNewLumi=1, excludeProcs=None, forceToNominal=[], sumFakesPartial=True,
     ):
         logger.debug("Calling loadHistsForDatagroups()")
         logger.debug(f"The basename and syst is: {baseName}, {syst}")
@@ -290,7 +297,7 @@ class Datagroups(object):
                         logger.debug(f"No operation for member {i}: {member.name}/{procName}")
 
                 if preOpMap and member.name in preOpMap:
-                    logger.debug(f"Applying preOp to {member.name}/{procName} after loading")
+                    logger.debug(f"Applying action to {member.name}/{procName} after loading")
                     h = preOpMap[member.name](h, **preOpArgs)
 
                 if self.gen_axes != None:
@@ -360,17 +367,16 @@ class Datagroups(object):
                 logger.debug(f"Apply rebin operation for process {procName}")
                 group.hists[label] = group.rebinOp(group.hists[label])
 
+            if action and type(action) != dict:
+                logger.debug(f"Applying action={action}     actionArgs={actionArgs}")
+                h = action(group.hists[label], **actionArgs)
+
             if group.selectOp:
                 if not applySelection:
                     logger.warning(f"Selection requested for process {procName} but applySelection=False, thus it will be ignored")
-                elif label in group.hists.keys():
+                elif label in group.hists.keys() and group.hists[label] is not None:
                     logger.debug(f"Apply selection for process {procName}")
-                    if procName == self.fakeName and "fakerate_axes" not in group.selectOpArgs and len(self.fakerate_axes):
-                        opArgs = {**group.selectOpArgs, "fakerate_axes": self.fakerate_axes}
-                    else:
-                        opArgs = group.selectOpArgs
-                    if group.hists[label]:
-                        group.hists[label] = group.selectOp(group.hists[label], **opArgs)
+                    group.hists[label] = group.selectOp(group.hists[label], **group.selectOpArgs)
 
         # Avoid situation where the nominal is read for all processes for this syst
         if nominalIfMissing and not foundExact:

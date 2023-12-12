@@ -322,7 +322,8 @@ class HDF5Writer(object):
                     chanInfo.nominalName, systName, label="syst",
                     procsToRead=procs_syst, 
                     forceNonzero=forceNonzero and systName != "qcdScaleByHelicity",
-                    preOpMap=syst["actionMap"], preOpArgs=syst["actionArgs"],
+                    preOpMap=systMap["preOpMap"], preOpArgs=systMap["preOpArgs"], 
+                    action=systMap["action"], actionArgs=systMap["actionArgs"], 
                     # Needed to avoid always reading the variation for the fakes, even for procs not specified
                     forceToNominal=forceToNominal,
                     scaleToNewLumi=chanInfo.lumiScale,
@@ -334,9 +335,6 @@ class HDF5Writer(object):
 
                     hvar = dg.groups[proc].hists["syst"]
                     
-                    if syst["doActionBeforeMirror"] and syst["action"]:
-                        logger.debug(f"Do action before mirror")
-                        hvar = syst["action"](hvar, **syst["actionArgs"])
                     if syst["decorrByBin"]:
                         raise NotImplementedError("By bin decorrelation is not supported for writing output in hdf5")
 

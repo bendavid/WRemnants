@@ -113,12 +113,20 @@ class CardTool(object):
             
     def setFitAxes(self, axes):
         self.fit_axes = axes[:]
+        self._setFakerateIntegrationAxes()
 
     def setFakerateAxes(self, fakerate_axes=["eta", "pt", "charge"]):
         self.datagroups.fakerate_axes = fakerate_axes
-        
+        self._setFakerateIntegrationAxes()
+
     def getFakerateAxes(self):
         return self.datagroups.fakerate_axes
+
+    def _setFakerateIntegrationAxes(self):
+        self.datagroups.setFakerateIntegrationAxes([x for x in self.fit_axes if x not in self.datagroups.fakerate_axes])
+        
+    def getFakerateIntegrationAxes(self):
+        return self.datagroups.fakerate_integration_axes
 
     def setProcsNoStatUnc(self, procs, resetList=True):
         if self.skipHist:
@@ -281,16 +289,13 @@ class CardTool(object):
                                                 }
             })
 
-    # action will be applied to the sum of all the individual samples contributing, actionMap should be used
-    # to apply a separate action per process. this is needed for example for the scale uncertainty split
-    # by pt or helicity
-    # action takes place after mirroring
-    # use doActionBeforeMirror to do something before it instead (so the mirroring will act on the modified histogram)
+    # preOp is a dictionary to apply a separate action per process
+    # action will be applied to the sum of all the individual samples contributing, 
     # decorrelateByBin is to customize eta-pt decorrelation: pass dictionary with {axisName: [bin edges]}
     def addSystematic(self, name, systAxes=[], systAxesFlow=[], outNames=None, skipEntries=None, labelsByAxis=None, 
                       baseName="", mirror=False, mirrorDownVarEqualToUp=False, mirrorDownVarEqualToNomi=False, symmetrize = "average",
                       scale=1, processes=None, group=None, noi=False, noConstraint=False, noProfile=False,
-                      action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
+                      preOpMap=None, preOpArgs={}, action=None, actionArgs={},
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
                       rename=None, splitGroup={}, decorrelateByBin={}, formatWithValue=None,
                       customizeNuisanceAttributes={},
@@ -313,10 +318,7 @@ class CardTool(object):
 
         if mirrorDownVarEqualToUp and mirrorDownVarEqualToNomi:
             raise ValueError("mirrorDownVarEqualToUp and mirrorDownVarEqualToNomi cannot be both True")
-            
-        if action and actionMap:
-            raise ValueError("Only one of action and actionMap args are allowed")
-
+        
         # protection when the input list is empty because of filters but the systematic is built reading the nominal
         # since the nominal reads all filtered processes regardless whether a systematic is passed to them or not
         # this can happen when creating new systs by scaling of the nominal histogram
@@ -344,9 +346,9 @@ class CardTool(object):
                 "mirrorDownVarEqualToUp" : mirrorDownVarEqualToUp,
                 "mirrorDownVarEqualToNomi" : mirrorDownVarEqualToNomi,
                 "symmetrize" : symmetrize,
+                "preOpMap" : preOpMap,
+                "preOpArgs" : preOpArgs,
                 "action" : action,
-                "doActionBeforeMirror" : doActionBeforeMirror,
-                "actionMap" : actionMap,
                 "actionArgs" : actionArgs,
                 "systNameReplace" : systNameReplace,
                 "noConstraint" : noConstraint,
@@ -496,12 +498,6 @@ class CardTool(object):
         systInfo = self.systematics[syst] 
         systAxes = systInfo["systAxes"]
         systAxesLabels = systInfo.get("labelsByAxis", systAxes)
-
-        # Jan: moved above the mirror action, as this action can cause mirroring
-        if systInfo["action"] and not systInfo["doActionBeforeMirror"]:
-            hvar = systInfo["action"](hvar, **systInfo["actionArgs"])
-        if self.outfile:
-            self.outfile.cd() # needed to restore the current directory in case the action opens a new root file
             
         axNames = systAxes[:]
         axLabels = systAxesLabels[:]
@@ -714,12 +710,6 @@ class CardTool(object):
             systInfo = self.systematics[syst]
             procDict = self.datagroups.getDatagroups()
             hnom = procDict[proc].hists[self.nominalName]
-            #logger.debug(f"{proc}: {syst}: {h.axes.name}")
-            if systInfo["doActionBeforeMirror"] and systInfo["action"]:
-                logger.debug("Applying action before mirroring:")
-                logger.debug(f"action={systInfo['action']}     actionArgs={systInfo['actionArgs']}")
-                h = systInfo["action"](h, **systInfo["actionArgs"])
-                self.outfile.cd() # needed to restore the current directory in case the action opens a new root file
             if systInfo["mirror"]:
                 h = hh.extendHistByMirror(h, hnom,
                                           downAsUp=systInfo["mirrorDownVarEqualToUp"],
@@ -874,7 +864,8 @@ class CardTool(object):
                 self.nominalName, systName, label="syst",
                 procsToRead=processes, 
                 forceNonzero=forceNonzero and systName != "qcdScaleByHelicity",
-                preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"],
+                preOpMap=systMap["preOpMap"], preOpArgs=systMap["preOpArgs"], 
+                action=systMap["action"], actionArgs=systMap["actionArgs"], 
                 forceToNominal=forceToNominal,
                 scaleToNewLumi=self.lumiScale
             )

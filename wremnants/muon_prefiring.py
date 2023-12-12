@@ -42,5 +42,5 @@ def make_muon_prefiring_helpers(filename = data_dir + "/muonSF/L1MuonPrefiringPa
 @ROOT.pythonization("muon_prefiring_helper_stat<", ns="wrem", is_prefix=True)
 def pythonize_rdataframe(klass):
     # add axes corresponding to the tensor dimensions
-    klass.tensor_axes = (hist.axis.Integer(0, klass.NVar, underflow=False, overflow=False, name="etaPhiRegion", label = "muon prefiring eta-phi regions", metadata={"type":"syst"}),
+    klass.tensor_axes = (hist.axis.Integer(0, klass.NVar, underflow=False, overflow=False, name="etaPhiRegion", label = "muon prefiring eta-phi regions"),
                         common.down_up_axis)

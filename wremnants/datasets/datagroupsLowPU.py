@@ -11,9 +11,11 @@ def make_datagroups_lowPU(dg, combine=False, excludeGroups=None, filterGroups=No
     if dg.mode == "lowpu_w" and applySelection:
         sigOp = sel.signalHistWmass
         fakeOp = sel.fakeHistABCD
+        fakeOpArgs = {"fakerate_integration_axes":[]}
     else:
         sigOp = None
         fakeOp = None
+        fakeOpArgs = None
 
     # data
     dg.addGroup("Data",
@@ -74,6 +76,7 @@ def make_datagroups_lowPU(dg, combine=False, excludeGroups=None, filterGroups=No
             members = [member for sublist in [v.members for k, v in dg.groups.items() if k != "QCD"] for member in sublist],
             scale = lambda x: 1. if x.is_data else -1,
             selectOp = fakeOp,
+            selectOpArgs = fakeOpArgs
         )
         dg.filterGroups(filterGroups)
         dg.excludeGroups(excludeGroups)

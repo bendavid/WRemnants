@@ -316,7 +316,7 @@ def rebinHist(h, axis_name, edges):
     overflow = ax.traits.overflow or (edges[-1] < ax.edges[-1] and not np.isclose(edges[-1], ax.edges[-1]))
     underflow = ax.traits.underflow or (edges[0] > ax.edges[0] and not np.isclose(edges[0], ax.edges[0]))
     flow = overflow or underflow
-    new_ax = hist.axis.Variable(edges, name=ax.name, overflow=overflow, underflow=underflow, metadata=ax.metadata)
+    new_ax = hist.axis.Variable(edges, name=ax.name, overflow=overflow, underflow=underflow)
     axes = list(h.axes)
     axes[ax_idx] = new_ax
     

@@ -40,7 +40,7 @@ def add_xnorm_histograms(results, df, args, dataset_name, corr_helpers, qcdScale
     # define the helicity tensor, here nominal_weight will only have theory weights, no experimental pieces, it is defined in theory_tools.define_theory_weights_and_corrs
     df_xnorm = define_helicity_weights(df_xnorm)
     df_xnorm = df_xnorm.DefinePerSample("xnorm", "0.5")
-    axis_xnorm = hist.axis.Regular(1, 0., 1., name = "count", underflow=False, overflow=False, metadata={"type":"gen"})
+    axis_xnorm = hist.axis.Regular(1, 0., 1., name = "count", underflow=False, overflow=False)
     xnorm_axes = [axis_xnorm, *theoryAgnostic_axes]
     xnorm_cols = ["xnorm", *theoryAgnostic_cols]
     xnormByHelicity = df_xnorm.HistoBoost("xnorm", xnorm_axes, [*xnorm_cols, "nominal_weight_helicity"], tensor_axes=[axis_helicity])

@@ -184,9 +184,6 @@ def make_muon_smearing_helpers(filename = f"{data_dir}/calibration/smearingrel_s
         smearing_variations = pickle.load(fin)
 
     var_axis = smearing_variations.axes[-1]
-    if var_axis.metadata == None:
-        logger.warning(f"Tensor axis {var_axis.name} without metadata found for smearing helper, setting metadata to 'syst'")
-        var_axis.metadata={"type":"syst"}
 
     neig = var_axis.size
     smearing_variations_boost = narf.hist_to_pyroot_boost(smearing_variations, tensor_rank = 1)
@@ -212,10 +209,6 @@ def add_resolution_uncertainty(df, axes, results, nominal_cols, smearing_uncerta
     )
 
     var_axes = smearing_uncertainty_helper.tensor_axes
-    for var_axis in var_axes:
-        if var_axis.metadata == None:
-            logger.warning(f"Tensor axis {var_axis.name} without metadata found for resolution helper, setting metadata to 'syst'")
-            var_axis.metadata={"type":"syst"}
 
     muonResolutionSyst_responseWeights = df.HistoBoost(
             "nominal_muonResolutionSyst_responseWeights", axes,
@@ -282,7 +275,7 @@ def make_jpsi_crctn_unc_helper(
     axis_scale_params = hist.axis.Regular(n_scale_params, 0, 1, name = 'scale_params')
     axis_scale_params_unc = hist.axis.Regular(
         n_eta_bins * n_scale_params, 0, 1,
-        underflow = False, overflow = False,  name = 'unc', metadata={"type":"syst"}
+        underflow = False, overflow = False,  name = 'unc'
     )
     hist_scale_params_unc = hist.Hist(axis_eta, axis_scale_params, axis_scale_params_unc)
     for i in range(n_eta_bins):
@@ -371,7 +364,7 @@ def make_Z_non_closure_parametrized_helper(
                 ROOT.std.move(hist_non_closure_cpp)
             )
         z_non_closure_helper.tensor_axes = (
-            hist.axis.Regular(n_eta_bins, 0, n_eta_bins, name = 'unc', metadata={"type":"syst"}),
+            hist.axis.Regular(n_eta_bins, 0, n_eta_bins, name = 'unc'),
             common.down_up_axis
         )
         return z_non_closure_helper
@@ -414,8 +407,8 @@ def make_Z_non_closure_binned_helper(
                 ROOT.std.move(hist_non_closure_cpp)
             )
         z_non_closure_helper.tensor_axes = (
-            hist.axis.Regular(n_eta_bins, 0, n_eta_bins, name = 'unc_ieta', metadata={"type":"syst"}),
-            hist.axis.Regular(n_pt_bins, 0, n_pt_bins, name = 'unc_ipt', metadata={"type":"syst"}),
+            hist.axis.Regular(n_eta_bins, 0, n_eta_bins, name = 'unc_ieta'),
+            hist.axis.Regular(n_pt_bins, 0, n_pt_bins, name = 'unc_ipt'),
             common.down_up_axis
         )
         return z_non_closure_helper
