@@ -29,9 +29,7 @@ def fakeHistABCD(h, thresholdMT=40.0, fakerate_axes=[], axis_name_mt="mt", integ
     # compute fakerate in fakerate axes and systematic axes (separately for each systematic)
     syst_axes = [ax.name for ax in h.axes if ax.metadata == "syst"]
     if any([a not in [*fakerate_axes, common.passIsoName, nameMT, *syst_axes] for a in h.axes.name]):
-        logger.error(f"Integrate out {[a for a in h.axes.name if a not in [*fakerate_axes, common.passIsoName, nameMT, *syst_axes]]} in fakerate computation")
-        import pdb
-        pdb.set_trace()
+        logger.info(f"Integrate out {[a for a in h.axes.name if a not in [*fakerate_axes, common.passIsoName, nameMT, *syst_axes]]} in fakerate computation")
         hPassIsoFailMT = h[{**common.passIso, nameMT: failMT}].project(*fakerate_axes, *syst_axes)
         hFailIsoFailMT = h[{**common.failIso, nameMT: failMT}].project(*fakerate_axes, *syst_axes)
     else:
