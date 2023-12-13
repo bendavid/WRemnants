@@ -466,7 +466,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                                         ) if sign in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}]) for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members
                                         },
                                         )
-
         elif args.unfolding:
             noi_args.update(dict(
                 name=f"yieldsUnfolding",
