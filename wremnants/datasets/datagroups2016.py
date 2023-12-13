@@ -11,9 +11,11 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
     if dg.mode == "wmass" and applySelection:
         sigOp = sel.signalHistWmass
         fakeOp = sel.fakeHistABCD
+        fakeOpArgs = {"fakerate_integration_axes":[]}
     else:
         sigOp = None
         fakeOp = None
+        fakeOpArgs = None
 
     dg.addGroup("Data",
         members = dg.get_members_from_results(is_data=True),
@@ -72,6 +74,7 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
             members = [member for sublist in [v.members for k, v in dg.groups.items() if k != "QCD"] for member in sublist],
             scale = lambda x: 1. if x.is_data else -1,
             selectOp = fakeOp,
+            selectOpArgs = fakeOpArgs
         )
         dg.filterGroups(filterGroups)
         dg.excludeGroups(excludeGroups)

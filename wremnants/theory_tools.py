@@ -12,11 +12,6 @@ from math import sqrt
 logger = logging.child_logger(__name__)
 narf.clingutils.Declare('#include "theoryTools.h"')
 
-# integer axis for -1 through 7
-axis_helicity = hist.axis.Integer(
-    -1, 8, name="helicity", overflow=False, underflow=False
-)
-
 # this puts the bin centers at 0.5, 1.0, 2.0
 axis_muRfact = hist.axis.Variable(
     [0.25, 0.75, 1.25, 2.75], name="muRfact", underflow=False, overflow=False
@@ -31,13 +26,8 @@ axis_absYVgen = hist.axis.Variable(
     name = "absYVgenNP", underflow=False
 )
 
-axis_chargeWgen = hist.axis.Regular(
-    2, -2, 2, name="chargeVgenNP", underflow=False, overflow=False
-)
-
-axis_chargeZgen = hist.axis.Integer(
-    0, 1, name="chargeVgenNP", underflow=False, overflow=False
-)
+axis_chargeWgen = hist.axis.Regular(2, -2, 2, name="chargeVgenNP", underflow=False, overflow=False)
+axis_chargeZgen = hist.axis.Integer(0, 1, name="chargeVgenNP", underflow=False, overflow=False)
 
 scale_tensor_axes = (axis_muRfact, axis_muFfact)
 
@@ -398,11 +388,11 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
             if name == "nominal":
                 res.append(df.HistoBoost(f"weight_uncorr", [hist.axis.Regular(100, -2, 2)], ["nominal_weight_uncorr"], storage=hist.storage.Double()))
 
-        hist_name = f"{name}_{generator}Corr"
-        unc = df.HistoBoost(hist_name, axes, [*cols, f"{generator}Weight_tensor"], tensor_axes=helpers[generator].tensor_axes[-1:], storage=hist.storage.Double())
-        res.append(unc)
-
         var_axis = helpers[generator].tensor_axes[-1]
+
+        hist_name = f"{name}_{generator}Corr"
+        unc = df.HistoBoost(hist_name, axes, [*cols, f"{generator}Weight_tensor"], tensor_axes=[var_axis], storage=hist.storage.Double())
+        res.append(unc)
 
         def is_flavor_dependent_np(var_label):
             return var_label.startswith("Omega") \

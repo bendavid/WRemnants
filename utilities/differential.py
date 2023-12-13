@@ -27,7 +27,6 @@ def get_pt_eta_charge_axes(n_bins_pt, min_pt, max_pt, n_bins_eta=0, flow_pt=True
     axes, cols = get_pt_eta_axes(n_bins_pt, min_pt, max_pt, n_bins_eta, flow_pt, flow_eta)
 
     axis_qGen = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "qGen")
-
     axes.append(axis_qGen)
     cols.append("qGen")
 

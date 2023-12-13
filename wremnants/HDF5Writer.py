@@ -92,7 +92,7 @@ class HDF5Writer(object):
         if return_variances and (h.storage_type != hist.storage.Weight):
             raise RuntimeError(f"Sumw2 not filled for {h} but needed for binByBin uncertainties")
 
-        if chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.fit_axes):
+        if chanInfo.ABCD and set(chanInfo.getFakerateAxes()) != set(chanInfo.fit_axes):
             h = projectABCD(chanInfo, h, return_variances=return_variances)
         elif h.axes.name != axes:
             h = h.project(*axes)
@@ -322,7 +322,7 @@ class HDF5Writer(object):
                     chanInfo.nominalName, systName, label="syst",
                     procsToRead=procs_syst, 
                     forceNonzero=forceNonzero and systName != "qcdScaleByHelicity",
-                    preOpMap=syst["actionMap"], preOpArgs=syst["actionArgs"],
+                    preOpMap=syst["preOpMap"], preOpArgs=syst["preOpArgs"], 
                     # Needed to avoid always reading the variation for the fakes, even for procs not specified
                     forceToNominal=forceToNominal,
                     scaleToNewLumi=chanInfo.lumiScale,
@@ -334,9 +334,6 @@ class HDF5Writer(object):
 
                     hvar = dg.groups[proc].hists["syst"]
                     
-                    if syst["doActionBeforeMirror"] and syst["action"]:
-                        logger.debug(f"Do action before mirror")
-                        hvar = syst["action"](hvar, **syst["actionArgs"])
                     if syst["decorrByBin"]:
                         raise NotImplementedError("By bin decorrelation is not supported for writing output in hdf5")
 
@@ -374,9 +371,6 @@ class HDF5Writer(object):
                             logkavg_proc = get_logk(var_name)
                             logkhalfdiff_proc = np.zeros_like(logkavg_proc)
                         elif syst["symmetrize"] is not None:
-                            if syst["symmetrize"] not in ["average", "conservative"]:
-                                raise ValueError("Invalid option for 'symmetrize'.  Valid options are 'average' and 'conservative'")
-
                             logkup_proc = get_logk(var_name, "Up")
                             logkdown_proc = get_logk(var_name, "Down")
 
