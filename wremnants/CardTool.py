@@ -289,13 +289,14 @@ class CardTool(object):
                                                 }
             })
 
-    # preOp is a dictionary to apply a separate action per process
-    # action will be applied to the sum of all the individual samples contributing, 
+    # preOp is a function to apply per process, preOpMap can be used with a dict for a speratate function for each process, 
+    #   it is executed before summing the processes. Arguments can be specified with preOpArgs 
+    # action will be applied to the sum of all the individual samples contributing, arguments can be specified with actionArgs
     # decorrelateByBin is to customize eta-pt decorrelation: pass dictionary with {axisName: [bin edges]}
     def addSystematic(self, name, systAxes=[], systAxesFlow=[], outNames=None, skipEntries=None, labelsByAxis=None, 
                       baseName="", mirror=False, mirrorDownVarEqualToUp=False, mirrorDownVarEqualToNomi=False, symmetrize = "average",
                       scale=1, processes=None, group=None, noi=False, noConstraint=False, noProfile=False,
-                      preOpMap=None, preOpArgs={}, action=None, actionArgs={},
+                      preOp=None, preOpMap=None, preOpArgs={}, action=None, actionArgs={}, 
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
                       rename=None, splitGroup={}, decorrelateByBin={}, formatWithValue=None,
                       customizeNuisanceAttributes={},
@@ -304,14 +305,6 @@ class CardTool(object):
         # for now better not to use the options, although it might be useful to keep it implemented
         if mirrorDownVarEqualToUp or mirrorDownVarEqualToNomi:
             raise ValueError("mirrorDownVarEqualToUp and mirrorDownVarEqualToNomi currently lead to pathological results in the fit, please keep them False")
-        
-        if isinstance(processes, str):
-            processes = [processes]
-        # Need to make an explicit copy of the array before appending
-        procs_to_add = [x for x in (self.allMCProcesses() if processes is None else processes)]
-        procs_to_add = self.expandProcesses(procs_to_add)
-        if passToFakes and self.getFakeName() not in procs_to_add and not self.ABCD:
-            procs_to_add.append(self.getFakeName())
 
         if not mirror and (mirrorDownVarEqualToUp or mirrorDownVarEqualToNomi):
             raise ValueError("mirrorDownVarEqualToUp and mirrorDownVarEqualToNomi requires mirror=True")
@@ -321,6 +314,21 @@ class CardTool(object):
 
         if symmetrize not in ["average", "conservative"]:
             raise ValueError("Invalid option for 'symmetrize'.  Valid options are 'average' and 'conservative'")
+
+        if preOp and preOpMap:
+            raise ValueError("Only one of preOp and preOpMap args are allowed")
+
+        if isinstance(processes, str):
+            processes = [processes]
+        # Need to make an explicit copy of the array before appending
+        procs_to_add = [x for x in (self.allMCProcesses() if processes is None else processes)]
+        procs_to_add = self.expandProcesses(procs_to_add)
+
+        if preOp:
+            preOpMap = {name : preOp for name in set([m.name for g in procs_to_add for m in self.datagroups.groups[g].members])}
+
+        if passToFakes and self.getFakeName() not in procs_to_add and not self.ABCD:
+            procs_to_add.append(self.getFakeName())
 
         # protection when the input list is empty because of filters but the systematic is built reading the nominal
         # since the nominal reads all filtered processes regardless whether a systematic is passed to them or not
@@ -501,7 +509,13 @@ class CardTool(object):
         systInfo = self.systematics[syst] 
         systAxes = systInfo["systAxes"]
         systAxesLabels = systInfo.get("labelsByAxis", systAxes)
-            
+
+        # Jan: moved above the mirror action, as this action can cause mirroring
+        if systInfo["action"]:
+            hvar = systInfo["action"](hvar, **systInfo["actionArgs"])
+        if self.outfile:
+            self.outfile.cd() # needed to restore the current directory in case the action opens a new root file
+
         axNames = systAxes[:]
         axLabels = systAxesLabels[:]
         if hvar.axes[-1].name == "mirror":
@@ -716,19 +730,21 @@ class CardTool(object):
             if systInfo["mirror"]:
                 h = hh.extendHistByMirror(h, hnom,
                                           downAsUp=systInfo["mirrorDownVarEqualToUp"],
-                                          downAsNomi=systInfo["mirrorDownVarEqualToNomi"])
+                                          downAsNomi=systInfo["mirrorDownVarEqualToNomi"])            
             if systInfo["decorrByBin"]:
                 decorrelateByBin = systInfo["decorrByBin"]
+
         logger.info(f"   {syst} for process {proc}")
         var_map = self.systHists(h, syst)
 
-        if systInfo and systInfo["symmetrize"] is not None:
-            self.symmetrizeUpDown(var_map, hnom, conservative = systInfo["symmetrize"]=="conservative")
+        if syst != self.nominalName:
+            if not systInfo["mirror"] and systInfo["symmetrize"] is not None:
+                self.symmetrizeUpDown(var_map, hnom, conservative = systInfo["symmetrize"]=="conservative")
 
-        if check_systs and syst != self.nominalName:
-            self.checkSysts(var_map, proc,
-                            skipSameSide=systInfo["mirrorDownVarEqualToUp"],
-                            skipOneAsNomi=systInfo["mirrorDownVarEqualToNomi"])
+            if check_systs:
+                self.checkSysts(var_map, proc,
+                                skipSameSide=systInfo["mirrorDownVarEqualToUp"],
+                                skipOneAsNomi=systInfo["mirrorDownVarEqualToNomi"])
         setZeroStatUnc = False
         if proc in self.noStatUncProcesses:
             logger.warning(f"Zeroing statistical uncertainty for process {proc}")
@@ -866,7 +882,6 @@ class CardTool(object):
                 procsToRead=processes, 
                 forceNonzero=forceNonzero and systName != "qcdScaleByHelicity",
                 preOpMap=systMap["preOpMap"], preOpArgs=systMap["preOpArgs"], 
-                action=systMap["action"], actionArgs=systMap["actionArgs"], 
                 forceToNominal=forceToNominal,
                 scaleToNewLumi=self.lumiScale
             )

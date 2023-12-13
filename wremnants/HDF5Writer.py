@@ -323,7 +323,6 @@ class HDF5Writer(object):
                     procsToRead=procs_syst, 
                     forceNonzero=forceNonzero and systName != "qcdScaleByHelicity",
                     preOpMap=syst["preOpMap"], preOpArgs=syst["preOpArgs"], 
-                    action=syst["action"], actionArgs=syst["actionArgs"], 
                     # Needed to avoid always reading the variation for the fakes, even for procs not specified
                     forceToNominal=forceToNominal,
                     scaleToNewLumi=chanInfo.lumiScale,

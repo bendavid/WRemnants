@@ -47,7 +47,7 @@ class TheoryHelper(object):
             tnp_scale=1.,
             mirror_tnp=True,
             pdf_from_corr=False,
-            pdf_action=None,
+            pdf_operation=None,
             scale_pdf_unc=1.,
             minnlo_unc='byHelicityPt'):
 
@@ -60,7 +60,7 @@ class TheoryHelper(object):
         self.tnp_scale = tnp_scale
         self.mirror_tnp = mirror_tnp
         self.pdf_from_corr = pdf_from_corr
-        self.pdf_action = pdf_action
+        self.pdf_operation = pdf_operation
         self.scale_pdf_unc = scale_pdf_unc
         self.minnlo_unc = minnlo_unc
         self.samples = []
@@ -71,7 +71,7 @@ class TheoryHelper(object):
         self.skipFromSignal = skipFromSignal
         self.add_nonpert_unc(model=self.np_model)
         self.add_resum_unc(magnitude=self.tnp_magnitude, mirror=self.mirror_tnp, scale=self.tnp_scale)
-        self.add_pdf_uncertainty(from_corr=self.pdf_from_corr, action=self.pdf_action, scale=self.scale_pdf_unc)
+        self.add_pdf_uncertainty(from_corr=self.pdf_from_corr, operation=self.pdf_operation, scale=self.scale_pdf_unc)
 
     def set_minnlo_unc(self, minnloUnc):
         self.minnlo_unc = minnloUnc
@@ -252,7 +252,7 @@ class TheoryHelper(object):
             systAxes=["vars"],
             passToFakes=self.propagate_to_fakes,
             systNameReplace=name_replace,
-            action=lambda h: h[{self.syst_ax : [central_var, *selected_tnp_nuisances]}],
+            preOp=lambda h: h[{self.syst_ax : [central_var, *selected_tnp_nuisances]}],
             mirror=mirror,
             scale=scale,
             skipEntries=[{self.syst_ax : central_var},],
@@ -315,7 +315,7 @@ class TheoryHelper(object):
             processes=['wtau_samples', 'single_v_nonsig_samples'] if self.skipFromSignal else ['single_v_samples'],
             passToFakes=self.propagate_to_fakes,
             systAxes=[self.syst_ax],
-            action=lambda h: h[{self.syst_ax : var_vals}],
+            preOp=lambda h: h[{self.syst_ax : var_vals}],
             outNames=var_names,
             group="resumNonpert",
             splitGroup={"resum": ".*"},
@@ -388,7 +388,7 @@ class TheoryHelper(object):
         gen_axes = ["absYVgenNP", "chargeVgenNP"]
         sum_axes = [] if binned else ["absYVgenNP"]
         syst_axes = ["absYVgenNP", "chargeVgenNP", self.syst_ax] if binned else ["chargeVgenNP", self.syst_ax]
-        action=lambda h,entries: syst_tools.hist_to_variations(h[{self.syst_ax : [central_var, *entries]}], gen_axes=gen_axes, sum_axes=sum_axes)
+        operation=lambda h,entries: syst_tools.hist_to_variations(h[{self.syst_ax : [central_var, *entries]}], gen_axes=gen_axes, sum_axes=sum_axes)
         for sample_group in self.samples:
             if not self.card_tool.procGroups.get(sample_group, None):
                 continue
@@ -402,15 +402,15 @@ class TheoryHelper(object):
                     splitGroup={"resum": ".*"},
                     systAxes=syst_axes,
                     passToFakes=self.propagate_to_fakes,
-                    action=action,
-                    actionArgs={"entries": entries},
+                    preOp=operation,
+                    preOpArgs={"entries": entries},
                     # outNames=[f"{rename}Down", f"{rename}Up"] if not binned else None,
                     systNameReplace=[(entries[1], f"{rename}Up"), (entries[0], f"{rename}Down"), ],
                     skipEntries=[{self.syst_ax : central_var}],
                     rename=rename,
                 )
 
-    def add_pdf_uncertainty(self, action=None, from_corr=False, scale=1):
+    def add_pdf_uncertainty(self, operation=None, from_corr=False, scale=1):
         pdf = input_tools.args_from_metadata(self.card_tool, "pdfs")[0]
         pdfInfo = theory_tools.pdf_info_map("ZmumuPostVFP", pdf)
         pdfName = pdfInfo["name"]
@@ -436,7 +436,7 @@ class TheoryHelper(object):
             group=pdfName,
             splitGroup={f"{pdfName}NoAlphaS": '.*'},
             passToFakes=self.propagate_to_fakes,
-            preOpMap=action,
+            preOpMap=operation,
             scale=pdfInfo.get("scale", 1)*scale,
             systAxes=[pdf_ax],
         )
@@ -458,7 +458,7 @@ class TheoryHelper(object):
                     group=pdfName,
                     splitGroup={f"{pdfName}NoAlphaS": '.*'},
                     passToFakes=self.propagate_to_fakes,
-                    preOpMap=action,
+                    preOpMap=operation,
                     scale=pdfInfo.get("scale", 1)*scale,
                     systAxes=[pdf_ax],
                 )
@@ -503,7 +503,7 @@ class TheoryHelper(object):
                 # NOTE: I don't actually remember why this used no_flow=ptVgen previously, I don't think there's any harm in not using it...
                 # preOpMap={s : lambda h: hh.syst_min_and_max_env_hist(h, obs, self.syst_ax,
                     # [x for x in h.axes["vars"] if "transition_point" in x]) for s in expanded_samples},
-                action = lambda h: h[{"vars" : transition_vars}],
+                preOp = lambda h: h[{"vars" : transition_vars}],
                 outNames=[f"resumTransitionSym{name_append}Up", f"resumTransitionSym{name_append}Down", f"resumTransitionAsym{name_append}Up", f"resumTransitionAsym{name_append}Down"],
                 rename=f"scetlibResumTransition{name_append}",
             )

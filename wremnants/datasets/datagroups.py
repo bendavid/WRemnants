@@ -214,7 +214,7 @@ class Datagroups(object):
     ## baseName takes values such as "nominal"
     def loadHistsForDatagroups(self, 
         baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
-        applySelection=True, forceNonzero=True, action=None, actionArgs=None, preOpMap=None, preOpArgs=None, 
+        applySelection=True, forceNonzero=True, preOpMap=None, preOpArgs={}, 
         scaleToNewLumi=1, excludeProcs=None, forceToNominal=[], sumFakesPartial=True,
     ):
         logger.debug("Calling loadHistsForDatagroups()")
@@ -367,10 +367,6 @@ class Datagroups(object):
                 logger.debug(f"Apply rebin operation for process {procName}")
                 group.hists[label] = group.rebinOp(group.hists[label])
 
-            if action and type(action) != dict:
-                logger.debug(f"Applying action={action}     actionArgs={actionArgs}")
-                group.hists[label] = action(group.hists[label], **actionArgs)
-
             if group.selectOp:
                 if not applySelection:
                     logger.warning(f"Selection requested for process {procName} but applySelection=False, thus it will be ignored")
@@ -433,7 +429,7 @@ class Datagroups(object):
         return self.results
 
     def addSummedProc(self, refname, name, label=None, color=None, exclude=["Data"], relabel=None, 
-            procsToRead=None, reload=False, rename=None, action=None, preOpMap={}, preOpArgs={}, 
+            procsToRead=None, reload=False, rename=None, action=None, actionArgs={}, preOpMap=None, preOpArgs={}, 
             forceNonzero=True):
         if reload:
             self.loadHistsForDatagroups(refname, syst=name, excludeProcs=exclude,
@@ -455,7 +451,7 @@ class Datagroups(object):
                 raise ValueError(f"Failed to find hist for proc {proc}, histname {name}")
             if action:
                 logger.debug(f"Applying action in addSummedProc! Before sum {h.sum()}")
-                h = action(h)
+                h = action(h, **actionArgs)
                 logger.debug(f"After action sum {h.sum()}")
             tosum.append(h)
         histname = refname if not relabel else relabel
