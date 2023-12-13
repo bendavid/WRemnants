@@ -117,8 +117,6 @@ if args.unfolding:
     if not args.poiAsNoi:
         datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
         datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wtaunu")
-        groups_to_aggregate.append("BkgWmunu")
-        groups_to_aggregate.append("BkgWtaunu")
 
 elif args.theoryAgnostic:
     theoryAgnostic_axes, theoryAgnostic_cols = differential.get_theoryAgnostic_axes(ptV_bins=args.genPtVbinEdges, absYV_bins=args.genAbsYVbinEdges, ptV_flow=args.poiAsNoi, absYV_flow=args.poiAsNoi)
@@ -126,7 +124,7 @@ elif args.theoryAgnostic:
     # the following just prepares the existence of the group for out-of-acceptance signal, but doesn't create or define the histogram yet
     if not args.poiAsNoi:
         datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
-        groups_to_aggregate.append("BkgWmunu")
+        groups_to_aggregate.append("WmunuOOA")
 
 # axes for study of fakes
 axis_mt_fakes = hist.axis.Regular(120, 0., 120., name = "mt", underflow=False, overflow=True)
@@ -526,8 +524,8 @@ def build_graph(df, dataset):
     if hasattr(dataset, "out_of_acceptance"):
         # Rename dataset to not overwrite the original one
         if len(smearing_weights_procs) > 0 and smearing_weights_procs[-1] == dataset.name:
-            smearing_weights_procs[-1] = "Bkg"+dataset.name
-        dataset.name = "Bkg"+dataset.name
+            smearing_weights_procs[-1] = dataset.name+"OOA"
+        dataset.name = dataset.name+"OOA"
 
     return results, weightsum
 

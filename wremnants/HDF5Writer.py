@@ -65,7 +65,7 @@ class HDF5Writer(object):
 
     def add_channel(self, cardTool, name=None):
         if name is None:
-            name = f"ch{len(self.channels)+1}"
+            name = f"ch{len(self.channels)}"
         if cardTool.xnorm and not self.theoryFit:
             name += "_masked"
         self.channels[name] = cardTool
@@ -222,7 +222,7 @@ class HDF5Writer(object):
                                     syst_bin = pseudo_axis.bin(idx) if type(idx) == int else str(idx)
                                 else:
                                     syst_bin = str(pseudo_axis.index(idx)) if type(idx) == int else str(idx)
-                                key = f"{pseudo_data_name}{f'_{syst_bin}' if syst_idx is not None else ''}"
+                                key = f"{pseudo_data_name}{f'_{syst_bin}' if syst_idx not in [None, 0] else ''}"
                                 logger.info(f"Write pseudodata {key}")
                                 pseudoDataNameList.append(key)
                         else:
@@ -372,7 +372,22 @@ class HDF5Writer(object):
 
                         if syst["mirror"]:
                             logkavg_proc = get_logk(var_name)
-                            logkhalfdiff_proc = np.zeros([nbinschan],dtype=self.dtype)
+                            logkhalfdiff_proc = np.zeros_like(logkavg_proc)
+                        elif syst["symmetrize"] is not None:
+                            if syst["symmetrize"] not in ["average", "conservative"]:
+                                raise ValueError("Invalid option for 'symmetrize'.  Valid options are 'average' and 'conservative'")
+
+                            logkup_proc = get_logk(var_name, "Up")
+                            logkdown_proc = get_logk(var_name, "Down")
+
+                            if syst["symmetrize"] == "conservative":
+                                # symmetrize by largest magnitude of up and down variations
+                                logkavg_proc = np.where(np.abs(logkup_proc) > np.abs(logkdown_proc), logkup_proc, -logkdown_proc)
+                            else:
+                                # symmetrize by average of up and down variations
+                                logkavg_proc = 0.5*(logkup_proc - logkdown_proc)
+
+                            logkhalfdiff_proc = np.zeros_like(logkavg_proc)
                         else:
                             logkup_proc = get_logk(var_name, "Up")
                             logkdown_proc = get_logk(var_name, "Down")

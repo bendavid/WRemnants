@@ -7,15 +7,25 @@ from utilities.styles import styles
 
 logger = logging.child_logger(__name__)
 
+class Datagroup_member(object):
+    def __init__(self, name, result):
+        self.name = name
+        self.xsec = result["dataset"]["xsec"]
+        self.weight_sum = result["weight_sum"]
+        self.is_data = result["dataset"].get("is_data", False)
+        self.lumi = result.get("lumi", 0)
+
 class Datagroup(object):
 
-    def __init__(self, name, members=[], scale=None, selectOp=None, selectOpArgs={}, memberOp=None, rebinOp=None, label=None, color=None):
+    def __init__(self, name, members={}, scale=None, selectOp=None, selectOpArgs={}, memberOp=None, rebinOp=None, label=None, color=None):
         self.name = name
         self.scale = scale
         self.label = styles.process_labels.get(name, name) if label is None else label
         self.color = styles.process_colors.get(name, "grey") if color is None else color
-
-        self.members = members              # list of narf datasets
+        if type(members) == dict:
+            self.members = [Datagroup_member(k, v) for k, v in members.items()]
+        else:
+            self.members = members
 
         self.selectOp = selectOp            # operation that is applied on all members of the group
         self.selectOpArgs = selectOpArgs    # argments to the selectOp

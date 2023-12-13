@@ -98,13 +98,14 @@ def plotImpacts(df, poi, pulls=False, normalize=False, oneSidedImpacts=False):
         # append numerical values of impacts on nuisance name; fill up empty room with spaces to align numbers
         frmt = "{:0"+str(int(np.log10(max(df[impact_str])))+2)+".2f}"
         nval = df[impact_str].apply(lambda x,frmt=frmt: frmt.format(x)) #.astype(str)
-        nspace = nval.apply(lambda x, n=nval.apply(len).max(): " "*(n - len(x))) 
+        nspace = nval.apply(lambda x, n=nval.apply(len).max(): "\\ "*(n - len(x))) 
         if include_ref:
             frmt_ref = "{:0"+str(int(np.log10(max(df[f"{impact_str}_ref"])))+2)+".2f}"
             nval_ref = df[f'{impact_str}_ref'].apply(lambda x,frmt=frmt_ref: " ("+frmt.format(x)+")") #.round(2).astype(str)
-            nspace_ref = nval_ref.apply(lambda x, n=nval_ref.apply(len).max(): " "*(n - len(x))) 
+            nspace_ref = nval_ref.apply(lambda x, n=nval_ref.apply(len).max(): "\\ "*(n - len(x))) 
             nval = nval+nspace_ref+nval_ref 
-        labels = df["label"]+"  "+nspace+nval
+        labels = df["label"].apply(lambda x: x[:-1] if x.startswith("$") else r"$\text{"+x+"}")
+        labels = labels+r"\ \ "+nspace+nval+"$"
         textargs = dict()
     else:
         labels = df["label"]
@@ -200,6 +201,21 @@ def plotImpacts(df, poi, pulls=False, normalize=False, oneSidedImpacts=False):
             ),
             row=1,col=ncols,
         )
+        if args.diffPullAsym:
+            fig.add_trace(
+                go.Scatter(
+                    x=df['newpull'],
+                    y=labels,
+                    mode="markers",
+                    marker=dict(color='blue', symbol="x", size=8, 
+                        line=dict(
+                            width=1  # Adjust the thickness of the marker lines
+                    )),
+                    name="newpulls",
+                ),
+                row=1,col=ncols,
+            )
+
         if include_ref:
             fig.add_trace(
                 go.Bar(
@@ -226,16 +242,17 @@ def plotImpacts(df, poi, pulls=False, normalize=False, oneSidedImpacts=False):
         pullrange = .5*np.ceil(max_pull/0.5)+1.1
         # Keep it a factor of 0.25, but no bigger than 1
         spacing = min(1, np.ceil(pullrange)/4.)
+        xaxis_title = r'$\Theta - \Theta_0 \ \color{blue}{(\Theta - \Theta_0) / \sqrt{\sigma^2 -\sigma_0^2}}$' if args.diffPullAsym else r'$\Theta - \Theta_0$'
         info = dict(
             xaxis=dict(range=[-pullrange, pullrange],
-                    showgrid=True, gridwidth=2,gridcolor='LightBlue',
+                    showgrid=True, gridwidth=2, gridcolor='LightBlue',
                     zeroline=True, zerolinewidth=4, zerolinecolor='Gray',
                     tickmode='linear',
                     tick0=0.,
                     dtick=spacing,
                     side='top',
                 ),
-            xaxis_title="pull+constraint",
+            xaxis_title=xaxis_title,
             yaxis=dict(range=[-1, ndisplay]),
             yaxis_visible=not impacts,
         )
@@ -250,7 +267,7 @@ def plotImpacts(df, poi, pulls=False, normalize=False, oneSidedImpacts=False):
 
 def readFitInfoFromFile(rf, filename, poi, group=False, stat=0.0, normalize=False, scale=100):    
     impacts, labels, _ = combinetf_input.read_impacts_poi(rf, group, add_total=group, stat=stat, poi=poi, normalize=normalize)
-
+    
     if (group and grouping) or args.filters:
         filtimpacts = []
         filtlabels = []
@@ -268,8 +285,11 @@ def readFitInfoFromFile(rf, filename, poi, group=False, stat=0.0, normalize=Fals
     df['label'] = [translate_label.get(l, l) for l in labels]
     df['absimpact'] = np.abs(df['impact'])
     if not group:
-        df["pull"], df["constraint"] = combinetf_input.get_pulls_and_constraints(filename, labels)
+        df["pull"], df["constraint"], df["pull_prefit"] = combinetf_input.get_pulls_and_constraints(filename, labels)
+        df["pull"] = df['pull'] - df["pull_prefit"]
         df['abspull'] = np.abs(df['pull'])
+        df['newpull'] = df['pull'] / (1-df["constraint"]**2)**0.5
+        df['newpull'].replace([np.inf, -np.inf, np.nan], 999, inplace=True)
         if poi:
             df.drop(df.loc[df['label'].str.contains(poi.replace("_noi",""), regex=True)].index, inplace=True)
     colors = np.full(len(df), '#377eb8')
@@ -294,6 +314,7 @@ def parseArgs():
     parser.add_argument("-m", "--mode", choices=["group", "ungrouped", "both"], default="both", help="Impact mode")
     parser.add_argument("--absolute", action='store_true', help="Not normalize impacts on cross sections and event numbers.")
     parser.add_argument("--debug", action='store_true', help="Print debug output")
+    parser.add_argument("--diffPullAsym", action='store_true', help="Also add the pulls after the diffPullAsym definition")
     parser.add_argument("--oneSidedImpacts", action='store_true', help="Make impacts one-sided")
     parser.add_argument("--filters", nargs="*", type=str, help="Filter regexes to select nuisances by name")
     parser.add_argument("--grouping", type=str, default=None, help="Select nuisances by a predefined grouping", choices=groupings.keys())
@@ -323,17 +344,41 @@ app = dash.Dash(__name__)
     [Input("groups", "on")],
 )
 
-def producePlots(fitresult, args, poi, group=False, normalize=False, fitresult_ref=None):
+def producePlots(fitresult, args, poi, group=False, normalize=False, fitresult_ref=None, scale=100):
 
     if not (group and args.output_mode == 'output'):
-        df = readFitInfoFromFile(fitresult, args.inputFile, poi, False, stat=args.stat/100., normalize=normalize)
+        df = readFitInfoFromFile(fitresult, args.inputFile, poi, False, stat=args.stat/100., normalize=normalize, scale=scale)
     elif group:
-        df = readFitInfoFromFile(fitresult, args.inputFile, poi, True, stat=args.stat/100., normalize=normalize)
+        df = readFitInfoFromFile(fitresult, args.inputFile, poi, True, stat=args.stat/100., normalize=normalize, scale=scale)
 
     if fitresult_ref:
-        df_ref = readFitInfoFromFile(fitresult_ref, args.referenceFile, poi, group, stat=args.stat/100., normalize=normalize)
+        df_ref = readFitInfoFromFile(fitresult_ref, args.referenceFile, poi, group, stat=args.stat/100., normalize=normalize, scale=scale)
         df = df.merge(df_ref, how="left", on="label", suffixes=("","_ref"))
-        
+    
+    if group and fitresult_ref:
+        # add another group for the uncertainty from all systematics that are not common among the two groups; 
+        # defined as err = sqrt( variance(total) - variance(common nuisances) )
+        np_common = [s in fitresult_ref["hsysts"][...] for s in fitresult["hsysts"][...]]
+        np_common_ref = [s in fitresult["hsysts"][...] for s in fitresult_ref["hsysts"][...]]
+        cov = fitresult["cov"][np_common, :][:, np_common]
+        cov_ref = fitresult_ref["cov"][np_common_ref, :][:, np_common_ref]
+
+        jac = fitresult["nuisance_impact_nois"][:,np_common]
+        jac_ref = fitresult_ref["nuisance_impact_nois"][:,np_common_ref]
+
+        df_total = df.loc[df["label"] == "Total"]
+        impact_others = np.sqrt(df_total["impact"].values[0]**2 - scale**2 * (jac @ (cov @ jac.T))[0][0])
+        impact_others_ref = np.sqrt(df_total["impact_ref"].values[0]**2 - scale**2 * (jac_ref @ (cov_ref @ jac_ref.T))[0][0])
+
+        new_row = {"label": "Others",
+            "impact": impact_others, "absimpact": abs(impact_others), "impact_color": df_total["impact_color"].values[0],
+            "impact_ref": impact_others_ref, "absimpact_ref": abs(impact_others_ref), "impact_color_ref": df_total["impact_color"].values[0],
+        }
+
+        df = pd.concat([df, pd.DataFrame([new_row])], ignore_index=True)
+        # remove rows with nuisance groups that are only included in one group but not in the other, since those are included in "Others" already
+        df = df.dropna()
+
     if args.sort:
         if args.sort.endswith("diff"):
             key = args.sort.replace("_diff","")

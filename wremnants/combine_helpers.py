@@ -22,6 +22,7 @@ def add_recoil_uncertainty(card_tool, samples, passSystToFakes=False, pu_type="h
             processes=samples,
             mirror = True,
             group = "recoil" if group_compact else "recoil_stat",
+            splitGroup={"experimental": f".*"},
             systAxes = ["recoil_unc"],
             passToFakes=passSystToFakes,
         )
@@ -30,6 +31,7 @@ def add_recoil_uncertainty(card_tool, samples, passSystToFakes=False, pu_type="h
             processes=samples,
             mirror = True,
             group = "recoil" if group_compact else "recoil_syst",
+            splitGroup={"experimental": f".*"},
             systAxes = ["recoil_unc"],
             passToFakes=passSystToFakes,
         )
