@@ -346,7 +346,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                 mirror=False,
                                 noConstraint=not constrainMass,
                                 systAxes=["massShift"],
-                                passToFakes=passSystToFakes,
+                                passToFakes=passSystToFakes
             )
 
         if args.fitMassDiff:
@@ -416,7 +416,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                     systAxesFlow=[], # only bins in acceptance in this call
                                     skipEntries=[{"helicitySig" : [6,7,8]}], # removing last three indices out of 9 (0,1,...,7,8) corresponding to A5,6,7
                                     actionMap={
-                                        m.name: (lambda h, scale_hist=scale_hists[m.name]: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], hh.multiplyHists(hh.addGenericAxis(h,common.down_up_axis), hh.rescaleBandVariation(scale_hist,args.theoryAgnosticBandSize),flow=False))) if sign in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}]) for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
+                                        m.name: (lambda h, scale_hist=scale_hists[m.name]: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], hh.multiplyHists(hh.addGenericAxis(h,common.down_up_axis, flow=False), hh.rescaleBandVariation(scale_hist,args.theoryAgnosticBandSize),flow=False))) if sign in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}]) for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
                                     )
                 # now OOA
                 nuisanceBaseNameOOA = f"{nuisanceBaseName}OOA_"
