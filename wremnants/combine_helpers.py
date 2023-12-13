@@ -32,10 +32,10 @@ def add_recoil_uncertainty(card_tool, samples, passSystToFakes=False, pu_type="h
 def projectABCD(cardTool, h, return_variances=False, dtype="float64"):
     # in case the desired axes are different at low MT and high MT we need to project each seperately, and then concatenate
 
-    if any(ax not in h.axes.name for ax in cardTool.fakerateAxes):
-        logger.warning(f"Not all desired fakerate axes found in histogram. Fakerate axes are {cardTool.fakerateAxes}, and histogram axes are {h.axes.name}")
+    if any(ax not in h.axes.name for ax in cardTool.getFakerateAxes()):
+        logger.warning(f"Not all desired fakerate axes found in histogram. Fakerate axes are {cardTool.getFakerateAxes()}, and histogram axes are {h.axes.name}")
 
-    fakerate_axes = [n for n in h.axes.name if n in cardTool.fakerateAxes]
+    fakerate_axes = [n for n in h.axes.name if n in cardTool.getFakerateAxes()]
 
     lowMT_axes = [n for n in h.axes.name if n in fakerate_axes]
     highMT_failIso_axes = [n for n in h.axes.name if n in [*fakerate_axes, *cardTool.fit_axes]]

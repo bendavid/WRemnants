@@ -66,6 +66,8 @@ class Datagroups(object):
         self.fakeName = "Fake"
         self.dataName = "Data"
         self.setGenAxes()
+        self.fakerate_axes = ["pt", "eta", "charge"]
+        self.fakerate_integration_axes = []
 
         if "lowpu" in self.mode:
             from wremnants.datasets.datagroupsLowPU import make_datagroups_lowPU as make_datagroups
@@ -169,7 +171,13 @@ class Datagroups(object):
         
         if len(self.groups) == 0:
             logger.warning(f"Excluded all groups using '{excludes}'. Continue without any group.")
-    
+
+    def setFakerateIntegrationAxes(self, axes=[]):
+        for group in self.groups.values():
+            if group.selectOpArgs is not None and "fakerate_integration_axes" in group.selectOpArgs:
+                logger.info(f"Set fakerate_integration_axes={axes} for {group.name}")
+                group.selectOpArgs["fakerate_integration_axes"] = axes
+
     def setGlobalAction(self, action):
         # To be used for applying a selection, rebinning, etc.
         if self.globalAction is None:
@@ -215,8 +223,8 @@ class Datagroups(object):
     ## baseName takes values such as "nominal"
     def loadHistsForDatagroups(self, 
         baseName, syst, procsToRead=None, label=None, nominalIfMissing=True, 
-        applySelection=True, fakerateIntegrationAxes=[], forceNonzero=True, preOpMap=None, preOpArgs=None, scaleToNewLumi=1, 
-        excludeProcs=None, forceToNominal=[], sumFakesPartial=True
+        applySelection=True, forceNonzero=True, preOpMap=None, preOpArgs={}, 
+        scaleToNewLumi=1, excludeProcs=None, forceToNominal=[], sumFakesPartial=True,
     ):
         logger.debug("Calling loadHistsForDatagroups()")
         logger.debug(f"The basename and syst is: {baseName}, {syst}")
@@ -292,7 +300,7 @@ class Datagroups(object):
                         logger.debug(f"No operation for member {i}: {member.name}/{procName}")
 
                 if preOpMap and member.name in preOpMap:
-                    logger.debug(f"Applying preOp to {member.name}/{procName} after loading")
+                    logger.debug(f"Applying action to {member.name}/{procName} after loading")
                     h = preOpMap[member.name](h, **preOpArgs)
 
                 sum_axes = [x for x in self.sum_gen_axes if x in h.axes.name]
@@ -364,14 +372,9 @@ class Datagroups(object):
             if group.selectOp:
                 if not applySelection:
                     logger.warning(f"Selection requested for process {procName} but applySelection=False, thus it will be ignored")
-                elif label in group.hists.keys():
+                elif label in group.hists.keys() and group.hists[label] is not None:
                     logger.debug(f"Apply selection for process {procName}")
-                    if procName == self.fakeName and "fakerate_integration_axes" not in group.selectOpArgs and len(fakerateIntegrationAxes):
-                        opArgs = {**group.selectOpArgs, "fakerate_integration_axes": fakerateIntegrationAxes}
-                    else:
-                        opArgs = group.selectOpArgs
-                    if group.hists[label]:
-                        group.hists[label] = group.selectOp(group.hists[label], **opArgs)
+                    group.hists[label] = group.selectOp(group.hists[label], **group.selectOpArgs)
 
         # Avoid situation where the nominal is read for all processes for this syst
         if nominalIfMissing and not foundExact:
@@ -428,12 +431,12 @@ class Datagroups(object):
         return self.results
 
     def addSummedProc(self, refname, name, label=None, color=None, exclude=["Data"], relabel=None, 
-            procsToRead=None, reload=False, rename=None, action=None, preOpMap={}, preOpArgs={}, 
-            fakerateIntegrationAxes=[], forceNonzero=True):
+            procsToRead=None, reload=False, rename=None, action=None, actionArgs={}, preOpMap=None, preOpArgs={}, 
+            forceNonzero=True):
         if reload:
             self.loadHistsForDatagroups(refname, syst=name, excludeProcs=exclude,
                 procsToRead=procsToRead, preOpMap=preOpMap, preOpArgs=preOpArgs, 
-                fakerateIntegrationAxes=fakerateIntegrationAxes, forceNonzero=forceNonzero)
+                forceNonzero=forceNonzero)
 
         if not rename:
             rename = name
@@ -450,7 +453,7 @@ class Datagroups(object):
                 raise ValueError(f"Failed to find hist for proc {proc}, histname {name}")
             if action:
                 logger.debug(f"Applying action in addSummedProc! Before sum {h.sum()}")
-                h = action(h)
+                h = action(h, **actionArgs)
                 logger.debug(f"After action sum {h.sum()}")
             tosum.append(h)
         histname = refname if not relabel else relabel

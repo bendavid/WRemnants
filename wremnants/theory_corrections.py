@@ -48,11 +48,11 @@ def make_corr_helper_fromnp(filename=f"{common.data_dir}/N3LLCorrections/inclusi
         corrf_Wp = np.load(filename.format(process="Wp"), allow_pickle=True)
         corrf_Wm = np.load(filename.format(process="Wm"), allow_pickle=True)
         bins = corrf_Wp["bins"]
-        axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge")
+        axis_charge = common.axis_chargeWgen
     else:
         corrf = np.load(filename.format(process="Z"), allow_pickle=True)
         bins = corrf["bins"]
-        axis_charge = hist.axis.Regular(1, -1., 1., underflow=False, overflow=False, name = "charge")
+        axis_charge =  common.axis_chargeZgen
 
     axis_syst = hist.axis.Regular(len(bins[0]) - 1, bins[0][0], bins[0][-1], 
                     name="systIdx", overflow=False, underflow=False)

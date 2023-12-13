@@ -77,7 +77,8 @@ else:
 )
 
 axis_ptqVgen = hist.axis.Variable(
-    [round(x, 4) for x in list(np.arange(0, 0.1 + 0.0125, 0.0125))]+[round(x, 4) for x in list(np.arange(0.1+0.025, 0.5 + 0.025, 0.025))], name = "ptqVgen", underflow=False
+    [round(x, 4) for x in list(np.arange(0, 0.1 + 0.0125, 0.0125))]+[round(x, 4) for x in list(np.arange(0.1+0.025, 0.5 + 0.025, 0.025))], 
+    name = "ptqVgen", underflow=False
 )
 
 axis_chargeWgen = hist.axis.Regular(

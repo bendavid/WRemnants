@@ -8,7 +8,7 @@ import hist
 import pickle
 import lz4.frame
 from .correctionsTensor_helper import makeCorrectionsTensor
-from .theory_tools import axis_helicity, moments_to_angular_coeffs
+from .theory_tools import moments_to_angular_coeffs
 from utilities import common, logging
 from utilities import boostHistHelpers as hh
 import numpy as np
@@ -23,6 +23,7 @@ narf.clingutils.Declare('#include "syst_helicity_utils.h"')
 data_dir = f"{pathlib.Path(__file__).parent}/data/"
 
 #UL, A0...A4
+axis_helicity = hist.axis.Integer(-1, 8, name="helicity", overflow=False, underflow=False)
 axis_helicity_multidim = hist.axis.Integer(-1, 8, name="helicitySig", overflow=False, underflow=False)
 
 #creates the helicity weight tensor

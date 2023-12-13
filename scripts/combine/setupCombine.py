@@ -367,22 +367,22 @@ def setup(args, inputFile, fitvar, xnorm=False):
             if args.fitMassDiff == "charge":
                 cardTool.addSystematic(**mass_diff_args,
                                     # # on gen level based on the sample, only possible for mW
-                                    # actionMap={m.name: (lambda h, swap=swap_bins: swap(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown")) 
+                                    # preOpMap={m.name: (lambda h, swap=swap_bins: swap(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown")) 
                                     #     for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members if "minus" in m.name},
                                     # on reco level based on reco charge
-                                    actionMap={m.name: (lambda h: 
+                                    preOpMap={m.name: (lambda h: 
                                             hh.swap_histogram_bins(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "charge", 0)) 
                                         for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members},
                 )
             elif args.fitMassDiff == "eta-sign":
                 cardTool.addSystematic(**mass_diff_args, 
-                                    actionMap={m.name: (lambda h: 
+                                    preOpMap={m.name: (lambda h: 
                                             hh.swap_histogram_bins(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "eta", hist.tag.Slicer()[0:complex(0,0):]))
                                         for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members},
                 )
             elif args.fitMassDiff == "eta-range":
                 cardTool.addSystematic(**mass_diff_args, 
-                                    actionMap={m.name: (lambda h: 
+                                    preOpMap={m.name: (lambda h: 
                                             hh.swap_histogram_bins(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "eta", hist.tag.Slicer()[complex(0,-0.9):complex(0,0.9):]))
                                         for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members},
                 )
@@ -415,7 +415,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                     labelsByAxis=["PtV", "YVBin", "Helicity","downUpVar"],
                                     systAxesFlow=[], # only bins in acceptance in this call
                                     skipEntries=[{"helicitySig" : [6,7,8]}], # removing last three indices out of 9 (0,1,...,7,8) corresponding to A5,6,7
-                                    actionMap={
+                                    preOpMap={
                                         m.name: (lambda h, scale_hist=scale_hists[m.name]: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], hh.multiplyHists(hh.addGenericAxis(h,common.down_up_axis, flow=False), hh.rescaleBandVariation(scale_hist,args.theoryAgnosticBandSize),flow=False))) if sign in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}]) for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
                                     )
                 # now OOA
@@ -436,7 +436,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                     labelsByAxis=["PtVBin","Helicity"],
                                     systAxesFlow=["ptVgenSig"], # this can activate nuisances on overflow bins, mainly just ptV and yV since the helicity axis has no overflow bins
                                     skipEntries=[{"helicitySig" : [6,7,8]}], # removing last three indices out of 9 (0,1,...,7,8) corresponding to A5,6,7
-                                    actionMap={
+                                    preOpMap={
                                         m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}],
                                                                         h[{"ptVgenSig": hist.tag.Slicer()[hist.overflow:],
                                                                             "absYVgenSig": hist.tag.Slicer()[0:h.axes["absYVgenSig"].size:hist.sum]}],
@@ -458,7 +458,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                     labelsByAxis=["YVBin","Helicity"],
                                     systAxesFlow=["absYVgenSig"], # this can activate nuisances on overflow bins, mainly just ptV and yV since the helicity axis has no overflow bins
                                     skipEntries=[{"helicitySig" : [6,7,8]}], # removing last three indices out of 9 (0,1,...,7,8) corresponding to A5,6,7
-                                    actionMap={
+                                    preOpMap={
                                         m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}],
                                                                         h[{"ptVgenSig": hist.tag.Slicer()[0:h.axes["ptVgenSig"].size:hist.sum],
                                                                             "absYVgenSig": hist.tag.Slicer()[hist.overflow:]}],
@@ -480,7 +480,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                     labelsByAxis=["PtVBin", "YVBin", "Helicity"],
                                     systAxesFlow=["ptVgenSig", "absYVgenSig"], # this can activate nuisances on overflow bins, mainly just ptV and yV since the helicity axis has no overflow bins
                                     skipEntries=[{"helicitySig" : [6,7,8]}], # removing last three indices out of 9 (0,1,...,7,8) corresponding to A5,6,7
-                                    actionMap={
+                                    preOpMap={
                                         m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}],
                                                                         h[{"ptVgenSig": hist.tag.Slicer()[hist.overflow:],
                                                                             "absYVgenSig": hist.tag.Slicer()[hist.overflow:]}],
@@ -507,7 +507,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                 cardTool.addSystematic(**noi_args,
                     rename=f"noiWminus",
                     baseName=f"W_qGen0",
-                    actionMap={
+                    preOpMap={
                         m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], h, scale2=args.scaleNormXsecHistYields))
                             if "minus" in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}])
                         for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
@@ -515,7 +515,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                 cardTool.addSystematic(**noi_args,
                     rename=f"noiWplus",
                     baseName=f"W_qGen1",
-                    actionMap={
+                    preOpMap={
                         m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], h, scale2=args.scaleNormXsecHistYields))
                             if "plus" in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}])
                         for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
@@ -523,7 +523,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
             else:
                 cardTool.addSystematic(**noi_args,
                     baseName=f"{label}_",
-                    actionMap={
+                    preOpMap={
                         m.name: (lambda h: hh.addHists(
                             h[{**{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}, "acceptance": hist.tag.Slicer()[::hist.sum]}], h[{"acceptance":True}], scale2=args.scaleNormXsecHistYields))
                         for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
