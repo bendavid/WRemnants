@@ -127,7 +127,7 @@ class HDF5Writer(object):
         if return_variances and (h.storage_type != hist.storage.Weight):
             raise RuntimeError(f"Sumw2 not filled for {h} but needed for binByBin uncertainties")
 
-        if chanInfo.ABCD and set(chanInfo.getFakerateAxes()) != set(chanInfo.fit_axes[:len(chanInfo.fakerateAxes)]):
+        if chanInfo.ABCD and set(chanInfo.getFakerateAxes()) != set(chanInfo.fit_axes[:len(chanInfo.getFakerateAxes())]):
             h = projectABCD(chanInfo, h, return_variances=return_variances)
         elif h.axes.name != axes:
             h = h.project(*axes)
@@ -181,8 +181,7 @@ class HDF5Writer(object):
                 label=chanInfo.nominalName, 
                 scaleToNewLumi=chanInfo.lumiScale, 
                 forceNonzero=forceNonzero,
-                sumFakesPartial=not chanInfo.ABCD,
-                fakerateIntegrationAxes=chanInfo.getFakerateIntegrationAxes()    
+                sumFakesPartial=not chanInfo.ABCD
             )
 
             procs_chan = chanInfo.predictedProcesses()
@@ -366,8 +365,7 @@ class HDF5Writer(object):
                     forceToNominal=forceToNominal,
                     scaleToNewLumi=chanInfo.lumiScale,
                     nominalIfMissing=not chanInfo.xnorm, # for masked channels not all systematics exist (we can skip loading nominal since Fake does not exist)
-                    sumFakesPartial=not chanInfo.ABCD,
-                    fakerateIntegrationAxes=chanInfo.getFakerateIntegrationAxes()
+                    sumFakesPartial=not chanInfo.ABCD
                 )
 
                 for proc in procs_syst:

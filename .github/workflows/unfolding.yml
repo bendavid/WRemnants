@@ -176,7 +176,7 @@ jobs:
       - name: wmass combine setup
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py 
-          -i $HIST_FILE --lumiScale $LUMI_SCALE --unfold --ABCD --hdf5 --sparse --addTauToSignal -o $WREMNANTS_OUTDIR --postfix unfolding
+          -i $HIST_FILE --lumiScale $LUMI_SCALE --unfold --ABCD --hdf5 --sparse -o $WREMNANTS_OUTDIR --postfix unfolding
 
       - name: wmass combine fit 
         run: >-
@@ -222,7 +222,7 @@ jobs:
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py -i $HIST_FILE 
           --fitresult ${WREMNANTS_OUTDIR}/WMass_eta_pt_charge_passIso_passMT_unfolding/fitresults_123456789.hdf5 --fitvar qGen-ptGen-absEtaGen 
-          --hdf5 --addTauToSignal -o $WREMNANTS_OUTDIR --postfix theoryfit
+          --hdf5 -o $WREMNANTS_OUTDIR --postfix theoryfit
 
       - name: wmass theoryfit combine fit 
         run: >-
@@ -238,7 +238,7 @@ jobs:
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_plots.py 
           $HIST_FILE --fitresult $WREMNANTS_OUTDIR/WMass_qGen_ptGen_absEtaGen_theoryfit/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR 
-          -n xnorm --plots prefit postfit --addTauToSignal -v 4 --rrange 0.9 1.1 --lumi=$LUMI_SCALE
+          -n xnorm --plots prefit postfit -v 4 --rrange 0.9 1.1 --lumi=$LUMI_SCALE
 
 
   wlike-analysis:
