@@ -258,14 +258,14 @@ class TheoryHelper(object):
             syst_ax_labels = ["PtV", "var"]
             format_with_values = ["edges", "center"]
 
-            def action_func(h, *args, **kwargs):
+            def preop_func(h, *args, **kwargs):
                 hsel = h[{"vars" : ["pdf0"] + sel_vars}]
                 return syst_tools.hist_to_variations(hsel, *args, **kwargs)
 
-            action_args = {}
-            action_args["gen_axes"] = [pt_ax]
-            action_args["rebin_axes"] = [pt_ax]
-            action_args["rebin_edges"] = [binning]
+            preop_args = {}
+            preop_args["gen_axes"] = [pt_ax]
+            preop_args["rebin_axes"] = [pt_ax]
+            preop_args["rebin_edges"] = [binning]
 
             self.card_tool.addSystematic(name=self.scale_hist_name,
                 processes=[sample_group],
@@ -274,8 +274,8 @@ class TheoryHelper(object):
                 systAxes=[pt_ax, "vars"],
                 symmetrize = "conservative",
                 passToFakes=self.propagate_to_fakes,
-                action = action_func,
-                actionArgs = action_args,
+                preOp = preop_func,
+                preOpArgs = preop_args,
                 skipEntries = skip_entries,
                 labelsByAxis=syst_ax_labels,
                 baseName=name_append+"_",
