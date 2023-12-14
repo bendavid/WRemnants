@@ -172,7 +172,41 @@ dataDictV9 = {
         ["{BASE_PATH}/BKGV9/QCD_Pt-20_MuEnrichedPt15_TuneCP5_13TeV-pythia8"],
         'xsec' : 238800,
         'group' : "QCD",
-    }
+    },
+    'GGToLLMass5to50PostVFP' : { 
+        'filepaths' :
+        [
+            "{BASE_PATH}/GGToLL_M-5To50_TuneCP5_13TeV-pythia8/NanoV9MCPostVFP_{NANO_PROD_TAG}",
+        ],
+        'xsec' : 9.448e+02,
+        'group': "PhotonInduced",
+    },
+    'GGToLLPostVFP' : { 
+        'filepaths' :
+        [
+            "{BASE_PATH}/GGToLL_TuneCP5_13TeV-pythia8/NanoV9MCPostVFP_{NANO_PROD_TAG}",
+        ],
+        'xsec' : 14.93,
+        'group': "PhotonInduced",
+    },
+    'QGToDYQTo2LPostVFP' : { 
+        'filepaths' :
+        [
+            "{BASE_PATH}/QGToDYQTo2L_TuneCP5_13TeV-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}",
+        ],
+        'xsec' : 1.373,
+        'group': "PhotonInduced",
+    },
+    'QGToWQToLNuPostVFP' : { 
+        'filepaths' :
+        [
+            "{BASE_PATH}/QGToWQToLNu_TuneCP5_13TeV-pythia8-photos/NanoV9MCPostVFP_{NANO_PROD_TAG}",
+        ],
+        'xsec' : 4.224e+01,
+        'xsec_up' : 4.827e+01,
+        'xsec_dn' : 3.588e+01,
+        'group': "PhotonInduced",
+    },
 }
 
 # extended version with additional samples (but missing some pdf sets)

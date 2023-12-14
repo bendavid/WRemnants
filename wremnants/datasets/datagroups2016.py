@@ -27,6 +27,10 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
         members = dg.get_members_from_results(startswith=["Ztautau"]),
         selectOp = sigOp,
     )
+    dg.addGroup("PhotonInduced",
+        members = dg.get_members_from_results(startswith=["GG", "QG"]),
+        selectOp = sigOp,
+    )
 
     if pseudodata_pdfset and dg.combine:
         dg.addGroup(f"pdf{pseudodata_pdfset.upper()}_sum",
@@ -60,7 +64,7 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
         )   
     else:
         dg.addGroup("Other",
-            members = dg.get_members_from_results(not_startswith=["Zmumu", "Ztautau", "QCD"]),
+            members = dg.get_members_from_results(not_startswith=["Zmumu", "Ztautau", "QCD", "GG", "QG"]),
         )
 
     dg.filterGroups(filterGroups)
