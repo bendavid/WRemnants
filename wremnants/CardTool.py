@@ -1,6 +1,5 @@
 from collections import OrderedDict
 from wremnants import histselections as sel
-from wremnants.combine_helpers import setSimultaneousABCD
 from utilities import boostHistHelpers as hh, common, logging
 from utilities.io_tools import output_tools
 import narf
@@ -777,7 +776,7 @@ class CardTool(object):
                 logger.warning(f"These processes are taken from nominal datagroups: {processesFromNomi}")
                 datagroupsFromNomi = self.datagroups
                 datagroupsFromNomi.loadHistsForDatagroups(
-                    baseName=self.nominalName, syst=self.nominalName, # CHECK: shouldn't it be syst=pseudoData?
+                    baseName=self.nominalName, syst=self.nominalName,
                     procsToRead=processesFromNomi, 
                     label=pseudoData,
                     scaleToNewLumi=self.lumiScale,
@@ -786,7 +785,6 @@ class CardTool(object):
                 procDictFromNomi = datagroupsFromNomi.getDatagroups()
                 hists.extend([procDictFromNomi[proc].hists[pseudoData] for proc in processesFromNomi])
             # done, now sum all histograms
-
             hdata = hh.sumHists(hists)
             if self.pseudoDataAxes[idx] is None:
                 extra_ax = [ax for ax in hdata.axes.name if ax not in self.fit_axes]
@@ -856,8 +854,6 @@ class CardTool(object):
             scaleToNewLumi=self.lumiScale, 
             forceNonzero=forceNonzero,
             sumFakesPartial=not self.ABCD)
-        if self.ABCD and not self.xnorm:
-            setSimultaneousABCD(self)
         
         self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName, check_systs=check_systs)
         self.loadNominalCard()
@@ -882,8 +878,9 @@ class CardTool(object):
                 procsToRead=processes, 
                 forceNonzero=forceNonzero and systName != "qcdScaleByHelicity",
                 preOpMap=systMap["preOpMap"], preOpArgs=systMap["preOpArgs"], 
+                scaleToNewLumi=self.lumiScale,
                 forceToNominal=forceToNominal,
-                scaleToNewLumi=self.lumiScale
+                sumFakesPartial=not self.ABCD
             )
             self.writeForProcesses(syst, label="syst", processes=processes, check_systs=check_systs)
 
@@ -1104,10 +1101,10 @@ class CardTool(object):
         if self.fit_axes:
             axes = self.fit_axes[:]
             if self.ABCD and not self.xnorm:
-                if self.nameMT not in axes:
-                    axes.append(self.nameMT)
                 if common.passIsoName not in axes:
                     axes.append(common.passIsoName)
+                if self.nameMT not in axes:
+                    axes.append(self.nameMT)
             # don't project h into itself when axes to project are all axes
             if any (ax not in h.axes.name for ax in axes):
                 logger.error("Request to project some axes not present in the histogram")

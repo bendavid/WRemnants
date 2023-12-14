@@ -76,8 +76,8 @@ class Datagroups(object):
 
         make_datagroups(self, **kwargs)
 
-        if "Data" in self.groups:
-            self.lumi = sum([m.lumi for m in self.groups["Data"].members if m.is_data])
+        self.lumi = sum([value.get("lumi", 0) for key, value in self.results.items()])
+        if self.lumi > 0:
             logger.info(f"Integrated luminosity from data: {self.lumi}/fb")
         else:
             self.lumi = 1
@@ -206,7 +206,16 @@ class Datagroups(object):
         else:
             meta_info = self.getMetaInfo()
             return meta_info["command"]
-        
+
+    # remove a histogram that is loaded into memory from a proxy object 
+    def release_results(self, histname):
+        for result in self.results.values():
+            if "output" not in result:
+                continue
+            res = result["output"]
+            if histname in res:
+                res[histname].release()
+
     # for reading pickle files
     # as a reminder, the ND hists with tensor axes in the pickle files are organized as
     # pickle[procName]["output"][baseName] where
@@ -257,16 +266,10 @@ class Datagroups(object):
                 raise RuntimeError(f"Group {procName} not known. Defined groups are {list(self.groups.keys())}.")
             group = self.groups[procName]
 
-            # Check if the histogram is already there and in case use it
-            if Datagroups.histName(baseName, procName, syst) in group.hists:
-                logger.debug(f"Existing histogram for proc {procName} base name {baseName} syst {syst} found.")
-                group.hists[label] = group.hists[Datagroups.histName(baseName, procName, syst)]
-                foundExact = True
-                continue
             group.hists[label] = None
 
             for i, member in enumerate(group.members):
-                if procName == self.fakeName and member.name in fakesMembersWithSyst:
+                if sumFakesPartial and procName == self.fakeName and member.name in fakesMembersWithSyst:
                     # if we are here this process has been already used to build the fakes when running for other groups
                     continue
                 logger.debug(f"Looking at group member {member.name}")
@@ -300,13 +303,12 @@ class Datagroups(object):
                     logger.debug(f"Applying action to {member.name}/{procName} after loading")
                     h = preOpMap[member.name](h, **preOpArgs)
 
-                if self.gen_axes != None:
-                    # integrate over remaining gen axes 
-                    logger.debug(f"Integrate over gen axes {self.gen_axes}")
-                    projections = [a for a in h.axes.name if a not in self.gen_axes]
-                    if len(projections) < len(h.axes.name):
-                        h = h.project(*projections)
-                    logger.debug(f"Integrated, Hist axes are {h.axes.name}")
+                sum_axes = [x for x in self.sum_gen_axes if x in h.axes.name]
+                if len(sum_axes) > 0:
+                    # sum over remaining axes (avoid integrating over fit axes & fakerate axes)
+                    logger.debug(f"Sum over axes {sum_axes}")
+                    h = h.project(*[x for x in h.axes.name if x not in sum_axes])
+                    logger.debug(f"Hist axes are now {h.axes.name}")
 
                 if h_id == id(h):
                     logger.debug(f"Make explicit copy")
@@ -468,34 +470,34 @@ class Datagroups(object):
                 raise ValueError(f"In setSelectOp(): process {proc} not found")
             self.groups[proc].selectOp = op
 
-    def setGenAxes(self, gen_axes=None):
+    def setGenAxes(self, gen_axes=None, sum_gen_axes=None):
+        # gen_axes are the axes to be recognized as gen axes, e.g. for the unfolding
+        # sum_gen_axes are all gen axes that are potentially in the produced histogram and integrated over if not used
         if isinstance(gen_axes, str):
             gen_axes = [gen_axes]
+        if isinstance(sum_gen_axes, str):
+            sum_gen_axes = [sum_gen_axes]
 
-        self.gen_axes = None
+        # infer all gen axes from metadata
+        try:
+            args = self.getMetaInfo()["args"]
+        except ValueError as e:
+            logger.warning("No meta data found so no gen axes could be auto set")
+            return
 
-        if gen_axes != None:
-            self.gen_axes = list(gen_axes)
-        else:
-            # infer gen axes from metadata
-            try:
-                args = self.getMetaInfo()["args"]
-            except ValueError as e:
-                logger.warning("No meta data found so no gen axes could be auto set")
-                return
-            if args.get("unfolding", False) is False and args.get("theoryAgnostic", False) is False:
-                return
+        self.all_gen_axes = args.get("genVars", [])
 
-            if len(args.get("genVars", [])) > 0:
-                self.gen_axes = args["genVars"]
-            else:
-                logger.warning(f"Unknown gen axes!")
+        if self.mode in ["wmass", "lowpu_w"]:
+            self.all_gen_axes = ["qGen", *self.all_gen_axes]
+
+        self.gen_axes = list(gen_axes) if gen_axes != None else self.all_gen_axes
+        self.sum_gen_axes = list(sum_gen_axes) if sum_gen_axes != None else self.all_gen_axes
 
         logger.debug(f"Gen axes are now {self.gen_axes}")
 
-    def getGenBinIndices(self, h, axesToRead=[]):
+    def getGenBinIndices(self, h, axesToRead=None):
         gen_bins = []
-        for gen_axis in (axesToRead if len(axesToRead) else self.gen_axes):
+        for gen_axis in (self.gen_axes if axesToRead is None else axesToRead):
             if gen_axis not in h.axes.name:
                 raise RuntimeError(f"Gen axis '{gen_axis}' not found in histogram axes '{h.axes.name}'!")
 
@@ -507,10 +509,11 @@ class Datagroups(object):
             gen_bins.append(gen_bin_list)
         return gen_bins
 
-    def defineSignalBinsUnfolding(self, group_name, new_name=None, member_filter=None, histToReadAxes="xnorm", axesToRead=[]):
+    def defineSignalBinsUnfolding(self, group_name, new_name=None, member_filter=None, histToReadAxes="xnorm", axesToRead=None):
         if group_name not in self.groups.keys():
             raise RuntimeError(f"Base group {group_name} not found in groups {self.groups.keys()}!")
-
+        if axesToRead is None:
+            axesToRead = self.gen_axes
         base_members = self.groups[group_name].members[:]
         if member_filter is not None:
             base_members = [m for m in filter(lambda x, f=member_filter: f(x), base_members)]            
@@ -524,7 +527,7 @@ class Datagroups(object):
         for indices in itertools.product(*gen_bin_indices):
 
             proc_name = group_name if new_name is None else new_name
-            for idx, var in zip(indices, self.gen_axes):
+            for idx, var in zip(indices, axesToRead):
                 if idx == hist.underflow:
                     idx_str = "U"
                 elif idx == hist.overflow:
@@ -533,9 +536,10 @@ class Datagroups(object):
                     idx_str = str(idx)
                 proc_name += f"_{var}{idx_str}"
 
+
             self.copyGroup(group_name, proc_name, member_filter=member_filter)
 
-            memberOp = lambda x, indices=indices, genvars=self.gen_axes: x[{var : i for var, i in zip(genvars, indices)}]
+            memberOp = lambda x, indices=indices, genvars=axesToRead: x[{var : i for var, i in zip(genvars, indices)}]
             self.groups[proc_name].memberOp = [memberOp for m in base_members]
 
             self.unconstrainedProcesses.append(proc_name)

@@ -4,20 +4,23 @@ import hist
 
 logger = logging.child_logger(__name__)
 
-def make_datagroups_lowPU(dg, combine=False, excludeGroups=None, filterGroups=None, applySelection=True):
+def make_datagroups_lowPU(dg, combine=False, excludeGroups=None, filterGroups=None, applySelection=True, simultaneousABCD=False):
     # reset datagroups
     dg.groups = {}
 
-    if dg.mode == "lowpu_w" and applySelection:
-        sigOp = sel.signalHistWmass
-        fakeOp = sel.fakeHistABCD
+    if dg.mode == "lowpu_w":
         fakeOpArgs = {"fakerate_integration_axes":[]}
+        if applySelection:
+            sigOp = sel.signalHistWmass
+            fakeOp = sel.fakeHistABCD
+        else:
+            sigOp = None
+            fakeOp = sel.fakeHistSimultaneousABCD
     else:
         sigOp = None
         fakeOp = None
         fakeOpArgs = None
 
-    # data
     dg.addGroup("Data",
         members = dg.get_members_from_results(is_data=True),
         selectOp = sigOp,

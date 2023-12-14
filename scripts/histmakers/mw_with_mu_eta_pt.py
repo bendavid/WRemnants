@@ -113,10 +113,10 @@ if args.unfolding:
     min_pt_unfolding = template_minpt+template_wpt
     max_pt_unfolding = template_maxpt-template_wpt
     npt_unfolding = args.genBins[0]-2
-    unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(npt_unfolding, min_pt_unfolding, max_pt_unfolding, args.genBins[1], flow_eta=args.poiAsNoi)
+    unfolding_axes, unfolding_cols = differential.get_pt_eta_axes(npt_unfolding, min_pt_unfolding, max_pt_unfolding, args.genBins[1] if "absEtaGen" in args.genVars else None , flow_eta=args.poiAsNoi)
     if not args.poiAsNoi:
         datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wmunu")
-        datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wtaunu")
+        # datasets = unfolding_tools.add_out_of_acceptance(datasets, group = "Wtaunu")
 
 elif args.theoryAgnostic:
     theoryAgnostic_axes, theoryAgnostic_cols = differential.get_theoryAgnostic_axes(ptV_bins=args.genPtVbinEdges, absYV_bins=args.genAbsYVbinEdges, ptV_flow=args.poiAsNoi, absYV_flow=args.poiAsNoi)
@@ -239,15 +239,15 @@ def build_graph(df, dataset):
     axes = nominal_axes
     cols = nominal_cols
 
-    if args.unfolding and isW:
+    if args.unfolding and isWmunu:
         df = unfolding_tools.define_gen_level(df, args.genLevel, dataset.name, mode="wmass")
         if hasattr(dataset, "out_of_acceptance"):
             logger.debug("Reject events in fiducial phase space")
-            df = unfolding_tools.select_fiducial_space(df, mode="wmass", accept=False)
+            df = unfolding_tools.select_fiducial_space(df, mtw_min=args.mtCut, mode="wmass", accept=False)
         else:
             if not args.poiAsNoi:
                 logger.debug("Select events in fiducial phase space")
-                df = unfolding_tools.select_fiducial_space(df, mode="wmass", accept=True)
+                df = unfolding_tools.select_fiducial_space(df, mtw_min=args.mtCut, mode="wmass", accept=True)
                 axes = [*nominal_axes, *unfolding_axes] 
                 cols = [*nominal_cols, *unfolding_cols]
             
