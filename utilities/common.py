@@ -180,7 +180,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--nonClosureScheme", type=str, default = "A-only", choices=["none", "A-M-separated", "A-M-combined", "binned", "binned-plus-M", "A-only", "M-only"], help = "source of the Z non-closure nuisances")
     parser.add_argument("--correlatedNonClosureNP", action="store_false", help="disable the de-correlation of Z non-closure nuisance parameters after the jpsi massfit")
     parser.add_argument("--dummyNonClosureA", action="store_false", help="read values for the magnetic part of the Z non-closure from a file")
-    parser.add_argument("--dummyNonClosureAMag", default=7.5e-5, type=float, help="magnitude of the dummy value for the magnetic part of the Z non-closure")
+    parser.add_argument("--dummyNonClosureAMag", default=6.8e-5, type=float, help="magnitude of the dummy value for the magnetic part of the Z non-closure")
     parser.add_argument("--dummyNonClosureM", action="store_true", help="use a dummy value for the alignment part of the Z non-closure")
     parser.add_argument("--dummyNonClosureMMag", default=0., type=float, help="magnitude of the dummy value for the alignment part of the Z non-closure")
     parser.add_argument("--noScaleToData", action="store_true", help="Do not scale the MC histograms with xsec*lumi/sum(gen weights) in the postprocessing step")
