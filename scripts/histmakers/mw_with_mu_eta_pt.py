@@ -285,16 +285,12 @@ def build_graph(df, dataset):
     df = muon_calibration.define_corrected_reco_muon_kinematics(df)
 
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "goodMuons")
- 
+
     df = muon_selections.veto_electrons(df)
     df = muon_selections.apply_met_filters(df)
     if args.makeMCefficiency:
-        if dataset.group in common.background_MCprocs:
-            df = df.Define("GoodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_pt,TrigObj_l1pt,TrigObj_l2pt,TrigObj_filterBits)")
-        else:
-            df = df.Define("GoodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_filterBits)")
+        df = df.Define("GoodTrigObjs", "wrem::goodMuonTriggerCandidate(TrigObj_id,TrigObj_filterBits)")
         df = df.Define("passTrigger","(HLT_IsoTkMu24 || HLT_IsoMu24) && wrem::hasTriggerMatch(goodMuons_eta0,goodMuons_phi0,TrigObj_eta[GoodTrigObjs],TrigObj_phi[GoodTrigObjs])")
-
     else:
         df = muon_selections.apply_triggermatching_muon(df, dataset, "goodMuons_eta0", "goodMuons_phi0")
 
@@ -337,7 +333,7 @@ def build_graph(df, dataset):
             for reco_type in ['crctd', 'cvh', 'uncrct', 'gen_smeared']:
                 df = muon_validation.define_reco_over_gen_cols(df, reco_type)
 
-    if args.isolationDefinition == "iso04" or dataset.group in bkgMCprocs:
+    if args.isolationDefinition == "iso04":
         df = df.Define("goodMuons_pfRelIso04_all0", "Muon_pfRelIso04_all[goodMuons][0]")
     elif args.isolationDefinition == "iso04vtxAgn":
         df = df.Define("goodMuons_pfRelIso04_all0", "Muon_vtxAgnPfRelIso04_all[goodMuons][0]")
