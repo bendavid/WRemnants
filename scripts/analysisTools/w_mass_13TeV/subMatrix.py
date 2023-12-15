@@ -284,7 +284,8 @@ if __name__ == "__main__":
     parser.add_argument(     '--uniqueString',  default=None, required=True, type=str, help='Keyword for canvas name to uniquely identify the output plot')
     parser.add_argument(     '--nContours', default=51, type=int, help='Number of contours in palette. Default is 51 (keep it odd: no correlation is white with our palette)')
     parser.add_argument(     '--palette'  , default=0, type=int, help='Set palette: default is a built-in one, 55 is kRainbow')
-    parser.add_argument(     '--vertical-labels-X', dest='verticalLabelsX',    default=False, action='store_true', help='Set labels on X axis vertically (sometimes they overlap if rotated)')
+    parser.add_argument(     '--vertical-labels-X', dest='verticalLabelsX', action='store_true', help='Set labels on X axis vertically (sometimes they overlap if rotated)')
+    parser.add_argument(     '--noTextMatrix', action='store_true', help='Do not print text with values on the matrix')
     parser.add_argument(     '--title'  , default='', type=str, help='Title for matrix ')
     parser.add_argument(     '--show-more-correlated' , dest='showMoreCorrelated',    default=0, type=int, help='Show the N nuisances more correlated (in absolute value) with the parameters given with --params. If 0, do not do this part')
     parser.add_argument('-m','--matrix-type', dest='matrixType',    default='channelnone', choices=list(filter_matrixType_poiPostfix.keys()), type=str, help='Select which matrix to read from file')
@@ -294,7 +295,7 @@ if __name__ == "__main__":
     parser.add_argument(     '--show-all-nuisances', dest='showAllNuisances',  action='store_true', help='Show all nuisances in the matrix (e.g. to prepare HEPdata entries): this implies that option --params is only used to filter POIs (for fixed POI fit with no real POI it is suggested using --params "NOTEXISTING", otherwise leaving --params empty makes all nuisances be treated as POI for the sake of building the matrix)')
     parser.add_argument('--which-matrix',  dest='whichMatrix', choices=["both","covariance","correlation"], default='correlation', type=str, help='Which matrix: covariance|correlation|both')
     parser.add_argument(     '--skipLatexOnTop', action='store_true', help='Do not write "CMS blabla" on top (mainly useful when a title is needed)')
-    parser.add_argument(     '--use-hepdata-labels', dest='useHepdataLabels',    default=False, action='store_true', help='Write axis labels using latex for hepdata, with some name polishing')
+    parser.add_argument(     '--use-hepdata-labels', dest='useHepdataLabels', action='store_true', help='Write axis labels using latex for hepdata, with some name polishing')
     args = parser.parse_args()
 
 
@@ -536,7 +537,7 @@ if __name__ == "__main__":
             
         if args.outdir:
             ROOT.gStyle.SetPaintTextFormat('1.2f')
-            if len(params)<30: tmp_mat.Draw('colz text45')
+            if len(params) < 30 and not args.noTextMatrix: tmp_mat.Draw('colz text45')
             else: tmp_mat.Draw('colz')
 
             lat = ROOT.TLatex()

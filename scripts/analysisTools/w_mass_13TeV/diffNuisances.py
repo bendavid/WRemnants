@@ -91,6 +91,8 @@ if __name__ == "__main__":
     parser.add_argument(      "--y-title",      dest="ytitle",  default="Fit #theta - #theta_{0}",   type=str,  help="Title for Y axis")
     parser.add_argument(      "--y-setting",    dest="ysetting",  nargs=5, default=[-5.0,-3,0,3,5.0], type=float,  help="Settings to customize y axis: pass list of ymin,yhalfd,ycen,yhalfu,ymax, where horizontal lines are drawn")
     parser.add_argument(      "--y-offset",    dest="yoffset",  nargs=2, default=[0.5,0.5], type=float,  help="Offset (positive value) for each side of the y axis, wrt to extremes of --y-setting")
+    parser.add_argument(      "--postfitLegendLabelExp", type=str, default="Postfit expected",  help="Label for expected fit when using --expected-infile (which can actually be another type of fit)")
+    parser.add_argument(     '--defaultYmax' , dest='defaultYmax', default=4.0, type=float, help='Set the default max value for y (but it is still overridden if some parameters are above)')
     #parser.add_argument(      "--y-setting",    dest="ysetting",  type=lambda s: [float(item) for item in s.split(',')], default="-5.0,-3,0,3,5.0",  help="Settings to customize y axis: comma-separated list of ymin,yhalfd,ycen,yhalfu,ymax, where horizontal lines are drawn")
     parser.add_argument('-R', "--rank-nuisances-by", dest="rankNuisancesBy",  default=None, choices=["", "pull", "sigma"],  type=str,  help="Rank nuisances based on either sigma or pull. It is devised to work with --pois '.*', but of course you can further filter nuisances and/or pois")
     parser.add_argument('-N','--show-N' , dest='showN',    default=0, type=int, help='To be used with -R: it shows only the N nuisances ranked. If not positive, no limit is used')    
@@ -428,7 +430,7 @@ if __name__ == "__main__":
             eyobs  = array('d',[hist_fit_s.GetBinError(i) for i in range(1, 1+hist_fit_s.GetNbinsX()) ])
 
             maxPull = max(list([abs(y) for y in yobs]))
-            maxz = max(4, math.ceil(maxPull))
+            maxz = max(args.defaultYmax, math.ceil(maxPull))
 
             lat = ROOT.TLatex(); lat.SetNDC()
             lat.SetTextFont(42)
@@ -480,7 +482,7 @@ if __name__ == "__main__":
             gr_expected.SetFillColor(ROOT.kOrange+7)
             gr_expected.SetMarkerColor(ROOT.kOrange+7)
             gr_expected.Draw('P2')
-            leg.AddEntry(gr_expected,'Postfit expected','f')
+            leg.AddEntry(gr_expected,args.postfitLegendLabelExp,'f')
 
             # observed
             gr_observed = ROOT.TGraphErrors(nbins,x,yobs,zero,eyobs)
@@ -513,7 +515,7 @@ if __name__ == "__main__":
 
             # deal with extreme cases with POIs
             maxPull = max(list([(hist_fit_s.GetBinContent(i)+hist_fit_s.GetBinError(i)) for i in range(1, 1+hist_fit_s.GetNbinsX())]))
-            maxz = max(4, math.ceil(maxPull))
+            maxz = max(args.defaultYmax, math.ceil(maxPull))
             minz = min(-maxz, ymin-args.yoffset[0])
             maxz = max(maxz, ymax+args.yoffset[1])
             #hist_fit_s.GetYaxis().SetRangeUser(ymin-args.yoffset[0],ymax+args.yoffset[1])
