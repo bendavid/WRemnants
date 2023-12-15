@@ -311,7 +311,7 @@ class CardTool(object):
         if mirrorDownVarEqualToUp and mirrorDownVarEqualToNomi:
             raise ValueError("mirrorDownVarEqualToUp and mirrorDownVarEqualToNomi cannot be both True")
 
-        if symmetrize not in ["average", "conservative"]:
+        if symmetrize not in [None, "average", "conservative"]:
             raise ValueError("Invalid option for 'symmetrize'.  Valid options are 'average' and 'conservative'")
 
         if preOp and preOpMap:
