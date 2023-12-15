@@ -46,7 +46,6 @@ for d in datasets: logger.info(f"Dataset {d.name}")
 # standard regular axes
 axis_eta = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
 axis_pt = hist.axis.Regular(29, 26., 55., name = "pt")
-axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge")
 #axis_mll = hist.axis.Regular(60, 60., 120., underflow=False, overflow=False, name = "mll")
 axis_yll = hist.axis.Regular(50, -2.5, 2.5, name = "yll")
 axis_ptll = hist.axis.Regular(300, 0, 300,  name = "ptll")
@@ -76,7 +75,7 @@ if args.unfolding:
 nominal_axes = [
     hist.axis.Variable([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 25, 30, 40, 50, 60, 75, 90, 150], name = "ptll", underflow=False, overflow=True),
     hist.axis.Regular(20, -2.5, 2.5, name = "yll", overflow=True, underflow=True), 
-    axis_charge]
+    common.axis_charge]
 
 # corresponding columns
 nominal_cols = ["ptll", "yll", "TrigLep_charge"]

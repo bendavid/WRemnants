@@ -22,6 +22,7 @@ colors_plots_ = {"Wmunu"      : ROOT.TColor.GetColor("#8B0000"), #ROOT.kRed+2,
                  "Ztautau"    : ROOT.TColor.GetColor("#00008B"), #ROOT.kSpring+9,
                  "Top"        : ROOT.TColor.GetColor("#008000"), #ROOT.kGreen+2,
                  "Diboson"    : ROOT.TColor.GetColor("#FFC0CB"), #ROOT.kViolet,
+                 "PhotonInduced" : ROOT.TColor.GetColor("#FFFF99"),
                  "Fake"       : ROOT.TColor.GetColor("#D3D3D3"), # dimgray is "#696969" #ROOT.kGray,
                  "QCD"        : ROOT.TColor.GetColor("#D3D3D3"), # light grey #ROOT.kGray,
                  "Other"      : ROOT.TColor.GetColor("#808080"), # grey #ROOT.kGray}
@@ -35,6 +36,7 @@ legEntries_plots_ = {"Wmunu"      : "W#rightarrow#mu#nu",
                      "Ztautau"    : "Z#rightarrow#tau#tau",
                      "Top"        : "t quark",
                      "Diboson"    : "Diboson",
+                     "PhotonInduced" : "Photon-induced",
                      "Fake"       : "Nonprompt", # or "Multijet"
                      "QCD"        : "QCD MC",
                      "Other"      : "Other"}   
