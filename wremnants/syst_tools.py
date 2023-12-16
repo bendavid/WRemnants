@@ -55,6 +55,8 @@ def syst_transform_map(base_hist, hist_name):
     def projAx(hname):
         return hname.split("-")
 
+    resum_tnps = ['pdf0', 'gamma_cusp+1', 'gamma_mu_q+1', 'gamma_nu+1', 'h_qqV-0.5', 's+1', 'b_qqV+1', 'b_qqbarV+1', 'b_qqS+1', 'b_qqDS+1', 'b_qg+1']
+
     transforms.update({
         "resumFOScaleUp" : {
             "action" : lambda h: scetlibIdx(h, 2)},
@@ -74,21 +76,39 @@ def syst_transform_map(base_hist, hist_name):
                 ["transition_points0.2_0.65_1.1", "transition_points0.4_0.55_0.7", 
                 "transition_points0.2_0.45_0.7", "transition_points0.4_0.75_1.1", ],
                  no_flow=["ptVgen"], do_min=True)},
-       "resumTNPAllUp" : {
-           "action" : lambda h: h if "vars" not in h.axes.name else theory_tools.hessianPdfUnc(h[{"vars" :
-                 [x for x in h.axes["vars"] if any(re.match(y, x) for y in ["pdf0", "^gamma_", "^q_", "b_", "^s+", "^s-", "^h_"])]}], 
-                "vars", uncType="asymHessian")[0]},
-       "resumTNPAllDown" : {
-           "action" : lambda h: h if "vars" not in h.axes.name else theory_tools.hessianPdfUnc(h[{"vars" :
-                 [x for x in h.axes["vars"] if any(re.match(y, x) for y in ["pdf0", "^gamma_", "^q_", "b_", "^s+", "^s-", "^h_"])]}], 
-                "vars", uncType="asymHessian")[1]},
+       "resumTNPUp" : {
+           "action" : lambda h: h if "vars" not in h.axes.name else hh.rssHist(h[{"vars" : resum_tnps}], "vars")[0]
+        },
+       "resumTNPDown" : {
+           "action" : lambda h: h if "vars" not in h.axes.name else hh.rssHist(h[{"vars" : resum_tnps}], "vars")[1]
+        },
+       "resumTNPx5Up" : {
+           "action" : lambda h: h if "vars" not in h.axes.name else hh.rssHist(h[{"vars" : resum_tnps}], "vars", scale=5)[0]
+        },
+       "resumTNPx5Down" : {
+           "action" : lambda h: h if "vars" not in h.axes.name else hh.rssHist(h[{"vars" : resum_tnps}], "vars", scale=5)[1]
+        },
+       "resumTNPx12Up" : {
+           "action" : lambda h: h if "vars" not in h.axes.name else hh.rssHist(h[{"vars" : resum_tnps}], "vars", scale=12)[0]
+        },
+       "resumTNPx12Down" : {
+           "action" : lambda h: h if "vars" not in h.axes.name else hh.rssHist(h[{"vars" : resum_tnps}], "vars", scale=12)[1]
+        },
        "resumScaleAllUp" : {
            "action" : lambda h: h if "vars" not in h.axes.name else hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars",
-                 [x for x in h.axes["vars"] if any(re.match(y, x) for y in ["pdf0", "^nuB.*", "nuS.*", "^muB.*", "^muS.*",])],
+                 [x for x in h.axes["vars"] if any(re.match(y, x) for y in ["pdf0", "^nuB.*", "nuS.*", "^muB.*", "^muS.*", 'kappa.*', 'muf.*', ])],
                     do_min=False)},
        "resumScaleAllDown" : {
            "action" : lambda h: h if "vars" not in h.axes.name else hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars",
-                 [x for x in h.axes["vars"] if any(re.match(y, x) for y in ["pdf0", "^nuB.*", "nuS.*", "^muB.*", "^muS.*",])],
+                 [x for x in h.axes["vars"] if any(re.match(y, x) for y in ["pdf0", "^nuB.*", "nuS.*", "^muB.*", "^muS.*", 'kappa.*', 'muf.*', ])],
+                    do_min=True)},
+       "resumScaleUp" : {
+           "action" : lambda h: h if "vars" not in h.axes.name else hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars",
+                 [x for x in h.axes["vars"] if any(re.match(y, x) for y in ["pdf0", "^nuB.*", "nuS.*", "^muB.*", "^muS.*"])],
+                    do_min=False)},
+       "resumScaleDown" : {
+           "action" : lambda h: h if "vars" not in h.axes.name else hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars",
+                 [x for x in h.axes["vars"] if any(re.match(y, x) for y in ["pdf0", "^nuB.*", "nuS.*", "^muB.*", "^muS.*"])],
                     do_min=True)},
        "resumNPUp" : {
             "action" : lambda h: hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars", 
