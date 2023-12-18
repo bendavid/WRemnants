@@ -397,9 +397,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
         if args.theoryAgnostic:
             import numpy as np
             # open file with theory bands
-            #with h5py.File(f"{common.data_dir}/angularCoefficients/theoryband_variations.hdf5", "r") as ff:
-            #with h5py.File(f"/scratch/submit/cms/emanca/theoryband_variations.hdf5", "r") as ff:
-            with h5py.File(f"/work/submit/emanca/WRemnants/theoryband_variations.hdf5", "r") as ff:
+            with h5py.File(f"{common.data_dir}/angularCoefficients/theoryband_variations.hdf5", "r") as ff:
                 scale_hists = narf.ioutils.pickle_load_h5py(ff["theorybands"])
                 for tt in scale_hists:
                     scale_hists[tt].values()[...,1] = scale_hists[tt].values()[...,1]-np.ones_like(scale_hists[tt].values()[...,1])
