@@ -123,6 +123,22 @@ genDataDict = {
     },
 }
 
+# renesance
+genDataDict.update({
+    'Zmumu_renesance-lo' : { 
+                   'filepaths' :
+                    ["{BASE_PATH}/Renesance_v0/ZToMuMu_TuneCP5_13TeV-renesance_loqcd-fsr-photos-isr-pythia"],
+                   'xsec' : xsec_powheg_ZToMuMu_LO,
+                   'group': "Zmumu",
+    },
+    'Zmumu_renesance-nlo' : { 
+                   'filepaths' :
+                    ["{BASE_PATH}/Renesance_v0/ZToMuMu_TuneCP5_13TeV-renesance_loqcdnloweak-fsr-photos-isr-pythia"],
+                   'xsec' : xsec_powheg_ZToMuMu_NLOEW,
+                   'group': "Zmumu",
+    },
+})
+
 if horace_v1:
     genDataDict.update({
         'Zmumu_horace-v1-alpha-old-fsr-off-isr-pythia' : { 

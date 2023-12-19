@@ -27,6 +27,7 @@ wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "Wplust
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS", 
     'Zmumu_horace-lo-photos', 'Zmumu_horace-nlo', 'Zmumu_horace-lo', 'Zmumu_horace-new',
     'Zmumu_horace-alpha-fsr-off-isr-off', 'Zmumu_horace-alpha-old-fsr-off-isr-off', 'Zmumu_horace-alpha-old-fsr-off-isr-pythia',
+    'Zmumu_renesance-lo', 'Zmumu_renesance-nlo'
     ]
 
 vprocs = wprocs+zprocs
