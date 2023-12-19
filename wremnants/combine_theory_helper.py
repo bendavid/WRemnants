@@ -489,7 +489,7 @@ class TheoryHelper(object):
         pdfInfo = theory_tools.pdf_info_map("ZmumuPostVFP", pdf)
         pdfName = pdfInfo["name"]
         pdf_hist = pdfName
-        symmetrize = None
+        symmetrize = "average"
 
         if from_corr:
             theory_unc = input_tools.args_from_metadata(self.card_tool, "theoryCorr")
