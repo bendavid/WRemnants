@@ -788,7 +788,7 @@ class HDF5Writer(object):
         self.book_logk(self.dict_logkavg, self.dict_logkavg_indices, self.dict_logkavg_values, *args)
     
     def book_logk_halfdiff(self, *args):
-        self.book_logk(self.dict_logkavg, self.dict_logkavg_indices, self.dict_logkavg_values, *args)
+        self.book_logk(self.dict_logkhalfdiff, self.dict_logkavg_indices, self.dict_logkavg_values, *args)
 
     def book_logk(self, dict_logk, dict_logk_indices, dict_logk_values, logk, chan, proc, syst_name):
         norm_proc = self.dict_norm[chan][proc]
