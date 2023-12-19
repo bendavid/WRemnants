@@ -108,17 +108,16 @@ else:
     applySelection=True
 
 fake_int_axes = list(set([x for h in args.hists for x in h.split("-") if x not in ["pt", "eta", "charge"]]))
+groups.setFakerateIntegrationAxes(fake_int_axes)
 
 if not args.nominalRef:
     nominalName = args.baseName.rsplit("_", 1)[0]
     groups.setNominalName(nominalName)
-    groups.loadHistsForDatagroups(args.baseName, syst="", procsToRead=datasets, applySelection=applySelection, 
-        fakerateIntegrationAxes=fake_int_axes)
+    groups.loadHistsForDatagroups(args.baseName, syst="", procsToRead=datasets, applySelection=applySelection)
 else:
     nominalName = args.nominalRef
     groups.setNominalName(nominalName)
-    groups.loadHistsForDatagroups(nominalName, syst=args.baseName, procsToRead=datasets, applySelection=applySelection,
-        fakerateIntegrationAxes=fake_int_axes)
+    groups.loadHistsForDatagroups(nominalName, syst=args.baseName, procsToRead=datasets, applySelection=applySelection)
 
 exclude = ["Data"] 
 unstack = exclude[:]
@@ -166,7 +165,7 @@ if addVariation:
             action = None
         groups.addSummedProc(nominalName, relabel=args.baseName, name=name, label=label, exclude=exclude,
             color=color, reload=reload, rename=varname, procsToRead=datasets,
-            preOpMap=load_op, action=action, forceNonzero=True, fakerateIntegrationAxes=fake_int_axes)
+            preOpMap=load_op, action=action, forceNonzero=True)
 
         exclude.append(varname)
         unstack.append(varname)

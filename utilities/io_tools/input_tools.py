@@ -141,17 +141,37 @@ def flip_hist_y_sign(h, yaxis="Y"):
     h.values()[...] = h.values()*scale[(None if ax.name != yaxis else slice(0, ax.size) for ax in h.axes)]
     return h 
 
-def read_dyturbo_pdf_hist(base_name, pdf_members, axes, charge=None):
-    pdf_ax = hist.axis.StrCategory([f"pdf{i}" for i in range(pdf_members)], name="vars")
-    pdf_hist = None
-    
-    for i in range(pdf_members):
-        h = read_dyturbo_hist([base_name.format(i=i)], axes=axes, charge=charge)
-        if not pdf_hist:
-            pdf_hist = hist.Hist(*h.axes, pdf_ax, storage=h._storage_type())
-        pdf_hist[...,i] = h.view()
-        
-    return pdf_hist
+def read_dyturbo_vars_hist(base_name, var_axis, axes, charge=None):
+
+    # map from scetlib fo variations naming to dyturbo naming
+    # *FIXME* this is sensitive to presence or absence of trailing zeros for kappas
+    scales_map = {
+            "kappaFO0.5-kappaf2." : "murH-muf1",
+            "kappaFO2.-kappaf0.5" : "mur2-muf1",
+            "kappaf0.5" : "mur1-mufH",
+            "kappaf2." : "mur1-muf2",
+            "kappaFO0.5" : "murH-mufH",
+            "kappaFO2." : "mur2-muf2"
+        }
+
+    var_hist = None
+
+    for i, var in enumerate(var_axis):
+        if var.startswith("pdf"):
+            pdf_member = int(var.removeprefix("pdf"))
+        else:
+            pdf_member = 0
+        if ("kappaf" in var or "kappaFO" in var) and var not in scales_map:
+            raise ValueError(f"Scale variation {var} found for fo_sing piece but no corresponding variation found for dyturbo")
+        dyturbo_scale = scales_map.get(var, "mur1-muf1")
+        dyturbo_name = base_name.format(i=pdf_member, scale=dyturbo_scale)
+        h = read_dyturbo_hist([dyturbo_name], axes=axes, charge=charge)
+        if not var_hist:
+            var_hist = hist.Hist(*h.axes, var_axis, storage=h._storage_type())
+        var_hist[...,i] = h.view()
+
+    return var_hist
+
 
 def read_dyturbo_hist(filenames, path="", axes=("y", "pt"), charge=None, coeff=None):
     filenames = [os.path.expanduser(os.path.join(path, f)) for f in filenames]
@@ -266,7 +286,7 @@ def add_charge_axis(h, charge):
     return hnew
 
 def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo, axes=None, charge=None, fix_nons_bin0=True, coeff=None):
-    hsing = read_scetlib_hist(scetlib_resum, charge=charge, flip_y_sign=coeff=="a4")
+    hresum = read_scetlib_hist(scetlib_resum, charge=charge, flip_y_sign=coeff=="a4")
     hfo_sing = read_scetlib_hist(scetlib_fo_sing, charge=charge, flip_y_sign=coeff=="a4")
 
     if axes:
@@ -279,20 +299,22 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
         if tnp_axes:
             indices = tuple(hfo_sing.axes["vars"].index(tnp_axes))
             hfo_sing.view()[...,indices] = hfo_sing[...,0].view()[...,np.newaxis]
-        hsing = hsing.project(*newaxes)
-    if all("pdf" in x for x in hsing.axes["vars"]) and hsing.axes["vars"].size > 1:
-        logger.info("Reading PDF variations for DYTurbo")
-        pdf_members = hsing.axes["vars"].size
-        hfo = read_dyturbo_pdf_hist(dyturbo_fo, pdf_members=pdf_members, axes=axes if axes else hsing.axes.name[:-1], charge=charge)
+        hresum = hresum.project(*newaxes)
+
+    dyturbo_axes = axes if axes else hfo_sing.axes.name[:-1]
+    if hfo_sing.axes["vars"].size > 1:
+        hfo = read_dyturbo_vars_hist(dyturbo_fo, var_axis=hfo_sing.axes["vars"], axes=dyturbo_axes, charge=charge)
     else:
-        hfo = read_dyturbo_hist([dyturbo_fo], axes=axes if axes else hsing.axes.name[:-1], charge=charge, coeff=coeff)
+        hfo = read_dyturbo_hist([dyturbo_fo], axes=dyturbo_axes, charge=charge, coeff=coeff)
+
     for ax in ["Y", "Q"]:
-        if ax in set(hfo.axes.name).intersection(set(hfo_sing.axes.name)).intersection(set(hsing.axes.name)):
-            hfo, hfo_sing, hsing = hh.rebinHistsToCommon([hfo, hfo_sing, hsing], ax)
+        if ax in set(hfo.axes.name).intersection(set(hfo_sing.axes.name)).intersection(set(hresum.axes.name)):
+            hfo, hfo_sing, hresum = hh.rebinHistsToCommon([hfo, hfo_sing, hresum], ax)
     if "vars" in hfo.axes.name and hfo.axes["vars"].size != hfo_sing.axes["vars"].size:
         if hfo.axes["vars"].size == 1:
             hfo = hfo[{"vars" : 0}]
     hnonsing = hh.addHists(-1*hfo_sing, hfo, flow=False, by_ax_name=False)
+
     if fix_nons_bin0:
         # The 2 is for the WeightedSum
         res = np.zeros((*hnonsing[{"qT" : 0}].shape, 2))
@@ -300,14 +322,37 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
             hnonsing[...,0,:,:] = res
         else:
             hnonsing[...,0,:] = res
-    # TODO: Validate
-    if hnonsing.axes["vars"].size != hsing.axes["vars"].size:
-        htmp_nonsing = hsing.copy()
-        for var in htmp_nonsing.axes["vars"]:
-            logger.warning(f"Did not find variation {var} for nonsingular! Assuming nominal")
-            htmp_nonsing = hnonsing[{"vars" : var if var in hnonsing.axes["vars"] else 0}]
+
+    # variations are driven by resummed result, collect common variations from nonsingular piece
+    # if needed
+    if hnonsing.axes["vars"] != hresum.axes["vars"]:
+
+        # remapping is needed for scale variations which have slightly different parameter
+        # definitions for resummed vs fixed-order pieces
+        # *FIXME* this is sensitive to presence or absence of trailing zeros for kappas
+        scales_map = {"mufdown": "kappaf0.5",
+                      "mufup" : "kappaf2.",
+                      "mufdown-kappaFO0.5-kappaf2." : "kappaFO0.5",
+                      "mufup-kappaFO2.-kappaf0.5" : "kappaFO2.",
+                      }
+
+        htmp_nonsing = hist.Hist(*hnonsing.axes[:-1], hresum.axes["vars"], storage = hnonsing._storage_type())
+
+        for i, var in enumerate(hresum.axes["vars"]):
+            var_nonsing = scales_map.get(var, var)
+            if ("muf" in var or "kappaf" in var or "kappaFO" in var) and var_nonsing not in hnonsing.axes["vars"]:
+                raise ValueError(f"Scale variation {var} found for resummed piece which should correspond to {var_nonsing} for nonsingular piece but is not found")
+            var_nonsing = var_nonsing if var_nonsing in hnonsing.axes["vars"] else hnonsing.axes["vars"][0]
+
+            htmp_nonsing[{"vars" : i}] = hnonsing[{"vars" : var_nonsing}].view(flow=True)
+
         hnonsing = htmp_nonsing
-    return hh.addHists(hsing, hnonsing, by_ax_name=False)
+
+    htotal = hh.addHists(hresum, hnonsing, by_ax_name=False)
+
+    return htotal
+
+
 
 def read_json(fIn):
 

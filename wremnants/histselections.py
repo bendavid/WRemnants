@@ -33,7 +33,31 @@ def fakeHistABCD(h, thresholdMT=40.0, fakerate_integration_axes=[], axis_name_mt
     hFRF = hh.divideHists(hPassIsoFailMT, hFailIsoFailMT, cutoff=1, createNew=True)   
 
     return hh.multiplyHists(hFRF, h[{**common.failIso, nameMT: passMT}])
-    
+
+def fakeHistSimultaneousABCD(h, thresholdMT=40.0, fakerate_integration_axes=[], axis_name_mt="mt", integrateLowMT=True, integrateHighMT=False):
+    if h.storage_type == hist.storage.Weight:
+        # setting errors to 0
+        h.view(flow=True)[...] = np.stack((h.values(flow=True), np.zeros_like(h.values(flow=True))), axis=-1)
+
+    nameMT, failMT, passMT = get_mt_selection(h, thresholdMT, axis_name_mt, integrateLowMT, integrateHighMT)
+
+    if common.passIsoName not in h.axes.name or nameMT not in h.axes.name:
+        raise RuntimeError(f'{common.passIsoName} and {nameMT} expected to be found in histogram, but only have axes {h.axes.name}')
+
+    # axes in the correct ordering
+    axes = [ax for ax in h.axes.name if ax not in [nameMT, common.passIsoName]]
+    axes += [common.passIsoName, nameMT]
+
+    if set(h.axes.name) != set(axes):
+        logger.warning(f"Axes in histogram '{h.axes.name}' are not the same as required '{axes}' or in a different order than expected, try to project")
+        h = h.project(*axes)
+
+    # set the expected values in the signal region
+    slices = [passMT if n==nameMT else 1 if n==common.passIsoName else slice(None) for n in h.axes.name]
+    h.values(flow=True)[*slices] = fakeHistABCD(h, thresholdMT, fakerate_integration_axes, axis_name_mt, integrateLowMT, integrateHighMT).values(flow=True)
+
+    return h
+
 def fakeHistIsoRegion(h, scale=1.):
     #return h[{"iso" : 0.3j, "mt" : hist.rebin(10)}]*scale
     return h[{"iso" : 4}]*scale

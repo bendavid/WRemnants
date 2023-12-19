@@ -8,17 +8,20 @@ eta_binning = [0.0, 0.1, 0.2, 0.3, 0.4, 0.5, 0.6, 0.7, 0.8, 0.9, 1.0, 1.1, 1.2, 
 def get_pt_eta_axes(n_bins_pt, min_pt, max_pt, n_bins_eta=0, flow_pt=True, flow_eta=False):
 
     # gen axes for differential measurement
-    if n_bins_eta > 0:
-        axis_absEtaGen = hist.axis.Regular(n_bins_eta, 0, 2.4, underflow=False, overflow=flow_eta, name = "absEtaGen")
-    else:
-        axis_absEtaGen = hist.axis.Variable(eta_binning, underflow=False, overflow=flow_eta, name = "absEtaGen")
     axis_ptGen = hist.axis.Regular(n_bins_pt, min_pt, max_pt, underflow=flow_pt, overflow=flow_pt, name = "ptGen")    
-
-    axes = [axis_ptGen, axis_absEtaGen]
-    cols = ["ptGen", "absEtaGen"]
-
     logger.debug(f"Gen bins pT: {axis_ptGen.edges}")
-    logger.debug(f"Gen bins |eta|: {axis_absEtaGen.edges}")
+
+    axes = [axis_ptGen]
+    cols = ["ptGen"]
+
+    if n_bins_eta is not None:
+        if n_bins_eta > 0:
+            axis_absEtaGen = hist.axis.Regular(n_bins_eta, 0, 2.4, underflow=False, overflow=flow_eta, name = "absEtaGen")
+        else:
+            axis_absEtaGen = hist.axis.Variable(eta_binning, underflow=False, overflow=flow_eta, name = "absEtaGen")
+        axes.append(axis_absEtaGen)
+        cols.append("absEtaGen")
+        logger.debug(f"Gen bins |eta|: {axis_absEtaGen.edges}")
 
     return axes, cols
 
@@ -27,7 +30,6 @@ def get_pt_eta_charge_axes(n_bins_pt, min_pt, max_pt, n_bins_eta=0, flow_pt=True
     axes, cols = get_pt_eta_axes(n_bins_pt, min_pt, max_pt, n_bins_eta, flow_pt, flow_eta)
 
     axis_qGen = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "qGen")
-
     axes.append(axis_qGen)
     cols.append("qGen")
 

@@ -31,7 +31,7 @@ parser.add_argument("--ylim", type=float, nargs=2, help="Min and max values for 
 parser.add_argument("--logy", action='store_true', help="Make the yscale logarithmic")
 parser.add_argument("--yscale", type=float, help="Scale the upper y axis by this factor (useful when auto scaling cuts off legend)")
 parser.add_argument("--noData", action='store_true', help="Don't plot data")
-parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal')", default="nominal")
+parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'xnorm', 'nominal', ...)", default="xnorm")
 parser.add_argument("--plots", type=str, nargs="+", default=["xsec", "uncertainties"], choices=["xsec", "uncertainties", "ratio"], help="Define which plots to make")
 parser.add_argument("--genFlow", action='store_true', help="Show overflow/underflow pois")
 parser.add_argument("--poi", action='store_true', help="Plot signal strength parameters (mu)")
@@ -44,7 +44,14 @@ parser.add_argument("--plotSumPOIs", action='store_true', help="Plot xsecs from 
 parser.add_argument("--scaleXsec", type=float, default=1.0, help="Scale xsec predictions with this number")
 parser.add_argument("--grouping", type=str, default=None, help="Select nuisances by a predefined grouping", choices=groupings.keys())
 parser.add_argument("--genAxes", type=str, nargs="+", default=None, help="Gen axes used in unfolding")
+parser.add_argument("--ratioToPred", action='store_true', help="Use prediction as denominator in ratio")
 parser.add_argument("-t","--translate", type=str, default=None, help="Specify .json file to translate labels")
+
+parser.add_argument("--varName", default=[], type=str, nargs='+', help="Name of variation hist")
+parser.add_argument("--varLabel", default=[], type=str, nargs='+', help="Label(s) of variation hist for plotting")
+parser.add_argument("--selectAxis", default=[], type=str, nargs='+', help="If you need to select a variation axis")
+parser.add_argument("--selectEntries", default=[], type=str, nargs='+', help="entries to read from the selected axis")
+parser.add_argument("--colors", default=[], type=str, nargs='+', help="Variation colors")
 
 args = parser.parse_args()
 
@@ -73,7 +80,7 @@ base_process = process[0]
 gen_axes = groups.gen_axes if args.genAxes is None else args.genAxes
 
 groups.setNominalName(args.baseName)
-groups.loadHistsForDatagroups(args.baseName, syst="", procsToRead=[process])
+groups.loadHistsForDatagroups(args.baseName, syst="", procsToRead=[process], nominalIfMissing=False)
 
 input_subdir = args.fitresult.split("/")[-2]
 
@@ -122,6 +129,9 @@ def make_yields_df(hists, procs, signal=None, per_bin=False, yield_only=False, p
 def plot_xsec_unfolded(df, edges, poi_type, df_reference=None, bin_widths=None, channel=None, scale=1., normalize=False, process_label="V", axes=None,
     hist_others=[], label_others=[], color_others=[]
 ):
+    # ratio to data if there is no other histogram to make a ratio from
+    ratioToData = not args.ratioToPred or len(hist_others) == 0
+
     logger.info(f"Make "+("normalized " if normalize else "")+"unfoled xsec plot"+(f" in channel {channel}" if channel else ""))
 
     if poi_type == "mu":
@@ -166,7 +176,12 @@ def plot_xsec_unfolded(df, edges, poi_type, df_reference=None, bin_widths=None, 
         xlabel = xlabel.replace("[GeV]","")
         xlabel += " Bin"
 
-    fig, ax1, ax2 = plot_tools.figureWithRatio(hist_xsec, xlabel, yLabel, ylim, "Pred./Data", rrange, width_scale=2)
+    if ratioToData:
+        rlabel="Pred./Data"
+    else:
+        rlabel=f"Data/{label_others[0]}"
+
+    fig, ax1, ax2 = plot_tools.figureWithRatio(hist_xsec, xlabel, yLabel, ylim, rlabel, rrange, width_scale=2)
 
     hep.histplot(
         hist_xsec,
@@ -188,13 +203,17 @@ def plot_xsec_unfolded(df, edges, poi_type, df_reference=None, bin_widths=None, 
 
     centers = hist_xsec.axes.centers[0]
 
-    ax2.bar(centers, height=2*unc_ratio, bottom=1-unc_ratio, width=edges[1:] - edges[:-1], color="silver", label="Total")
-    if "err_stat" in df.keys():
-        ax2.bar(centers, height=2*unc_ratio_stat, bottom=1-unc_ratio_stat, width=edges[1:] - edges[:-1], color="gold", label="Stat")
+    if ratioToData:
+        ax2.bar(centers, height=2*unc_ratio, bottom=1-unc_ratio, width=edges[1:] - edges[:-1], color="silver", label="Total")
+        if "err_stat" in df.keys():
+            ax2.bar(centers, height=2*unc_ratio_stat, bottom=1-unc_ratio_stat, width=edges[1:] - edges[:-1], color="gold", label="Stat")
 
     ax2.plot([min(edges), max(edges)], [1,1], color="black", linestyle="-")
 
-    for h, l, c in zip(hist_others, label_others, color_others):
+    if ratioToData:
+        hden=hist_xsec
+
+    for i, (h, l, c) in enumerate(zip(hist_others, label_others, color_others)):
         h_flat = hist.Hist(
             hist.axis.Variable(edges, underflow=False, overflow=False), storage=hist.storage.Weight())
         h_flat.view(flow=False)[...] = np.stack([h.values(flow=args.genFlow).flatten()/bin_widths, h.variances(flow=args.genFlow).flatten()/bin_widths**2], axis=-1)
@@ -210,8 +229,20 @@ def plot_xsec_unfolded(df, edges, poi_type, df_reference=None, bin_widths=None, 
             zorder=2,
         )            
 
+        if i==0 and not ratioToData:
+            hden=h_flat
+            hep.histplot(
+                hh.divideHists(hist_xsec, hden, cutoff=0, rel_unc=True),
+                yerr=True,
+                histtype="errorbar",
+                color="black",
+                ax=ax2,
+                zorder=2,
+            ) 
+            continue
+
         hep.histplot(
-            hh.divideHists(h_flat, hist_xsec, cutoff=0, rel_unc=True),
+            hh.divideHists(h_flat, hden, cutoff=0, rel_unc=True),
             yerr=False,
             histtype="step",
             color=c,
@@ -232,7 +263,7 @@ def plot_xsec_unfolded(df, edges, poi_type, df_reference=None, bin_widths=None, 
         ) 
 
         hep.histplot(
-            hh.divideHists(ha_xsec, hist_xsec, cutoff=0, rel_unc=True),
+            hh.divideHists(ha_xsec, hden, cutoff=0, rel_unc=True),
             yerr=False,
             histtype="step",
             color="blue",
@@ -563,7 +594,6 @@ def plot_uncertainties_ratio(df, df_ref, poi_type, poi_type_ref, channel=None, e
 
         logger.debug(f"Plot source {source}")
 
-        
         hist_unc.view(flow=False)[...] = errors_ref/errors-1
 
         hep.histplot(
@@ -690,9 +720,11 @@ for poi_type, poi_type_ref in zip(poi_types, poi_types_ref):
                 continue
             
             # find bin widths
-            def get_histo(name):
-                h = sum([groups.results[m.name]["output"][name].get() for m in groups.groups[process].members 
+            def get_histo(name, axis=None, entry=None):
+                h = sum([groups.results[m.name]["output"][name].get()*groups.processScaleFactor(m) for m in groups.groups[process].members 
                     if not m.name.endswith("OOA") and (base_process=="Z" or channel=="all" or channel in m.name)])
+                if axis != None:
+                    h = h[{axis: entry}]
                 h = h.project(*channel_axes)
                 # for wlike the sample is randomly split in two based on reco charge
                 this_scale = 2*scale if groups.mode == "wlike" else scale
@@ -702,8 +734,8 @@ for poi_type, poi_type_ref in zip(poi_types, poi_types_ref):
                 return h
 
             histo = get_histo(args.baseName)
-            hxnorm = get_histo("xnorm")
-            hMiNNLO = get_histo("xnorm_uncorr")
+
+            histo_others = [get_histo(name) if len(args.selectAxis)==0 else get_histo(name, args.selectAxis[i], args.selectEntries[i]) for i, name in enumerate(args.varName)]
 
             if args.genFlow:
                 edges = plot_tools.extendEdgesByFlow(histo)
@@ -732,7 +764,9 @@ for poi_type, poi_type_ref in zip(poi_types, poi_types_ref):
             if "xsec" in args.plots:
                 plot_xsec_unfolded(data_c, edges, poi_type, data_c_ref, bin_widths=binwidths, channel=channel, scale=scale, normalize=args.normalize, axes=channel_axes, 
                     process_label=process_label, 
-                    #hist_others=[hxnorm, hMiNNLO], label_others=[r"MiNNLO $\times$ SCETlib+DYTurbo", "MiNNLO"], color_others=["blue", "red"]
+                    hist_others=histo_others, 
+                    label_others=args.varLabel, 
+                    color_others=args.colors
                 )
 
             if "uncertainties" in args.plots:

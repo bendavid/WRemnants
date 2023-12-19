@@ -40,7 +40,7 @@ datasets = getDatasets(maxFiles=args.maxFiles,
 
 logger.debug(f"Will process samples {[d.name for d in datasets]}")
 
-axis_massWgen = hist.axis.Variable([5., 13000.], name="massVgen", underflow=True, overflow=False)
+axis_massWgen = hist.axis.Variable([4., 13000.], name="massVgen", underflow=True, overflow=False)
 
 axis_massZgen = hist.axis.Regular(12, 60., 120., name="massVgen")
 
@@ -77,7 +77,8 @@ else:
 )
 
 axis_ptqVgen = hist.axis.Variable(
-    [round(x, 4) for x in list(np.arange(0, 0.1 + 0.0125, 0.0125))]+[round(x, 4) for x in list(np.arange(0.1+0.025, 0.5 + 0.025, 0.025))], name = "ptqVgen", underflow=False
+    [round(x, 4) for x in list(np.arange(0, 0.1 + 0.0125, 0.0125))]+[round(x, 4) for x in list(np.arange(0.1+0.025, 0.5 + 0.025, 0.025))], 
+    name = "ptqVgen", underflow=False
 )
 
 axis_chargeWgen = hist.axis.Regular(

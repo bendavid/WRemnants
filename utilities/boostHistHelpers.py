@@ -3,6 +3,7 @@ import numpy as np
 from functools import reduce
 import collections
 from utilities import common, logging
+import copy
 
 logger = logging.child_logger(__name__)
 
@@ -206,36 +207,24 @@ def extendHistByMirror(hvar, hnom, downAsUp=False, downAsNomi=False):
     
     return hnew
 
+# add new axis and set values of old histogram to idx
+def addGenChargeAxis(h, idx):
+    return addGenericAxis(h, hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "qGen"), idx, add_trailing=False, flow=True)
+    
 def addSystAxis(h, size=1, offset=0):
+    return addGenericAxis(h, hist.axis.Regular(size,offset,size+offset, name="systIdx"))
 
-    if h.storage_type == hist.storage.Double:
-        hnew = hist.Hist(*h.axes,hist.axis.Regular(size,offset,size+offset, name="systIdx"))
-        # Broadcast to new shape
-        newvals = hnew.values()+h.values()[...,np.newaxis]
-        hnew[...] = newvals
+def addGenericAxis(h, axis, idx=None, add_trailing=True, flow=True):
+    axes = [*h.axes, axis] if add_trailing else [axis, *h.axes]
+    hnew = hist.Hist(*axes, storage=h.storage_type())
+    if idx != None:
+        # add old histogram only in single bin 
+        slices = [idx if ax==axis else slice(None) for ax in hnew.axes]
+        hnew.view(flow=flow)[*slices] = h.view(flow=flow)
     else:
-        hnew = hist.Hist(*h.axes,hist.axis.Regular(size,offset,size+offset, name="systIdx"), storage=hist.storage.Weight())
         # Broadcast to new shape
-        newvals = hnew.values()+h.values()[...,np.newaxis]
-        newvars = hnew.variances()+h.variances()[...,np.newaxis]
-        hnew[...] = np.stack((newvals, newvars), axis=-1)
-
-    return hnew
-
-def addGenericAxis(h, axis):
-
-    if h.storage_type == hist.storage.Double:
-        hnew = hist.Hist(*h.axes,axis)
-        # Broadcast to new shape
-        newvals = hnew.values()+h.values()[...,np.newaxis]
-        hnew[...] = newvals
-    else:
-        hnew = hist.Hist(*h.axes,axis, storage=hist.storage.Weight())
-        # Broadcast to new shape
-        newvals = hnew.values()+h.values()[...,np.newaxis]
-        newvars = hnew.variances()+h.variances()[...,np.newaxis]
-        hnew[...] = np.stack((newvals, newvars), axis=-1)
-
+        slices = [np.newaxis if ax==axis else slice(None) for ax in hnew.axes]
+        hnew.view(flow=flow)[...] = hnew.view(flow=flow)+h.view(flow=flow)[*slices]
     return hnew
 
 def clipNegativeVals(h, clipValue=0, createNew=False):
@@ -543,6 +532,40 @@ def set_flow(h, val="nearest"):
         slices = [slice(None) if a!=axis else 0 for a in h.axes.name]
         h.view(flow=True)[*slices] = h[{axis: 0}].view(flow=True) if val=="nearest" else val
     return h
+
+# For converting the helicity scale hist to variations, keeping the gen axis to be fit
+# If swap_axes = True, the new axis takes the place of the old gen axis in the ordering
+def expand_hist_by_duplicate_axis(href, ref_ax_name, new_ax_name, swap_axes=False, flow=True):
+    if ref_ax_name not in href.axes.name:
+        raise ValueError(f"Did not find axis {ref_ax_name} in hist!")
+
+    axes = href.axes
+
+    ref_ax_idx = axes.name.index(ref_ax_name)
+    ref_ax = axes[ref_ax_name]
+    new_ax = copy.deepcopy(ref_ax)
+    new_ax._ax.metadata["name"] = new_ax_name
+
+    new_axes = [new_ax, *axes]
+    if swap_axes:
+        new_axes[0], new_axes[ref_ax_idx+1] = new_axes[ref_ax_idx+1], new_axes[0]
+    hnew = hist.Hist(*new_axes, storage=href.storage_type())
+
+    data = np.moveaxis(href.values(flow=flow), ref_ax_idx, 0)
+    # Copy data from other axis along the diagnoal, off-diagonals will be zero
+    exp_data = data*np.reshape(np.identity(data.shape[0]), (data.shape[0], data.shape[0], *(1 for i in data.shape[1:])))
+    hnew.values(flow=flow)[...] = np.moveaxis(exp_data, 1, ref_ax_idx+1)
+    if href.storage_type == hist.storage.Weight:
+        var = np.moveaxis(href.variances(flow=flow), ref_ax_idx, 0)
+        exp_var = var*np.reshape(np.identity(var.shape[0]), (var.shape[0], var.shape[0], *(1 for i in var.shape[1:])))
+        hnew.variances(flow=flow)[...] = np.moveaxis(exp_var, 1, ref_ax_idx+1)
+
+    return hnew
+
+def expand_hist_by_duplicate_axes(href, ref_ax_names, new_ax_names, **kwargs):
+    for ax_name, new_ax_name in zip(ref_ax_names, new_ax_names):
+        href = expand_hist_by_duplicate_axis(href, ax_name, new_ax_name, **kwargs)
+    return href
 
 def swap_histogram_bins(histo, axis1, axis1_bin1, axis1_bin2, axis2=None, axis2_slice=None, flow=False, axis1_replace=None):
     # swap content from axis1: axis1_bin1 with axis1: axis1_bin2 

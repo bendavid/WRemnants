@@ -95,8 +95,8 @@ def drange(x, y, jump):
 
 def readBoostHist(groups, hName, procs, charge="combined", boost=False, integrateAxes=[]): # readBoostHistProc
 
-    groups.setNominalName(hName) # fakerateIntegrationAxes
-    groups.loadHistsForDatagroups(hName, syst="", procsToRead=procs, fakerateIntegrationAxes=["eta", "pt"])
+    groups.setNominalName(hName)
+    groups.loadHistsForDatagroups(hName, syst="", procsToRead=procs)
     hists = groups.getDatagroups()
     bhist = sum([groups.groups[p].hists[hName] for p in procs])
 

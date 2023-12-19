@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-from wremnants import CardTool,combine_helpers,combine_theory_helper, HDF5Writer
+from wremnants import CardTool,combine_helpers,combine_theory_helper, HDF5Writer, syst_tools
 from wremnants.syst_tools import massWeightNames
 from wremnants.datasets.datagroups import Datagroups
 from utilities import common, logging, boostHistHelpers as hh
@@ -46,10 +46,11 @@ def make_parser(parser=None):
     parser.add_argument("--doStatOnly", action="store_true", default=False, help="Set up fit to get stat-only uncertainty (currently combinetf with -S 0 doesn't work)")
     parser.add_argument("--minnloScaleUnc", choices=["byHelicityPt", "byHelicityPtCharge", "byHelicityCharge", "byPtCharge", "byPt", "byCharge", "integrated", "none"], default="byHelicityPt",
             help="Decorrelation for QCDscale")
-    parser.add_argument("--resumUnc", default="tnp", type=str, choices=["scale", "tnp", "none"], help="Include SCETlib uncertainties")
+    parser.add_argument("--resumUnc", default="tnp", type=str, choices=["scale", "tnp", "tnp_minnlo", "minnlo",  "none"], help="Include SCETlib uncertainties")
+    parser.add_argument("--noTransitionUnc", action="store_true", help="Do not include matching transition parameter variations.")
     parser.add_argument("--npUnc", default="Delta_Lambda", type=str, choices=combine_theory_helper.TheoryHelper.valid_np_models, help="Nonperturbative uncertainty model")
     parser.add_argument("--tnpMagnitude", default=1, type=float, help="Variation size for the TNP")
-    parser.add_argument("--scaleTNP", default=5, type=float, help="Scale the TNP uncertainties by this factor")
+    parser.add_argument("--scaleTNP", default=12, type=float, help="Scale the TNP uncertainties by this factor")
     parser.add_argument("--scalePdf", default=1, type=float, help="Scale the PDF hessian uncertainties by this factor")
     parser.add_argument("--pdfUncFromCorr", action='store_true', help="Take PDF uncertainty from correction hist (Requires having run that correction)")
     parser.add_argument("--massVariation", type=float, default=100, help="Variation of boson mass")
@@ -107,12 +108,11 @@ def setup(args, inputFile, fitvar, xnorm=False):
         args.excludeProcGroups.append("QCD")
     filterGroup = args.filterProcGroups if args.filterProcGroups else None
     excludeGroup = args.excludeProcGroups if args.excludeProcGroups else None
-    if args.ABCD and (excludeGroup is None or "Fake" not in excludeGroup):
-        excludeGroup.append("Fake")
+
     logger.debug(f"Filtering these groups of processes: {args.filterProcGroups}")
     logger.debug(f"Excluding these groups of processes: {args.excludeProcGroups}")
 
-    datagroups = Datagroups(inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.ABCD)
+    datagroups = Datagroups(inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.ABCD, simultaneousABCD=args.ABCD)
 
     if not xnorm and (args.axlim or args.rebin or args.absval):
         datagroups.set_rebin_action(fitvar, args.axlim, args.rebin, args.absval)
@@ -123,8 +123,9 @@ def setup(args, inputFile, fitvar, xnorm=False):
     # Detect lowpu dilepton
     dilepton = "dilepton" in datagroups.mode or any(x in ["ptll", "mll"] for x in fitvar)
 
+    simultaneousABCD = wmass and args.ABCD and not xnorm
     constrainMass = (dilepton and not "mll" in fitvar) or args.fitXsec 
-
+    
     if wmass:
         base_group = "Wenu" if datagroups.flavor == "e" else "Wmunu"
     else:
@@ -143,21 +144,20 @@ def setup(args, inputFile, fitvar, xnorm=False):
         datagroups.globalAction = None # reset global action in case of rebinning or such
         if not args.unfolding:
             # creating the xnorm model (e.g. for the theory fit)
-            if wmass:
+            if wmass and "qGen" in fitvar:
                 # add gen charge as additional axis
-                datagroups.groups[base_group].add_member_axis("qGen",datagroups.results,
-                    member_filters={-1: lambda x: x.name.startswith("Wminus"), 1: lambda x: x.name.startswith("Wplus")}, 
-                    hist_filter=lambda x: x.startswith("xnorm"))
+                datagroups.groups[base_group].memberOp = [ (lambda h, m=member: hh.addGenChargeAxis(h, 
+                    idx=0 if "minus" in m.name else 1)) for member in datagroups.groups[base_group].members]
                 xnorm_axes = ["qGen", *datagroups.gen_axes]
             else:
                 xnorm_axes = datagroups.gen_axes[:]
-            datagroups.setGenAxes([a for a in xnorm_axes if a not in fitvar])
+            datagroups.setGenAxes(sum_gen_axes=[a for a in xnorm_axes if a not in fitvar])
     
     if args.poiAsNoi:
         constrainMass = False if args.theoryAgnostic else True
         poi_axes = datagroups.gen_axes if args.genAxes is None else args.genAxes
         # remove specified gen axes from set of gen axes in datagroups so that those are integrated over
-        datagroups.setGenAxes([a for a in datagroups.gen_axes if a not in poi_axes])
+        datagroups.setGenAxes(sum_gen_axes=[a for a in datagroups.gen_axes if a not in poi_axes])
 
         # FIXME: temporary customization of signal and out-of-acceptance process names for theory agnostic with POI as NOI
         # There might be a better way to do it more homogeneously with the rest.
@@ -182,15 +182,14 @@ def setup(args, inputFile, fitvar, xnorm=False):
     elif args.unfolding or args.theoryAgnostic:
         constrainMass = False if args.theoryAgnostic else True
         datagroups.setGenAxes(args.genAxes)
-
-        if wmass:
+        if wmass and "qGen" in datagroups.gen_axes:
             # gen level bins, split by charge
             if "minus" in args.recoCharge:
-                datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen0", member_filter=lambda x: x.name.startswith("Wminus") and not x.name.endswith("OOA"))
+                datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen0", member_filter=lambda x: x.name.startswith("Wminus") and not x.name.endswith("OOA"), axesToRead=[ax for ax in datagroups.gen_axes if ax!="qGen"])
             if "plus" in args.recoCharge:
-                datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen1", member_filter=lambda x: x.name.startswith("Wplus") and not x.name.endswith("OOA"))
+                datagroups.defineSignalBinsUnfolding(base_group, f"W_qGen1", member_filter=lambda x: x.name.startswith("Wplus") and not x.name.endswith("OOA"), axesToRead=[ax for ax in datagroups.gen_axes if ax!="qGen"])
         else:
-            datagroups.defineSignalBinsUnfolding(base_group, "Z", member_filter=lambda x: x.name.startswith(base_group) and not x.name.endswith("OOA"))
+            datagroups.defineSignalBinsUnfolding(base_group, base_group[0], member_filter=lambda x: not x.name.endswith("OOA"))
         
         # out of acceptance contribution
         to_del = [m for m in datagroups.groups[base_group].members if not m.name.endswith("OOA")]
@@ -199,23 +198,31 @@ def setup(args, inputFile, fitvar, xnorm=False):
         else:
             datagroups.groups[base_group].deleteMembers(to_del)    
 
-
     # Start to create the CardTool object, customizing everything
-    cardTool = CardTool.CardTool(xnorm=xnorm, ABCD=wmass and args.ABCD and not xnorm, real_data=args.realData)
+    cardTool = CardTool.CardTool(xnorm=xnorm, ABCD=simultaneousABCD, real_data=args.realData)
     cardTool.setDatagroups(datagroups)
     if args.qcdProcessName:
         cardTool.setFakeName(args.qcdProcessName)
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     if args.absolutePathInCard:
         cardTool.setAbsolutePathShapeInCard()
+
+    if simultaneousABCD:
+        # In case of ABCD we need to have different fake processes for e and mu to have uncorrelated uncertainties
+        cardTool.setFakeName(datagroups.fakeName + (datagroups.flavor if datagroups.flavor else ""))
+        cardTool.unroll=True
+
+        # add ABCD regions to fit
+        mtName = "mt" if "mt" in fitvar else common.passMTName
+        if common.passIsoName not in fitvar:
+            fitvar = [*fitvar, common.passIsoName]
+        if mtName not in fitvar:
+            fitvar = [*fitvar, mtName]
+
     cardTool.setFitAxes(fitvar)
     cardTool.setFakerateAxes(args.fakerateAxes)
-    if wmass and args.ABCD:
-        # In case of ABCD we need to have different fake processes for e and mu to have uncorrelated uncertainties
-        cardTool.setFakeName(datagroups.fakeName + (datagroups.flavor if datagroups.flavor else "")) 
-        cardTool.unroll=True
-    
-    if args.sumChannels or xnorm or dilepton or (wmass and args.ABCD) or "charge" not in fitvar:
+
+    if args.sumChannels or xnorm or dilepton or simultaneousABCD or "charge" not in fitvar:
         cardTool.setWriteByCharge(False)
     else:
         cardTool.setChannels(args.recoCharge)
@@ -234,7 +241,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     # define sumGroups for integrated cross section
     if args.unfolding and not args.poiAsNoi:
         # TODO: make this less hardcoded to filter the charge (if the charge is not present this will duplicate things)
-        if wmass:
+        if wmass and "qGen" in datagroups.gen_axes:
             if "plus" in args.recoCharge:
                 cardTool.addPOISumGroups(genCharge="qGen1")
             if "minus" in args.recoCharge:
@@ -250,14 +257,14 @@ def setup(args, inputFile, fitvar, xnorm=False):
         cardTool.setPseudodata(args.pseudoData, args.pseudoDataAxes, args.pseudoDataIdxs, args.pseudoDataProcsRegexp)
         if args.pseudoDataFile:
             # FIXME: should make sure to apply the same customizations as for the nominal datagroups so far
-            pseudodataGroups = Datagroups(args.pseudoDataFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.ABCD)
+            pseudodataGroups = Datagroups(args.pseudoDataFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.ABCD, simultaneousABCD=args.ABCD)
             cardTool.setPseudodataDatagroups(pseudodataGroups)
     cardTool.setLumiScale(args.lumiScale)
 
     if not args.theoryAgnostic:
         logger.info(f"cardTool.allMCProcesses(): {cardTool.allMCProcesses()}")
         
-    passSystToFakes = wmass and not args.skipSignalSystOnFakes and args.qcdProcessName not in excludeGroup and (filterGroup == None or args.qcdProcessName in filterGroup) and not xnorm
+    passSystToFakes = wmass and not (simultaneousABCD or xnorm or args.skipSignalSystOnFakes) and args.qcdProcessName not in excludeGroup and (filterGroup == None or args.qcdProcessName in filterGroup)
 
     # TODO: move to a common place if it is  useful
     def assertSample(name, startsWith=["W", "Z"], excludeMatch=[]):
@@ -277,7 +284,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     cardTool.addProcessGroup("single_vmu_samples",    lambda x: assertSample(x, startsWith=[*WMatch, *ZMatch], excludeMatch=[*dibosonMatch, "tau"]))
     cardTool.addProcessGroup("signal_samples",        lambda x: assertSample(x, startsWith=signalMatch,        excludeMatch=[*dibosonMatch, "tau"]))
     cardTool.addProcessGroup("signal_samples_inctau", lambda x: assertSample(x, startsWith=signalMatch,        excludeMatch=[*dibosonMatch]))
-    cardTool.addProcessGroup("MCnoQCD", lambda x: x not in ["QCD", "Data"])
+    cardTool.addProcessGroup("MCnoQCD", lambda x: x not in ["QCD", "Data"] + (["Fake"] if simultaneousABCD else []) )
     # FIXME/FOLLOWUP: the following groups may actually not exclude the OOA when it is not defined as an independent process with specific name
     cardTool.addProcessGroup("signal_samples_noOutAcc",        lambda x: assertSample(x, startsWith=["W" if wmass else "Z"], excludeMatch=[*dibosonMatch, "tau"]))
     cardTool.addProcessGroup("signal_samples_inctau_noOutAcc", lambda x: assertSample(x, startsWith=["W" if wmass else "Z"], excludeMatch=[*dibosonMatch]))
@@ -294,6 +301,41 @@ def setup(args, inputFile, fitvar, xnorm=False):
         logger.error("Temporarily not using mass weights for Wtaunu. Please update when possible")
         signal_samples_forMass = ["signal_samples"]
 
+    if simultaneousABCD:
+        # Fakerate A/B = C/D
+        fakerate_axes_syst = [f"_{n}" for n in args.fakerateAxes]
+        cardTool.addSystematic(
+            name="nominal",
+            rename=f"{cardTool.getFakeName()}Rate",
+            processes=cardTool.getFakeName(),
+            group=cardTool.getFakeName(),
+            systNamePrepend=f"{cardTool.getFakeName()}Rate",
+            noConstraint=True,
+            mirror=True,
+            systAxes=fakerate_axes_syst,
+            action=syst_tools.make_fakerate_variation,
+            actionArgs=dict(
+                fakerate_axes=args.fakerateAxes, 
+                fakerate_axes_syst=fakerate_axes_syst),
+        )
+        # Normalization parameters
+        fakenorm_axes = [*args.fakerateAxes, mtName]
+        fakenorm_axes_syst = [f"_{n}" for n in fakenorm_axes]
+        cardTool.addSystematic(
+            name="nominal",
+            rename=f"{cardTool.getFakeName()}Norm",
+            processes=cardTool.getFakeName(),
+            group=cardTool.getFakeName(),
+            systNamePrepend=f"{cardTool.getFakeName()}Norm",
+            noConstraint=True,
+            mirror=True,
+            systAxes=fakenorm_axes_syst,
+            action=lambda h: 
+                hh.addHists(h,
+                    hh.expand_hist_by_duplicate_axes(h, fakenorm_axes, fakenorm_axes_syst),
+                    scale2=0.1)
+        )
+
     label = 'W' if wmass else 'Z'
     if not (args.doStatOnly and constrainMass):
         if args.massVariation != 0:
@@ -305,7 +347,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                 mirror=False,
                                 noConstraint=not constrainMass,
                                 systAxes=["massShift"],
-                                passToFakes=passSystToFakes,
+                                passToFakes=passSystToFakes
             )
 
         if args.fitMassDiff:
@@ -326,22 +368,22 @@ def setup(args, inputFile, fitvar, xnorm=False):
             if args.fitMassDiff == "charge":
                 cardTool.addSystematic(**mass_diff_args,
                                     # # on gen level based on the sample, only possible for mW
-                                    # actionMap={m.name: (lambda h, swap=swap_bins: swap(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown")) 
+                                    # preOpMap={m.name: (lambda h, swap=swap_bins: swap(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown")) 
                                     #     for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members if "minus" in m.name},
                                     # on reco level based on reco charge
-                                    actionMap={m.name: (lambda h: 
+                                    preOpMap={m.name: (lambda h: 
                                             hh.swap_histogram_bins(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "charge", 0)) 
                                         for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members},
                 )
             elif args.fitMassDiff == "eta-sign":
                 cardTool.addSystematic(**mass_diff_args, 
-                                    actionMap={m.name: (lambda h: 
+                                    preOpMap={m.name: (lambda h: 
                                             hh.swap_histogram_bins(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "eta", hist.tag.Slicer()[0:complex(0,0):]))
                                         for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members},
                 )
             elif args.fitMassDiff == "eta-range":
                 cardTool.addSystematic(**mass_diff_args, 
-                                    actionMap={m.name: (lambda h: 
+                                    preOpMap={m.name: (lambda h: 
                                             hh.swap_histogram_bins(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "eta", hist.tag.Slicer()[complex(0,-0.9):complex(0,0.9):]))
                                         for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members},
                 )
@@ -374,8 +416,8 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                     labelsByAxis=["PtV", "YVBin", "Helicity","downUpVar"],
                                     systAxesFlow=[], # only bins in acceptance in this call
                                     skipEntries=[{"helicitySig" : [6,7,8]}], # removing last three indices out of 9 (0,1,...,7,8) corresponding to A5,6,7
-                                    actionMap={
-                                        m.name: (lambda h, scale_hist=scale_hists[m.name]: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], hh.multiplyHists(hh.addGenericAxis(h,common.down_up_axis), hh.rescaleBandVariation(scale_hist,args.theoryAgnosticBandSize),flow=False))) if sign in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}]) for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
+                                    preOpMap={
+                                        m.name: (lambda h, scale_hist=scale_hists[m.name]: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], hh.multiplyHists(hh.addGenericAxis(h,common.down_up_axis, flow=False), hh.rescaleBandVariation(scale_hist,args.theoryAgnosticBandSize),flow=False))) if sign in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}]) for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
                                     )
                 # now OOA
                 nuisanceBaseNameOOA = f"{nuisanceBaseName}OOA_"
@@ -395,7 +437,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                     labelsByAxis=["PtVBin","Helicity"],
                                     systAxesFlow=["ptVgenSig"], # this can activate nuisances on overflow bins, mainly just ptV and yV since the helicity axis has no overflow bins
                                     skipEntries=[{"helicitySig" : [6,7,8]}], # removing last three indices out of 9 (0,1,...,7,8) corresponding to A5,6,7
-                                    actionMap={
+                                    preOpMap={
                                         m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}],
                                                                         h[{"ptVgenSig": hist.tag.Slicer()[hist.overflow:],
                                                                             "absYVgenSig": hist.tag.Slicer()[0:h.axes["absYVgenSig"].size:hist.sum]}],
@@ -417,7 +459,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                     labelsByAxis=["YVBin","Helicity"],
                                     systAxesFlow=["absYVgenSig"], # this can activate nuisances on overflow bins, mainly just ptV and yV since the helicity axis has no overflow bins
                                     skipEntries=[{"helicitySig" : [6,7,8]}], # removing last three indices out of 9 (0,1,...,7,8) corresponding to A5,6,7
-                                    actionMap={
+                                    preOpMap={
                                         m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}],
                                                                         h[{"ptVgenSig": hist.tag.Slicer()[0:h.axes["ptVgenSig"].size:hist.sum],
                                                                             "absYVgenSig": hist.tag.Slicer()[hist.overflow:]}],
@@ -439,7 +481,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                     labelsByAxis=["PtVBin", "YVBin", "Helicity"],
                                     systAxesFlow=["ptVgenSig", "absYVgenSig"], # this can activate nuisances on overflow bins, mainly just ptV and yV since the helicity axis has no overflow bins
                                     skipEntries=[{"helicitySig" : [6,7,8]}], # removing last three indices out of 9 (0,1,...,7,8) corresponding to A5,6,7
-                                    actionMap={
+                                    preOpMap={
                                         m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}],
                                                                         h[{"ptVgenSig": hist.tag.Slicer()[hist.overflow:],
                                                                             "absYVgenSig": hist.tag.Slicer()[hist.overflow:]}],
@@ -466,7 +508,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                 cardTool.addSystematic(**noi_args,
                     rename=f"noiWminus",
                     baseName=f"W_qGen0",
-                    actionMap={
+                    preOpMap={
                         m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], h, scale2=args.scaleNormXsecHistYields))
                             if "minus" in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}])
                         for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
@@ -474,7 +516,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                 cardTool.addSystematic(**noi_args,
                     rename=f"noiWplus",
                     baseName=f"W_qGen1",
-                    actionMap={
+                    preOpMap={
                         m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], h, scale2=args.scaleNormXsecHistYields))
                             if "plus" in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}])
                         for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
@@ -482,7 +524,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
             else:
                 cardTool.addSystematic(**noi_args,
                     baseName=f"{label}_",
-                    actionMap={
+                    preOpMap={
                         m.name: (lambda h: hh.addHists(
                             h[{**{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}, "acceptance": hist.tag.Slicer()[::hist.sum]}], h[{"acceptance":True}], scale2=args.scaleNormXsecHistYields))
                         for g in cardTool.procGroups["signal_samples"] for m in cardTool.datagroups.groups[g].members},
@@ -563,6 +605,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     
     theory_helper = combine_theory_helper.TheoryHelper(cardTool, hasNonsigSamples=(wmass and not xnorm))
     theory_helper.configure(resumUnc=args.resumUnc, 
+        transitionUnc = not args.noTransitionUnc,
         propagate_to_fakes=to_fakes,
         np_model=args.npUnc,
         tnp_magnitude=args.tnpMagnitude,
@@ -816,6 +859,15 @@ def setup(args, inputFile, fitvar, xnorm=False):
             labelsByAxis=["unc_ieta", "unc_ipt", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
             passToFakes=passSystToFakes
         )
+
+    cardTool.addSystematic("muonScaleSyst_responseWeights",
+        processes=['single_v_samples'],
+        group="scaleCrctn",
+        splitGroup={f"muonCalibration" : f".*"},
+        baseName="Scale_correction_",
+        systAxes=["unc", "downUpVar"],
+        passToFakes=passSystToFakes
+    )
     if not input_tools.args_from_metadata(cardTool, "noSmearing"):
         cardTool.addSystematic("muonResolutionSyst_responseWeights", 
             mirror = True,
@@ -892,7 +944,7 @@ if __name__ == "__main__":
             args.doStatOnly = True
     
     if args.hdf5: 
-        writer = HDF5Writer.HDF5Writer()
+        writer = HDF5Writer.HDF5Writer(sparse=args.sparse)
 
         # loop over all files
         outnames = []

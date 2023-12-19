@@ -52,14 +52,9 @@ axis_fakerate_eta = hist.axis.Regular(12, -2.4, 2.4, name = "eta", underflow=Fal
 axis_eta = hist.axis.Regular(args.eta[0], args.eta[1], args.eta[2], name = "eta", underflow=False, overflow=False)
 axis_pt = hist.axis.Regular(args.pt[0], args.pt[1], args.pt[2], name = "pt", underflow=False)
 axis_phi = hist.axis.Regular(50, -4, 4, name = "phi")
-axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge")
 axis_iso = hist.axis.Regular(50, 0, 1, underflow=False, overflow=True, name = "iso")
 
-axis_passMT = hist.axis.Boolean(name = "passMT")
-axis_passIso = hist.axis.Boolean(name = "passIso")
 axis_lin = hist.axis.Regular(5, 0, 5, name = "lin")
-
-
 
 qcdScaleByHelicity_helper = wremnants.theory_corrections.make_qcd_uncertainty_helper_by_helicity()
 axis_ptVgen = qcdScaleByHelicity_helper.hist.axes["ptVgen"]
@@ -78,9 +73,9 @@ if args.unfolding:
 
 # axes for final cards/fitting
 nominal_axes = [
-    axis_fakerate_pt, axis_fakerate_eta, axis_charge, 
+    axis_fakerate_pt, axis_fakerate_eta, common.axis_charge, 
     hist.axis.Variable([0, 2, 4, 6, 8, 10, 12, 14, 16, 18, 20, 25, 30, 40, 50, 60, 75, 90, 150], name = "ptW", underflow=False, overflow=True),    
-    axis_passIso, axis_passMT]
+    common.axis_passIso, common.axis_passMT]
 
 # corresponding columns
 nominal_cols = ["lep_pt", "lep_eta", "lep_charge", "ptW", "passIso",  "passMT"]
@@ -89,11 +84,11 @@ nominal_cols = ["lep_pt", "lep_eta", "lep_charge", "ptW", "passIso",  "passMT"]
 axis_mT = hist.axis.Variable([0] + list(range(40, 100, 1)) + [100, 102, 104, 106, 108, 112, 116, 120, 130, 150, 200], name = "mt",underflow=False, overflow=True)
 # axis_mT = hist.axis.Regular(100, 0, 200, name = "mt", underflow=False)
 
-axes_mT = [axis_fakerate_pt, axis_fakerate_eta, axis_charge, axis_mT, axis_passIso]
+axes_mT = [axis_fakerate_pt, axis_fakerate_eta, common.axis_charge, axis_mT, common.axis_passIso]
 cols_mT = ["lep_pt", "lep_eta", "lep_charge", "transverseMass",  "passIso"]
 
-# reco_mT_axes = [common.axis_recoil_reco_ptW_lowpu, common.axis_mt_lowpu, axis_charge, axis_passMT, axis_passIso]
-# gen_reco_mT_axes = [common.axis_recoil_gen_ptW_lowpu, common.axis_recoil_reco_ptW_lowpu, common.axis_mt_lowpu, axis_charge, axis_passMT, axis_passIso]
+# reco_mT_axes = [common.axis_recoil_reco_ptW_lowpu, common.axis_mt_lowpu, common.axis_charge, common.axis_passMT, common.axis_passIso]
+# gen_reco_mT_axes = [common.axis_recoil_gen_ptW_lowpu, common.axis_recoil_reco_ptW_lowpu, common.axis_mt_lowpu, axis_charge, common.axis_passMT, common.axis_passIso]
 
 # # corresponding columns
 # gen_reco_mT_cols = ["ptVgen", "recoil_corr_rec_magn", "mt", "lep_charge", "passMT", "passIso"]
@@ -101,7 +96,6 @@ cols_mT = ["lep_pt", "lep_eta", "lep_charge", "transverseMass",  "passIso"]
     
 
 # extra axes which can be used to label tensor_axes
-down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar")
 axis_cutFlow = hist.axis.Regular(1, 0, 1, name = "cutFlow")
 
 corr_helpers = theory_corrections.load_corr_helpers([d.name for d in datasets if d.name in common.vprocs_lowpu], args.theoryCorr)
@@ -263,12 +257,12 @@ def build_graph(df, dataset):
     df = df.Alias("transverseMass", "mT_corr_rec")
     df = df.Define("passMT", f"transverseMass > {mtw_min}")
 
-    results.append(df.HistoBoost("lep_pt", [axis_pt, axis_charge, axis_passMT, axis_passIso], ["lep_pt", "lep_charge", "passMT", "passIso", "nominal_weight"]))
-    results.append(df.HistoBoost("lep_eta", [axis_eta, axis_charge, axis_passMT, axis_passIso], ["lep_eta", "lep_charge", "passMT", "passIso", "nominal_weight"]))
-    results.append(df.HistoBoost("lep_phi", [axis_phi, axis_charge, axis_passMT, axis_passIso], ["lep_phi", "lep_charge", "passMT", "passIso", "nominal_weight"]))
+    results.append(df.HistoBoost("lep_pt", [axis_pt, common.axis_charge, common.axis_passMT, common.axis_passIso], ["lep_pt", "lep_charge", "passMT", "passIso", "nominal_weight"]))
+    results.append(df.HistoBoost("lep_eta", [axis_eta, common.axis_charge, common.axis_passMT, common.axis_passIso], ["lep_eta", "lep_charge", "passMT", "passIso", "nominal_weight"]))
+    results.append(df.HistoBoost("lep_phi", [axis_phi, common.axis_charge, common.axis_passMT, common.axis_passIso], ["lep_phi", "lep_charge", "passMT", "passIso", "nominal_weight"]))
     results.append(df.HistoBoost("lep_iso", [axis_iso], ["lep_iso", "nominal_weight"]))
    
-    # results.append(df.HistoBoost("qcd_space", [axis_pt, axis_eta, axis_iso, axis_charge, axis_mT], ["lep_pt", "lep_eta", "lep_iso", "lep_charge", "transverseMass", "nominal_weight"]))  
+    # results.append(df.HistoBoost("qcd_space", [axis_pt, axis_eta, axis_iso, common.axis_charge, axis_mT], ["lep_pt", "lep_eta", "lep_iso", "lep_charge", "transverseMass", "nominal_weight"]))  
 
     df = df.Define("ptW", "wrem::pt_2(lep_pt, lep_phi, MET_corr_rec_pt, MET_corr_rec_phi)")
 
@@ -321,7 +315,7 @@ def build_graph(df, dataset):
         # mag = 1.e-4
         # df = df.Define(f"muonScaleDummy{netabins}Bins", f"wrem::dummyScaleFromMassWeights<{netabins}, {nweights}>(nominal_weight, massWeight_tensor_unscaled, Lep_abs_eta, {mag})")
         # scale_etabins_axis = hist.axis.Regular(netabins, -2.4, 2.4, name="scaleEtaSlice", underflow=False, overflow=False)
-        # dummyMuonScaleSyst = df.HistoBoost("mT_corr_rec_muonScaleSyst", [*axes_mT, axis_charge, axis_passMT, axis_passIso], [cols_mT, "Lep_charge", "passMT", "passIso", f"muonScaleDummy{netabins}Bins"], tensor_axes=[down_up_axis, scale_etabins_axis])
+        # dummyMuonScaleSyst = df.HistoBoost("mT_corr_rec_muonScaleSyst", [*axes_mT, common.axis_charge, common.axis_passMT, common.axis_passIso], [cols_mT, "Lep_charge", "passMT", "passIso", f"muonScaleDummy{netabins}Bins"], tensor_axes=[common.down_up_axis, scale_etabins_axis])
         # results.append(dummyMuonScaleSyst)
 
     if hasattr(dataset, "out_of_acceptance"):

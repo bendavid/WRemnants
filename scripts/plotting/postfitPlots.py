@@ -1,14 +1,14 @@
 import mplhep as hep
 import matplotlib as mpl
 import matplotlib.pyplot as plt
-
+import itertools
 import os
 import hist
 import numpy as np
 import argparse
 import pandas as pd
 
-from utilities import common, logging, boostHistHelpers as hh
+from utilities import common, logging, differential, boostHistHelpers as hh
 from utilities.styles import styles
 from wremnants import plot_tools, histselections as sel
 from utilities.io_tools import output_tools, combinetf_input, combinetf2_input
@@ -26,7 +26,7 @@ parser.add_argument("--yscale", type=float, help="Scale the upper y axis by this
 parser.add_argument("--noRatio", action='store_true', help="Don't make the ratio in the plot")
 parser.add_argument("--noData", action='store_true', help="Don't plot the data")
 parser.add_argument("--prefit", action='store_true', help="Make prefit plot, else postfit")
-parser.add_argument("--selectionAxes", type=str, default=["charge"], help="List of axes where for each bin a seperate plot is created")
+parser.add_argument("--selectionAxes", type=str, default=["charge", "passIso", "passMT"], help="List of axes where for each bin a seperate plot is created")
 
 args = parser.parse_args()
 
@@ -46,6 +46,9 @@ elif args.infile.endswith(".root"):
     combinetf2 = False
 else:
     raise IOError("Unknown format of input file")
+
+# order of the processes in the plots
+procs_sort = ["Wmunu", "Fake", "Zmumu", "Wtaunu", "Top", "DYlowMass", "Other", "Ztautau", "Diboson"][::-1]
 
 translate_selection = {
     "charge": {
@@ -186,29 +189,30 @@ def make_plot(h_data, h_inclusive, h_stack, axes, colors=None, labels=None, suff
         args=args, **kwargs
     )
 
-
 def make_plots(hist_data, hist_inclusive, hist_stack, axes, channel="", *opts, **kwopts):
     # make plots in slices (e.g. for charge plus an minus separately)
     selection_axes = [a for a in axes if a.name in args.selectionAxes]
     if len(selection_axes) > 0:
-        for axis in selection_axes:
-            for idx in range(len(axis)):
-                other_axes = [a for a in axes if a != axis]
+        selection_bins = [np.arange(a.size) for a in axes if a.name in args.selectionAxes]
+        other_axes = [a for a in axes if a not in selection_axes]
 
-                h_data = hist_data[{axis.name: idx}]
-                h_inclusive = hist_inclusive[{axis.name: idx}]
-                h_stack = [h[{axis.name: idx}] for h in hist_stack]
+        for bins in itertools.product(*selection_bins):
+            idxs = {a.name: i for a, i in zip(selection_axes, bins) }
 
-                idx_name = translate_selection[axis.name][idx]
-                suffix = f"{channel}_{idx_name}" if channel else idx_name
-                logger.info(f"Make plot for axes {[a.name for a in other_axes]}, in {axis.name} bin {idx_name}")
-                make_plot(h_data, h_inclusive, h_stack, other_axes, suffix=suffix, *opts, **kwopts)
+            h_data = hist_data[idxs]
+            h_inclusive = hist_inclusive[idxs]
+            h_stack = [h[idxs] for h in hist_stack]
+
+            suffix = f"{channel}_" + "_".join([f"{a}{i}" for a, i in idxs.items()])
+            logger.info(f"Make plot for axes {[a.name for a in other_axes]}, in bins {idxs}")
+            make_plot(h_data, h_inclusive, h_stack, other_axes, suffix=suffix, *opts, **kwopts)
     else:
         make_plot(hist_data, hist_inclusive, hist_stack, axes, suffix=channel, *opts, **kwopts)
 
 if combinetf2:
     meta = fitresult["meta"].get()
     procs = meta["procs"].astype(str)
+    procs = sorted(procs, key=lambda x: procs_sort.index(x) if x in procs_sort else len(procs_sort))
 
     labels = [styles.process_labels.get(p, p) for p in procs]
     colors = [styles.process_colors.get(p, "grey") for p in procs]
@@ -230,12 +234,12 @@ else:
     import ROOT
 
     procs = [k.replace("expproc_","").replace(f"_{fittype};1", "") for k in fitresult.keys() if fittype in k and k.startswith("expproc_") and "hybrid" not in k]
+    procs = sorted(procs, key=lambda x: procs_sort.index(x) if x in procs_sort else len(procs_sort))
 
     labels = [styles.process_labels.get(p, p) for p in procs]
-    colors = [styles.process_colors.get(p, "grey") for p in procs]
+    colors = [styles.process_colors.get(p, "red") for p in procs]
 
     logger.info(f"Found processes {procs} in fitresult")
-
 
     # get axes from the directory name
     filename_parts = [x for x in filter(lambda x: x, args.infile.split("/"))]
@@ -250,26 +254,37 @@ else:
         all_axes = {
             "pt": hist.axis.Regular(34, 26, 60, name = "pt", overflow=False, underflow=False),
             "eta": hist.axis.Regular(48, -2.4, 2.4, name = "eta", overflow=False, underflow=False),
-            "charge": common.axis_charge
+            "charge": common.axis_charge,
+            "ptGen": hist.axis.Regular(33, 27, 60, name = "ptGen", overflow=False, underflow=False),
+            "absEtaGen": hist.axis.Variable(differential.eta_binning, name = "absEtaGen", overflow=False, underflow=False),
+            "qGen": common.axis_charge,
         }
     elif analysis=="WMass":
         all_axes = {
-            "pt": hist.axis.Regular(30, 26, 56, name = "pt", overflow=False, underflow=False),
+            # "pt": hist.axis.Regular(30, 26, 56, name = "pt", overflow=False, underflow=False),
+            # "pt": hist.axis.Regular(31, 26, 57, name = "pt", overflow=False, underflow=False),
+            "pt": hist.axis.Regular(29, 27, 56, name = "ptGen", overflow=False, underflow=False),
             "eta": hist.axis.Regular(48, -2.4, 2.4, name = "eta", overflow=False, underflow=False),
-            "charge": common.axis_charge
+            "charge": common.axis_charge,
+            "passIso": common.axis_passIso,
+            "passMT": common.axis_passMT,
+            "ptGen": hist.axis.Regular(29, 27, 56, name = "ptGen", overflow=False, underflow=False),
+            "absEtaGen": hist.axis.Variable(differential.eta_binning, name = "absEtaGen", overflow=False, underflow=False),
+            "qGen": common.axis_charge,
         }
-    axes_names = [part for part in filename_parts[-2].split("_") if part in ["pt", "eta", "charge", "ptll", "yll", "mll"]]
-    axes = [all_axes[a] for a in axes_names]
+    axes = [all_axes[part] for part in filename_parts[-2].split("_") if part in all_axes.keys()]
     shape = [len(a) for a in axes]
 
     hist_data = fitresult["obs;1"].to_hist()
+    nBins = hist_data.shape[0]
     values = np.reshape(hist_data.values(), shape)
     hist_data = hist.Hist(*axes, storage=hist.storage.Weight(), data=np.stack((values, values), axis=-1))  
 
-    hist_inclusive = fitresult[f"expfull_{fittype};1"].to_hist()
+    # last bin can be masked channel; slice with [:nBins]
+    hist_inclusive = fitresult[f"expfull_{fittype};1"].to_hist()[:nBins]
     hist_inclusive = hist.Hist(*axes, storage=hist.storage.Weight(), 
         data=np.stack((np.reshape(hist_inclusive.values(), shape), np.reshape(hist_inclusive.variances(), shape)), axis=-1))  
-    hist_stack = [fitresult[f"expproc_{p}_{fittype};1"].to_hist() for p in procs]
+    hist_stack = [fitresult[f"expproc_{p}_{fittype};1"].to_hist()[:nBins] for p in procs]
     hist_stack = [hist.Hist(*axes, storage=hist.storage.Weight(), 
         data=np.stack((np.reshape(h.values(), shape), np.reshape(h.variances(), shape)), axis=-1)) for h in hist_stack]
 

@@ -124,9 +124,9 @@ class Recoil:
         self.axis_res_ratio = hist.axis.Regular(20000, 0, 2, name = "res", underflow=False, overflow=False)
         self.axis_res_diff = hist.axis.Regular(200000, -1, 1, name = "res", underflow=False, overflow=False)
 
-        self.axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge")
-        self.axis_passIso = hist.axis.Boolean(name = "passIso")
-        self.axis_passMT = hist.axis.Boolean(name = "passMT")
+        self.axis_charge = common.axis_charge
+        self.axis_passIso = common.axis_passIso
+        self.axis_passMT = common.axis_passMT
 
         self.axis_lep_pt_test = hist.axis.Regular(100, 0., 100., name = "pt_test", underflow=False)
 
