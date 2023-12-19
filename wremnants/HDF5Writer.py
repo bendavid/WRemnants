@@ -377,6 +377,7 @@ class HDF5Writer(object):
                         raise NotImplementedError("By bin decorrelation is not supported for writing output in hdf5")
 
                     var_map = chanInfo.systHists(hvar, systKey)
+
                     var_names = [x[:-2] if "Up" in x[-2:] else (x[:-4] if "Down" in x[-4:] else x) 
                         for x in filter(lambda x: x != "", var_map.keys())]
                     # Deduplicate while keeping order
@@ -788,7 +789,7 @@ class HDF5Writer(object):
         self.book_logk(self.dict_logkavg, self.dict_logkavg_indices, self.dict_logkavg_values, *args)
     
     def book_logk_halfdiff(self, *args):
-        self.book_logk(self.dict_logkhalfdiff, self.dict_logkavg_indices, self.dict_logkavg_values, *args)
+        self.book_logk(self.dict_logkhalfdiff, self.dict_logkhalfdiff_indices, self.dict_logkhalfdiff_values, *args)
 
     def book_logk(self, dict_logk, dict_logk_indices, dict_logk_values, logk, chan, proc, syst_name):
         norm_proc = self.dict_norm[chan][proc]
