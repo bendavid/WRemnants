@@ -46,7 +46,7 @@ pdfMap = {
         "branch" : "LHEPdfWeightAltSet11",
         "combine" : "asymHessian",
         "entries" : 59,
-        "alphas" : ["LHEPdfWeightAltSet11[0]", "LHEPdfWeightAltSet11[59]", "LHEPdfWeightAltSet18[62]"],
+        "alphas" : ["LHEPdfWeightAltSet11[0]", "LHEPdfWeightAltSet11[59]", "LHEPdfWeightAltSet11[62]"],
         "alphasRange" : "002",
         "scale" : 1/1.645 # Convert from 90% CL to 68%
     },
