@@ -13,6 +13,7 @@ import itertools
 import re
 import hist
 import copy
+import math
 
 logger = logging.child_logger(__name__)
 
@@ -311,8 +312,8 @@ class CardTool(object):
         if mirrorDownVarEqualToUp and mirrorDownVarEqualToNomi:
             raise ValueError("mirrorDownVarEqualToUp and mirrorDownVarEqualToNomi cannot be both True")
 
-        if symmetrize not in [None, "average", "conservative"]:
-            raise ValueError("Invalid option for 'symmetrize'.  Valid options are 'average' and 'conservative'")
+        if symmetrize not in [None, "average", "conservative", "linear", "quadratic"]:
+            raise ValueError("Invalid option for 'symmetrize'.  Valid options are None, 'average' 'conservative', 'linear', and 'quadratic'")
 
         if preOp and preOpMap:
             raise ValueError("Only one of preOp and preOpMap args are allowed")
@@ -341,6 +342,7 @@ class CardTool(object):
         self.systematics.update({
             name if not rename else rename : {
                 "outNames" : [] if not outNames else outNames,
+                "outNamesFinal" : [] if not outNames else outNames,
                 "baseName" : baseName,
                 "processes" : procs_to_add,
                 "systAxes" : systAxes,
@@ -563,31 +565,96 @@ class CardTool(object):
 
         return {name : var for name,var in zip(systInfo["outNames"], variations) if name}
 
-    def symmetrizeUpDown(self, var_map, hnom, conservative = False):
-        logkepsilon = np.log(1e-3)
+    def getLogk(self, hvar, hnom, kfac=1., logkepsilon=math.log(1e-3)):
+        # check if there is a sign flip between systematic and nominal
+        _logk = kfac*np.log(hvar.values()/hnom.values())
+        _logk_view = np.where(np.equal(np.sign(hnom.values()*hvar.values()),1), _logk, logkepsilon*np.ones_like(_logk))
+        return _logk_view
+
+    def symmetrize(self, var_map, hnom, symmetrize=None):
+        if symmetrize is None:
+            # nothing to do
+            return var_map
+
+        var_map_out = {}
 
         for var, hvar in var_map.items():
-            if var.endswith("Up"):
-                vardown = var.removesuffix("Up") + "Down"
+            if not np.all(np.isfinite(hvar.values())):
+                raise RuntimeError(f"{len(hvar.values())-sum(np.isfinite(hvar.values()))} NaN or Inf values encountered in systematic {var}!")
+
+            if symmetrize is not None and var.endswith("Up"):
+                varbase = var.removesuffix("Up")
+
+                varup = var
+                vardown = varbase + "Down"
 
                 hvarup = hvar
                 hvardown = var_map[vardown]
 
-                logkup = np.log(hvarup.values()/hnom.values())
-                logkup = np.where(np.equal(np.sign(hnom.values()*hvarup.values()),1), logkup, logkepsilon*np.ones_like(logkup))
+                logkup = self.getLogk(hvarup, hnom)
+                logkdown = -self.getLogk(hvardown, hnom)
 
-                logkdown = -np.log(hvardown.values()/hnom.values())
-                logkdown = np.where(np.equal(np.sign(hnom.values()*hvardown.values()),1), logkdown, -logkepsilon*np.ones_like(logkdown))
+                if symmetrize in ["conservative", "average"]:
+                    if symmetrize=="conservative":
+                        # symmetrize by largest magnitude of up and down variations
+                        logk = np.where(np.abs(logkup) > np.abs(logkdown), logkup, logkdown)
+                    elif symmetrize=="average":
+                        # symmetrize by average of up and down variations
+                        logk = 0.5*(logkup + logkdown)
 
-                if conservative:
-                    # symmetrize by largest magnitude of up and down variations
-                    logk = np.where(np.abs(logkup) > np.abs(logkdown), logkup, logkdown)
-                else:
-                    # symmetrize by average of up and down variations
-                    logk = 0.5*(logkup + logkdown)
+                    # reuse histograms to avoid copies
+                    # up and down variations are explicitly produced in this case
+                    hvarup.values()[...] = hnom.values()*np.exp(logk)
+                    hvardown.values()[...] = hnom.values()*np.exp(-logk)
 
-                hvarup.values()[...] = hnom.values()*np.exp(logk)
-                hvardown.values()[...] = hnom.values()*np.exp(-logk)
+                    var_map_out[varup] = hvarup
+                    var_map_out[vardown] = hvardown
+
+                elif symmetrize in ["linear", "quadratic"]:
+                    # "linear" corresponds to a piecewise linear dependence of logk on theta
+                    # while "quadratic" corresponds to a quadratic dependence and leads
+                    # to a large variance
+                    diff_fact = np.sqrt(3.) if symmetrize=="quadratic" else 1.
+
+                    # split asymmetric variation into two symmetric variations
+                    logkavg = 0.5*(logkup + logkdown)
+                    logkdiff =  0.5*diff_fact*(logkup - logkdown)
+
+                    varavg = varbase + "SymAvg"
+                    vardiff = varbase + "SymDiff"
+
+                    # reuse histograms to minimize copies
+                    hvaravgup = hvarup
+                    hvaravgdown = hvardown
+
+                    hvardiffup = hvarup.copy()
+                    hvardiffdown = hvardown.copy()
+
+                    hvaravgup.values()[...] = hnom.values()*np.exp(logkavg)
+                    hvaravgdown.values()[...] = hnom.values()*np.exp(-logkavg)
+
+                    hvardiffup.values()[...] = hnom.values()*np.exp(logkdiff)
+                    hvardiffdown.values()[...] = hnom.values()*np.exp(-logkdiff)
+
+                    varavgup = varavg + "Up"
+                    varavgdown = varavg + "Down"
+
+                    var_map_out[varavgup] = hvaravgup
+                    var_map_out[varavgdown] = hvaravgdown
+
+                    vardiffup = vardiff + "Up"
+                    vardiffdown = vardiff + "Down"
+
+                    var_map_out[vardiffup] = hvardiffup
+                    var_map_out[vardiffdown] = hvardiffdown
+            elif symmetrize is not None and var.endswith("Down"):
+                # this is already handled above
+                pass
+            else:
+                var_map_out[var] = hvar
+
+        return var_map_out
+
 
     def variationName(self, proc, name):
         if name == self.nominalName:
@@ -738,12 +805,17 @@ class CardTool(object):
 
         if syst != self.nominalName:
             if not systInfo["mirror"] and systInfo["symmetrize"] is not None:
-                self.symmetrizeUpDown(var_map, hnom, conservative = systInfo["symmetrize"]=="conservative")
+                var_map = self.symmetrize(var_map, hnom, symmetrize = systInfo["symmetrize"])
+
+            # since the list of variations may have been modified, we need to
+            # resynchronize it
+            systInfo["outNamesFinal"] = list(var_map.keys())
 
             if check_systs:
                 self.checkSysts(var_map, proc,
                                 skipSameSide=systInfo["mirrorDownVarEqualToUp"],
                                 skipOneAsNomi=systInfo["mirrorDownVarEqualToNomi"])
+
         setZeroStatUnc = False
         if proc in self.noStatUncProcesses:
             logger.warning(f"Zeroing statistical uncertainty for process {proc}")
@@ -996,7 +1068,7 @@ class CardTool(object):
             nondata_chan[chan] = list(filter(lambda x: not self.excludeProcessForChannel[chan].match(x), nondata))
             
         names = [x[:-2] if "Up" in x[-2:] else (x[:-4] if "Down" in x[-4:] else x) 
-                    for x in filter(lambda x: x != "", systInfo["outNames"])]
+                    for x in filter(lambda x: x != "", systInfo["outNamesFinal"])]
         # exit this function when a syst is applied to no process (can happen when some are excluded)
         if all(x not in procs for x in nondata):
             return 0
