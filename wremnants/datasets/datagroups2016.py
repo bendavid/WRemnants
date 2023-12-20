@@ -4,16 +4,22 @@ from wremnants import histselections as sel
 
 logger = logging.child_logger(__name__)
     
-def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelection=True, excludeGroups=None, filterGroups=None):
+def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelection=True, excludeGroups=None, filterGroups=None, simultaneousABCD=False):
     # reset datagroups
     dg.groups = {}
 
-    if dg.mode == "wmass" and applySelection:
-        sigOp = sel.signalHistWmass
-        fakeOp = sel.fakeHistABCD
+    if dg.mode == "wmass":
+        fakeOpArgs = {"fakerate_integration_axes":[]}
+        if applySelection:
+            sigOp = sel.signalHistWmass
+            fakeOp = sel.fakeHistABCD
+        else:
+            sigOp = None
+            fakeOp = sel.fakeHistSimultaneousABCD
     else:
         sigOp = None
         fakeOp = None
+        fakeOpArgs = None
 
     dg.addGroup("Data",
         members = dg.get_members_from_results(is_data=True),
@@ -25,6 +31,10 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
     ) 
     dg.addGroup("Ztautau",
         members = dg.get_members_from_results(startswith=["Ztautau"]),
+        selectOp = sigOp,
+    )
+    dg.addGroup("PhotonInduced",
+        members = dg.get_members_from_results(startswith=["GG", "QG"]),
         selectOp = sigOp,
     )
 
@@ -60,7 +70,7 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
         )   
     else:
         dg.addGroup("Other",
-            members = dg.get_members_from_results(not_startswith=["Zmumu", "Ztautau", "QCD"]),
+            members = dg.get_members_from_results(not_startswith=["Zmumu", "Ztautau", "QCD", "GG", "QG"]),
         )
 
     dg.filterGroups(filterGroups)
@@ -72,6 +82,7 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
             members = [member for sublist in [v.members for k, v in dg.groups.items() if k != "QCD"] for member in sublist],
             scale = lambda x: 1. if x.is_data else -1,
             selectOp = fakeOp,
+            selectOpArgs = fakeOpArgs
         )
         dg.filterGroups(filterGroups)
         dg.excludeGroups(excludeGroups)

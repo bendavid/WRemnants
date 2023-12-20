@@ -65,18 +65,6 @@ closure_filepaths = {
     'binned': f"{closure_dir}/closureZ_LBL_smeared_v721.root"
 }
 
-# unfolding axes for low pu
-axis_recoil_reco_ptZ_lowpu = hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 150], name = "recoil_reco", underflow=False, overflow=True)
-axis_recoil_gen_ptZ_lowpu = hist.axis.Variable([0.0, 10.0, 20.0, 40.0, 60.0, 90.0, 150], name = "recoil_gen", underflow=False, overflow=True)
-axis_recoil_reco_ptW_lowpu = hist.axis.Variable([0, 5, 10, 15, 20, 30, 40, 50, 60, 75, 90, 150], name = "recoil_reco", underflow=False, overflow=True)
-axis_recoil_gen_ptW_lowpu = hist.axis.Variable([0.0, 10.0, 20.0, 40.0, 60.0, 90.0, 150], name = "recoil_gen", underflow=False, overflow=True)
-axis_mll_lowpu = hist.axis.Variable([60, 75] + list(range(80, 100, 2)) + [100, 105, 110, 120], name = "mll", underflow=False, overflow=False)
-axis_mt_lowpu = hist.axis.Variable([0, 40, 45, 50, 55, 60, 65, 70, 75, 80, 85, 90, 95, 100, 110, 120, 130, 150], name = "mt", underflow=False, overflow=True)
-
-
-# standard regular axes
-axis_eta = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
-axis_pt = hist.axis.Regular(29, 26., 55., name = "pt")
 ## 5% quantiles from aMC@NLO used in SMP-18-012
 #ptV_5quantiles_binning = [0.0, 1.971, 2.949, 3.838, 4.733, 5.674, 6.684, 7.781, 8.979, 10.303, 11.777, 13.435, 15.332, 17.525, 20.115, 23.245, 27.173, 32.414, 40.151, 53.858, 13000.0]
 ## 10% quantiles from aMC@NLO used in SMP-18-012 with some rounding <== This one worked fine with toys
@@ -86,8 +74,7 @@ ptV_binning = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 20, 23, 27, 32, 40
 ptV_corr_binning = ptV_binning[:-4]+list(range(30,110,10))
 absYV_binning = [0, 0.25, 0.5, 0.75, 1, 1.25, 1.5, 1.75, 2, 2.25, 2.5, 2.75, 3, 3.25, 3.5, 3.75, 4]
 
-# categorical axes in python bindings always have an overflow bin, so use a regular
-# axis for the charge
+# categorical axes in python bindings always have an overflow bin, so use a regular axis for the charge
 axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge")
 
 down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar")
@@ -103,8 +90,6 @@ failMT = {passMTName: False}
 
 axis_passIso = hist.axis.Boolean(name = passIsoName)
 axis_passMT = hist.axis.Boolean(name = passMTName)
-
-nominal_axes = [axis_eta, axis_pt, axis_charge, axis_passIso, axis_passMT]
     
 # following list is used in other scripts to track what steps are charge dependent
 # but assumes the corresponding efficiencies were made that way
@@ -195,7 +180,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--nonClosureScheme", type=str, default = "A-only", choices=["none", "A-M-separated", "A-M-combined", "binned", "binned-plus-M", "A-only", "M-only"], help = "source of the Z non-closure nuisances")
     parser.add_argument("--correlatedNonClosureNP", action="store_false", help="disable the de-correlation of Z non-closure nuisance parameters after the jpsi massfit")
     parser.add_argument("--dummyNonClosureA", action="store_false", help="read values for the magnetic part of the Z non-closure from a file")
-    parser.add_argument("--dummyNonClosureAMag", default=7.5e-5, type=float, help="magnitude of the dummy value for the magnetic part of the Z non-closure")
+    parser.add_argument("--dummyNonClosureAMag", default=6.8e-5, type=float, help="magnitude of the dummy value for the magnetic part of the Z non-closure")
     parser.add_argument("--dummyNonClosureM", action="store_true", help="use a dummy value for the alignment part of the Z non-closure")
     parser.add_argument("--dummyNonClosureMMag", default=0., type=float, help="magnitude of the dummy value for the alignment part of the Z non-closure")
     parser.add_argument("--noScaleToData", action="store_true", help="Do not scale the MC histograms with xsec*lumi/sum(gen weights) in the postprocessing step")

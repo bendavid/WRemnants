@@ -2,12 +2,11 @@ import ROOT
 import hist
 import numpy as np
 from utilities import boostHistHelpers as hh, common, logging
-from wremnants import theory_tools
+from wremnants import theory_tools, histselections as sel
 from wremnants.datasets.datagroups import Datagroups
 from wremnants.helicity_utils import *
 import re
 import collections.abc
-import copy
 
 logger = logging.child_logger(__name__)
 
@@ -138,9 +137,10 @@ def syst_transform_map(base_hist, hist_name):
     transforms['h_qqV+0.5'] = {"action" : lambda h: h if "vars" not in h.axes.name else hh.mirrorHist(h[{"vars" : 'h_qqV-0.5'}], h[{"vars" : 'pdf0'}])}
 
     return transforms
+
 def gen_scale_helicity_hist_to_variations(scale_hist, gen_obs, sum_axes=[], pt_ax="ptVgen", gen_axes=["ptVgen", "chargeVgen", "helicity"], rebinPtV=None):
     for obs in gen_obs:
-        scale_hist = expand_hist_by_duplicate_axis(scale_hist, obs, obs+"Alt", swap_axes=True)
+        scale_hist = hh.expand_hist_by_duplicate_axis(scale_hist, obs, obs+"Alt", swap_axes=True)
 
     return scale_helicity_hist_to_variations(scale_hist, sum_axes, pt_ax, gen_axes, rebinPtV)
 
@@ -199,29 +199,41 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axes=[], pt_ax="ptVgen", g
 
     return scale_variation_hist 
 
-# For converting the helicity scale hist to variations, keeping the gen axis to be fit
-# If swap_axes = True, the new axis takes the place of the old gen axis in the ordering
-def expand_hist_by_duplicate_axis(href, ref_ax_name, new_ax_name, swap_axes=False):
-    if ref_ax_name not in href.axes.name:
-        raise ValueError(f"Did not find axis {ref_ax_name} in hist!")
+def make_fakerate_variation(href, fakerate_axes, fakerate_axes_syst, variation_fakerate=0.5, flow=False):
+    # 1) calculate fakerate in bins of fakerate axes
+    nameMT, failMT, passMT = sel.get_mt_selection(href)
+    hist_failMT_failIso = href[{**common.failIso, nameMT: failMT}].project(*fakerate_axes)
+    hist_failMT_passIso = href[{**common.passIso, nameMT: failMT}].project(*fakerate_axes)
+    fr = hh.divideHists(hist_failMT_failIso, hist_failMT_failIso+hist_failMT_passIso).values(flow=flow)
 
-    axes = href.axes
+    # 2) add a variation
+    diff = np.minimum(fr, 1 - fr)
+    frUp = fr + variation_fakerate * diff
+    hRateFail = hist.Hist(*[href.axes[n] for n in fakerate_axes], storage=hist.storage.Double(), data=frUp)
+    hRatePass = hist.Hist(*[href.axes[n] for n in fakerate_axes], storage=hist.storage.Double(), data=1-frUp)
 
-    ref_ax_idx = axes.name.index(ref_ax_name)
-    ref_ax = axes[ref_ax_name]
-    new_ax = copy.deepcopy(ref_ax)
-    new_ax._ax.metadata["name"] = new_ax_name
+    # 3) apply the varied fakerate to the original histogram to get the veried bin contents, subtract the nominal histogram to only have the difference
+    hvar = hist.Hist(*[a for a in href.axes], storage=hist.storage.Double(), data=-1*href.values(flow=flow))
+    s = hist.tag.Slicer()
 
-    data = np.moveaxis(href.view(flow=True), ref_ax_idx, 0)
-    # Copy data from other axis along the diagnoal, off-diagonals will be zero
-    exp_data = data*np.reshape(np.identity(data.shape[0]), (data.shape[0], data.shape[0], *(1 for i in data.shape[1:])))
+    # fail Iso, fail MT
+    slices = [failMT if n==nameMT else 0 if n==common.passIsoName else slice(None) for n in hvar.axes.name]
+    hvar.values(flow=flow)[*slices] += hh.multiplyHists(href[{common.passIsoName: s[::hist.sum], nameMT: failMT}], hRateFail).values(flow=flow)
+    # pass Iso, fail MT
+    slices = [failMT if n==nameMT else 1 if n==common.passIsoName else slice(None) for n in hvar.axes.name]
+    hvar.values(flow=flow)[*slices] += hh.multiplyHists(href[{common.passIsoName: s[::hist.sum], nameMT: failMT}], hRatePass).values(flow=flow)
+    # fail Iso, pass MT
+    slices = [passMT if n==nameMT else 0 if n==common.passIsoName else slice(None) for n in hvar.axes.name]
+    hvar.values(flow=flow)[*slices] += hh.multiplyHists(href[{common.passIsoName: s[::hist.sum], nameMT: passMT}], hRateFail).values(flow=flow)
+    # pass Iso, pass MT
+    slices = [passMT if n==nameMT else 1 if n==common.passIsoName else slice(None) for n in hvar.axes.name]
+    hvar.values(flow=flow)[*slices] += hh.multiplyHists(href[{common.passIsoName: s[::hist.sum], nameMT: passMT}], hRatePass).values(flow=flow)
 
-    new_axes = [new_ax, *href.axes]
-    if swap_axes:
-        new_axes[0], new_axes[ref_ax_idx+1] = new_axes[ref_ax_idx+1], new_axes[0]
+    # 4) expand the variations to be used as systematic axes
+    hsyst = hh.expand_hist_by_duplicate_axes(hvar, fakerate_axes, fakerate_axes_syst)
 
-    hnew = hist.Hist(*new_axes, data=np.moveaxis(exp_data, 1, ref_ax_idx+1))
-    return hnew
+    # 5) add back to the nominal histogram and broadcase the nominal histogram
+    return hh.addHists(href, hsyst)
 
 def hist_to_variations(hist_in, gen_axes = [], sum_axes = [], rebin_axes=[], rebin_edges=[]):
 

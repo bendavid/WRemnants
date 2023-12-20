@@ -35,12 +35,12 @@ thisAnalysis = ROOT.wrem.AnalysisType.Dilepton if args.useDileptonTriggerSelecti
 era = args.era
 
 datasets = getDatasets(maxFiles=args.maxFiles,
-                        filt=args.filterProcs,
-                        excl=args.excludeProcs, 
-                        nanoVersion="v9",
-                        base_path=args.dataPath,
-                        extended = "msht20an3lo" not in args.pdfs,
-                        era = era)
+                       filt=args.filterProcs,
+                       excl=args.excludeProcs, 
+                       nanoVersion="v9",
+                       base_path=args.dataPath,
+                       extended = "msht20an3lo" not in args.pdfs,
+                       era = era)
 
 # dilepton invariant mass cuts
 mass_min = 60
@@ -357,32 +357,34 @@ def build_graph(df, dataset):
 
                 df = muon_calibration.add_resolution_uncertainty(df, axes, results, cols, smearing_uncertainty_helper, reco_sel_GF)
 
-                # add the ad-hoc Z non-closure nuisances from the jpsi massfit to muon scale unc
-                df = df.DefinePerSample("AFlag", "0x01")
-                df = df.Define(
-                    "Z_non_closure_parametrized_A", z_non_closure_parametrized_helper,
-                    [*input_kinematics, "nominal_weight", "AFlag"]
-                )
-                hist_Z_non_closure_parametrized_A = df.HistoBoost(
-                    "nominal_Z_non_closure_parametrized_A",
-                    axes, [*cols, "Z_non_closure_parametrized_A"],
-                    tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
-                    storage=hist.storage.Double()
-                )
-                results.append(hist_Z_non_closure_parametrized_A)
+                if args.nonClosureScheme in ["A-M-separated", "A-only"]:
+                    # add the ad-hoc Z non-closure nuisances from the jpsi massfit to muon scale unc
+                    df = df.DefinePerSample("AFlag", "0x01")
+                    df = df.Define(
+                        "Z_non_closure_parametrized_A", z_non_closure_parametrized_helper,
+                        [*input_kinematics, "nominal_weight", "AFlag"]
+                    )
+                    hist_Z_non_closure_parametrized_A = df.HistoBoost(
+                        "nominal_Z_non_closure_parametrized_A",
+                        axes, [*cols, "Z_non_closure_parametrized_A"],
+                        tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
+                        storage=hist.storage.Double()
+                    )
+                    results.append(hist_Z_non_closure_parametrized_A)
 
-                df = df.DefinePerSample("MFlag", "0x04")
-                df = df.Define(
-                    "Z_non_closure_parametrized_M", z_non_closure_parametrized_helper,
-                    [*input_kinematics, "nominal_weight", "MFlag"]
-                )
-                hist_Z_non_closure_parametrized_M = df.HistoBoost(
-                    "nominal_Z_non_closure_parametrized_M",
-                    axes, [*cols, "Z_non_closure_parametrized_M"],
-                    tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
-                    storage=hist.storage.Double()
-                )
-                results.append(hist_Z_non_closure_parametrized_M)
+                if args.nonClosureScheme in ["A-M-separated", "binned-plus-M", "M-only"]:
+                    df = df.DefinePerSample("MFlag", "0x04")
+                    df = df.Define(
+                        "Z_non_closure_parametrized_M", z_non_closure_parametrized_helper,
+                        [*input_kinematics, "nominal_weight", "MFlag"]
+                    )
+                    hist_Z_non_closure_parametrized_M = df.HistoBoost(
+                        "nominal_Z_non_closure_parametrized_M",
+                        axes, [*cols, "Z_non_closure_parametrized_M"],
+                        tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
+                        storage=hist.storage.Double()
+                    )
+                    results.append(hist_Z_non_closure_parametrized_M)
             ####################################################
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays

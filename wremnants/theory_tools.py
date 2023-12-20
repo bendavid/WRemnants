@@ -12,11 +12,6 @@ from math import sqrt
 logger = logging.child_logger(__name__)
 narf.clingutils.Declare('#include "theoryTools.h"')
 
-# integer axis for -1 through 7
-axis_helicity = hist.axis.Integer(
-    -1, 8, name="helicity", overflow=False, underflow=False
-)
-
 # this puts the bin centers at 0.5, 1.0, 2.0
 axis_muRfact = hist.axis.Variable(
     [0.25, 0.75, 1.25, 2.75], name="muRfact", underflow=False, overflow=False
@@ -31,13 +26,8 @@ axis_absYVgen = hist.axis.Variable(
     name = "absYVgenNP", underflow=False
 )
 
-axis_chargeWgen = hist.axis.Regular(
-    2, -2, 2, name="chargeVgenNP", underflow=False, overflow=False
-)
-
-axis_chargeZgen = hist.axis.Integer(
-    0, 1, name="chargeVgenNP", underflow=False, overflow=False
-)
+axis_chargeWgen = hist.axis.Regular(2, -2, 2, name="chargeVgenNP", underflow=False, overflow=False)
+axis_chargeZgen = hist.axis.Integer(0, 1, name="chargeVgenNP", underflow=False, overflow=False)
 
 scale_tensor_axes = (axis_muRfact, axis_muFfact)
 
@@ -56,7 +46,7 @@ pdfMap = {
         "branch" : "LHEPdfWeightAltSet11",
         "combine" : "asymHessian",
         "entries" : 59,
-        "alphas" : ["LHEPdfWeightAltSet11[0]", "LHEPdfWeightAltSet11[59]", "LHEPdfWeightAltSet18[62]"],
+        "alphas" : ["LHEPdfWeightAltSet11[0]", "LHEPdfWeightAltSet11[59]", "LHEPdfWeightAltSet11[62]"],
         "alphasRange" : "002",
         "scale" : 1/1.645 # Convert from 90% CL to 68%
     },
@@ -398,11 +388,12 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
             if name == "nominal":
                 res.append(df.HistoBoost(f"weight_uncorr", [hist.axis.Regular(100, -2, 2)], ["nominal_weight_uncorr"], storage=hist.storage.Double()))
 
-        hist_name = f"{name}_{generator}Corr"
-        unc = df.HistoBoost(hist_name, axes, [*cols, f"{generator}Weight_tensor"], tensor_axes=helpers[generator].tensor_axes[-1:], storage=hist.storage.Double())
-        res.append(unc)
-
         var_axis = helpers[generator].tensor_axes[-1]
+
+        hist_name = f"{name}_{generator}Corr"
+        weight_tensor_name = f"{generator}Weight_tensor"
+        unc = df.HistoBoost(hist_name, axes, [*cols, weight_tensor_name], tensor_axes=[var_axis], storage=hist.storage.Double())
+        res.append(unc)
 
         def is_flavor_dependent_np(var_label):
             return var_label.startswith("Omega") \
@@ -417,16 +408,10 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
             # include nominal as well
             omegaidxs = [0] + omegaidxs
 
-            if f"{generator}Omega" not in df.GetColumnNames():
-                df = df.Define(f"{generator}FlavDepNP",
-                                f"""
-                                constexpr std::array<std::ptrdiff_t, {len(omegaidxs)}> idxs = {{{",".join([str(idx) for idx in omegaidxs])}}};
-                                Eigen::TensorFixedSize<double, Eigen::Sizes<{len(omegaidxs)}>> res;
-                                for (std::size_t i = 0; i < idxs.size(); ++i) {{
-                                res(i) = {generator}Weight_tensor(idxs[i]);
-                                }}
-                                return res;
-                                """)
+            if f"{generator}FlavDepNP" not in df.GetColumnNames():
+                np_idx_helper = ROOT.wrem.index_taker[df.GetColumnType(weight_tensor_name), len(omegaidxs)](omegaidxs)
+
+                df = df.Define(f"{generator}FlavDepNP", np_idx_helper, [weight_tensor_name])
 
             axis_FlavDepNP = hist.axis.StrCategory([var_axis[idx] for idx in omegaidxs], name = var_axis.name)
 
@@ -436,6 +421,32 @@ def make_theory_corr_hists(df, name, axes, cols, helpers, generators, modify_cen
             cols_FlavDepNP = cols + ["absYVgen", "chargeVgen", f"{generator}FlavDepNP"]
             unc_FlavDepNP = df.HistoBoost(hist_name_FlavDepNP, axes_FlavDepNP, cols_FlavDepNP, tensor_axes = [axis_FlavDepNP])
             res.append(unc_FlavDepNP)
+
+        def is_pt_dependent_scale(var_label):
+            return var_label.startswith("renorm_fact_resum_transition_scale_envelope") \
+                    or var_label.startswith("renorm_fact_resum_scale_envelope")
+
+        # special treatment for envelope of scale variations since they need to be decorrelated in pt
+        if isinstance(var_axis, hist.axis.StrCategory) and any(is_pt_dependent_scale(var_label) for var_label in var_axis):
+
+            scaleidxs = [var_axis.index(var_label) for var_label in var_axis if is_pt_dependent_scale(var_label)]
+
+            # include nominal as well
+            scaleidxs = [0] + scaleidxs
+
+            if f"{generator}PtDepScales" not in df.GetColumnNames():
+                scale_idx_helper = ROOT.wrem.index_taker[df.GetColumnType(weight_tensor_name), len(scaleidxs)](scaleidxs)
+
+                df = df.Define(f"{generator}PtDepScales", scale_idx_helper, [weight_tensor_name])
+
+            axis_PtDepScales = hist.axis.StrCategory([var_axis[idx] for idx in scaleidxs], name = var_axis.name)
+
+            hist_name_PtDepScales = f"{name}_{generator}PtDepScales"
+            axis_ptVgen = hist.axis.Variable(common.ptV_binning, name = "ptVgen", underflow=False)
+            axes_PtDepScales = axes + [axis_ptVgen]
+            cols_PtDepScales = cols + ["ptVgen", f"{generator}PtDepScales"]
+            unc_PtDepScales = df.HistoBoost(hist_name_PtDepScales, axes_PtDepScales, cols_PtDepScales, tensor_axes = [axis_PtDepScales])
+            res.append(unc_PtDepScales)
 
     return res
 

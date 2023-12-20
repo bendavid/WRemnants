@@ -176,17 +176,17 @@ jobs:
       - name: wmass combine setup
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py 
-          -i $HIST_FILE --lumiScale $LUMI_SCALE --unfold --ABCD --hdf5 --sparse --addTauToSignal -o $WREMNANTS_OUTDIR --postfix unfolding
+          -i $HIST_FILE --lumiScale $LUMI_SCALE --unfold --ABCD --hdf5 --sparse -o $WREMNANTS_OUTDIR --postfix unfolding
 
       - name: wmass combine fit 
         run: >-
           cmssw-cc7 --command-to-run scripts/ci/run_combine.sh /home/c/cmsmwbot/combinetf/CMSSW_10_6_30/src/ 
-          unfolding ${WREMNANTS_OUTDIR}/WMass_eta_pt_charge_unfolding/ WMass.hdf5
+          unfolding ${WREMNANTS_OUTDIR}/WMass_eta_pt_charge_passIso_passMT_unfolding/ WMass.hdf5
 
       - name: wmass combine unfolding plot pulls 
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/pullsAndImpacts.py 
-          -f $WREMNANTS_OUTDIR/WMass_eta_pt_charge_unfolding/fitresults_123456789.hdf5 -m ungrouped --sortDescending -s constraint 
+          -f $WREMNANTS_OUTDIR/WMass_eta_pt_charge_passIso_passMT_unfolding/fitresults_123456789.hdf5 -m ungrouped --sortDescending -s constraint 
           --debug --grouping max -t utilities/styles/nuisance_translate.json 
           output --outFolder $WEB_DIR/$PLOT_DIR -o pulls_unfolding_mw.html -n 50 --otherExtensions png pdf
           
@@ -194,7 +194,7 @@ jobs:
       - name: wmass combine unfolding plot xsec 
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_xsec.py $HIST_FILE 
-          --fitresult $WREMNANTS_OUTDIR/WMass_eta_pt_charge_unfolding/fitresults_123456789.hdf5 -o $WEB_DIR -f $PLOT_DIR -v 4 --rrange 0.9 1.1 --logy
+          --fitresult $WREMNANTS_OUTDIR/WMass_eta_pt_charge_passIso_passMT_unfolding/fitresults_123456789.hdf5 -o $WEB_DIR -f $PLOT_DIR -v 4 --rrange 0.9 1.1 --logy
           -t 'utilities/styles/nuisance_translate.json' --grouping max
 
   w-theoryfit:
@@ -221,8 +221,8 @@ jobs:
       - name: wmass theoryfit combine setup
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/combine/setupCombine.py -i $HIST_FILE 
-          --fitresult ${WREMNANTS_OUTDIR}/WMass_eta_pt_charge_unfolding/fitresults_123456789.hdf5 --fitvar qGen-ptGen-absEtaGen 
-          --hdf5 --addTauToSignal -o $WREMNANTS_OUTDIR --postfix theoryfit
+          --fitresult ${WREMNANTS_OUTDIR}/WMass_eta_pt_charge_passIso_passMT_unfolding/fitresults_123456789.hdf5 --fitvar qGen-ptGen-absEtaGen 
+          --hdf5 -o $WREMNANTS_OUTDIR --postfix theoryfit
 
       - name: wmass theoryfit combine fit 
         run: >-
@@ -238,7 +238,7 @@ jobs:
         run: >-
           scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/unfolding_plots.py 
           $HIST_FILE --fitresult $WREMNANTS_OUTDIR/WMass_qGen_ptGen_absEtaGen_theoryfit/fitresults_123456789.root -o $WEB_DIR -f $PLOT_DIR 
-          -n xnorm --plots prefit postfit --addTauToSignal -v 4 --rrange 0.9 1.1 --lumi=$LUMI_SCALE
+          -n xnorm --plots prefit postfit -v 4 --rrange 0.9 1.1 --lumi=$LUMI_SCALE
 
 
   wlike-analysis:

@@ -501,6 +501,39 @@ Vec_f breitWignerWeights(double massVgen, int type=0) {
     return res;
 }
 
+// take elements from a 1d tensor by index
+template<typename tensor_t, std::size_t N>
+class index_taker {
+public:
+    using idxs_type = std::array<std::ptrdiff_t, N>;
+    using out_tensor_t = Eigen::TensorFixedSize<typename tensor_t::Scalar, Eigen::Sizes<N>>;
+
+    index_taker(const idxs_type &idxs) : idxs_(idxs) {}
+
+    index_taker(const std::vector<std::ptrdiff_t> &idxs) {
+        if (idxs.size() != N) {
+            throw std::runtime_error("Mismatched indexes size");
+        }
+
+        for (std::size_t i = 0; i < N; ++i) {
+            idxs_[i] = idxs[i];
+        }
+    }
+
+    out_tensor_t operator() (const tensor_t &tensor) const {
+        out_tensor_t res;
+
+        for (std::size_t i = 0; i < N; ++i) {
+            res(i) = tensor(idxs_[i]);
+        }
+
+        return res;
+
+    }
+private:
+    idxs_type idxs_;
+};
+
 }
 
 

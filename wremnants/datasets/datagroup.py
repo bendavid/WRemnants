@@ -87,34 +87,3 @@ class Datagroup(object):
             self.memberOp = [v for (v, i) in zip(self.memberOp, mask) if i]
 
         self.members = [m for (m, i) in zip(self.members, mask) if i]
-
-    def add_member_axis(self, axis_name, results, member_filters={}, hist_filter=None):
-        # adds an axis depending on the group members
-        # member_filters is a dict with key of bin name/integer and value of member filter to specify which members are filled in the corresponding bin
-
-        if all([isinstance(x,int) for x in member_filters.keys()]):
-            axis = hist.axis.IntCategory(member_filters.keys(), name = axis_name)
-        else:
-            axis = hist.axis.StrCategory([str(x) for x in member_filters.keys()], name = axis_name)
-
-        for member in self.members:
-            logger.debug(f"Add new member axis for member {member.name}")
-            
-            for h_name, h in results[member.name]["output"].items():
-                
-                if hist_filter is not None and not hist_filter(h_name):
-                    continue
-
-                hold = h.get()
-                hnew = hist.Hist(axis, *hold.axes, storage=hold.storage_type())
-
-                for filter_bin, member_filter in member_filters.items():
-                    if member_filter(member):
-                        logger.debug(f"Fill bin {filter_bin} for member {member.name}, hist {h_name}")
-
-                        idx = hnew.axes[axis_name].index(filter_bin)
-
-                        hnew.view(flow=True)[idx,...] = hnew.view(flow=True)[idx,...] + hold.view(flow=True)
-
-                results[member.name]["output"][h_name] = H5PickleProxy(hnew)
-

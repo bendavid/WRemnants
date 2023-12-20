@@ -32,6 +32,7 @@ def load_corr_helpers(procs, generators, make_tensor=True):
                 continue
             logger.debug(f"Make theory correction helper for file: {fname}")
             corrh = load_corr_hist(fname, proc[0], get_corr_name(generator))
+            corrh = postprocess_corr_hist(corrh)
             if not make_tensor:
                 corr_helpers[proc][generator] = corrh
             elif "Helicity" in generator:
@@ -48,11 +49,11 @@ def make_corr_helper_fromnp(filename=f"{common.data_dir}/N3LLCorrections/inclusi
         corrf_Wp = np.load(filename.format(process="Wp"), allow_pickle=True)
         corrf_Wm = np.load(filename.format(process="Wm"), allow_pickle=True)
         bins = corrf_Wp["bins"]
-        axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge")
+        axis_charge = common.axis_chargeWgen
     else:
         corrf = np.load(filename.format(process="Z"), allow_pickle=True)
         bins = corrf["bins"]
-        axis_charge = hist.axis.Regular(1, -1., 1., underflow=False, overflow=False, name = "charge")
+        axis_charge =  common.axis_chargeZgen
 
     axis_syst = hist.axis.Regular(len(bins[0]) - 1, bins[0][0], bins[0][-1], 
                     name="systIdx", overflow=False, underflow=False)
@@ -80,6 +81,96 @@ def load_corr_hist(filename, proc, histname):
         corrh = corr[proc][histname]
     return corrh
 
+def compute_envelope(h, name, entries, axis_name="vars", slice_axis = None, slice_val = None):
+
+    axis_idx = h.axes.name.index(axis_name)
+    hvars = h[{axis_name : entries}]
+
+    hvar_min = h[{axis_name : entries[0]}].copy()
+    hvar_max = h[{axis_name : entries[0]}].copy()
+
+    hvar_min.values()[...] = np.min(hvars.values(), axis=axis_idx)
+    hvar_max.values()[...] = np.max(hvars.values(), axis=axis_idx)
+
+    if slice_axis is not None:
+        s = hist.tag.Slicer()
+
+        hnom = h[{axis_name : entries[0]}]
+        slice_idx = h.axes[slice_axis].index(slice_val)
+
+        hvar_min[{slice_axis : s[:slice_idx]}] = hnom[{slice_axis : s[:slice_idx]}].view()
+        hvar_max[{slice_axis : s[:slice_idx]}] = hnom[{slice_axis : s[:slice_idx]}].view()
+
+    res = {}
+    res[f"{name}_Down"] = hvar_min
+    res[f"{name}_Up"] = hvar_max
+
+    return res
+
+def postprocess_corr_hist(corrh):
+    # extend variations with some envelopes and special kinematic slices
+
+    if "vars" not in corrh.axes.name:
+        return corrh
+
+    additional_var_hists = {}
+
+    renorm_scale_vars = ["pdf0", "kappaFO0.5-kappaf2.", "kappaFO2.-kappaf0.5"]
+
+    renorm_fact_scale_vars = ['pdf0', 'kappaFO0.5-kappaf2.', 'kappaFO2.-kappaf0.5', 'mufdown', 'mufup', 'mufdown-kappaFO0.5-kappaf2.', 'mufup-kappaFO2.-kappaf0.5']
+
+    resum_scales = ["muB", "nuB", "muS", "nuS"]
+    resum_scale_vars_exclusive = [var for var in corrh.axes["vars"] if any(resum_scale in var for resum_scale in resum_scales)]
+    resum_scale_vars = ["pdf0"] + resum_scale_vars_exclusive
+
+
+    transition_vars_exclusive = ["transition_points0.2_0.35_1.0", "transition_points0.2_0.75_1.0"]
+
+    renorm_fact_resum_scale_vars = renorm_fact_scale_vars + resum_scale_vars_exclusive
+
+    renorm_fact_resum_transition_scale_vars = renorm_fact_resum_scale_vars + transition_vars_exclusive
+
+    if all(var in corrh.axes["vars"] for var in renorm_scale_vars):
+        additional_var_hists.update(compute_envelope(corrh, "renorm_scale_envelope", renorm_scale_vars))
+
+        # same thing but restricted to qT>20GeV to capture only the fixed order part of the variation and
+        # neglect the part at low pt which should be redundant with the TNPs
+        additional_var_hists.update(compute_envelope(corrh, "renorm_scale_pt20_envelope", renorm_scale_vars, slice_axis="qT", slice_val=20.))
+
+    if all(var in corrh.axes["vars"] for var in renorm_fact_scale_vars):
+        additional_var_hists.update(compute_envelope(corrh, "renorm_fact_scale_envelope", renorm_fact_scale_vars))
+
+        # same thing but restricted to qT>20GeV to capture only the fixed order part of the variation and
+        # neglect the part at low pt which should be redundant with the TNPs
+        additional_var_hists.update(compute_envelope(corrh, "renorm_fact_scale_pt20_envelope", renorm_fact_scale_vars, slice_axis="qT", slice_val=20.))
+
+    if all(var in corrh.axes["vars"] for var in renorm_fact_resum_scale_vars):
+        additional_var_hists.update(compute_envelope(corrh, "renorm_fact_resum_scale_envelope", renorm_fact_resum_scale_vars))
+    if all(var in corrh.axes["vars"] for var in renorm_fact_resum_transition_scale_vars):
+        additional_var_hists.update(compute_envelope(corrh, "renorm_fact_resum_transition_scale_envelope", renorm_fact_resum_transition_scale_vars))
+    if all(var in corrh.axes["vars"] for var in resum_scale_vars):
+        additional_var_hists.update(compute_envelope(corrh, "resum_scale_envelope", resum_scale_vars))
+
+
+    if not additional_var_hists:
+        return corrh
+
+    vars_out = list(corrh.axes["vars"]) + list(additional_var_hists.keys())
+
+    vars_out_axis = hist.axis.StrCategory(vars_out, name="vars")
+    corrh_tmp = hist.Hist(*corrh.axes[:-1], vars_out_axis, storage = corrh._storage_type())
+
+    for i, var in enumerate(vars_out_axis):
+        if var in corrh.axes["vars"]:
+            corrh_tmp[{"vars" : i}] = corrh[{"vars" : var}].view(flow=True)
+        else:
+            corrh_tmp[{"vars" : i}] = additional_var_hists[var].view(flow=True)
+
+    corrh = corrh_tmp
+
+    return corrh
+
+
 def get_corr_name(generator):
     # Hack for now
     label = generator.replace("1D", "")
@@ -96,10 +187,6 @@ def rebin_corr_hists(hists, ndim=-1, binning=None):
         return hists
 
     for i in range(ndims):
-        # This is a workaround for now for the fact that MiNNLO has mass binning up to
-        # Inf whereas SCETlib has 13 TeV
-        if all([h.axes[i].size == 1 for h in hists if h]):
-            continue
         hists = hh.rebinHistsToCommon(hists, i)
     return hists
 

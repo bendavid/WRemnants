@@ -4,7 +4,7 @@ from utilities import logging
 
 logger = logging.child_logger(__name__)
 
-def scale_to_data(result_dict, data_name = "dataPostVFP"):
+def scale_to_data(result_dict):
     # scale histograms by lumi*xsec/sum(gen weights)
     time0 = time.time()
 

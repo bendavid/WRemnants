@@ -35,11 +35,11 @@ thisAnalysis = ROOT.wrem.AnalysisType.Wlike
 era = args.era
 
 datasets = getDatasets(maxFiles=args.maxFiles,
-                        filt=args.filterProcs,
-                        excl=args.excludeProcs, 
-                        nanoVersion="v9", base_path=args.dataPath,
-                        extended = "msht20an3lo" not in args.pdfs,
-                        era=era)
+                       filt=args.filterProcs,
+                       excl=args.excludeProcs, 
+                       nanoVersion="v9", base_path=args.dataPath,
+                       extended = "msht20an3lo" not in args.pdfs,
+                       era=era)
 
 # dilepton invariant mass cuts
 mass_min = 60
@@ -62,11 +62,7 @@ logger.info(f"Pt binning: {template_npt} bins from {template_minpt} to {template
 axis_eta = hist.axis.Regular(template_neta, template_mineta, template_maxeta, name = "eta", overflow=False, underflow=False)
 axis_pt = hist.axis.Regular(template_npt, template_minpt, template_maxpt, name = "pt", overflow=False, underflow=False)
 
-# categorical axes in python bindings always have an overflow bin, so use a regular
-# axis for the charge
-axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge")
-
-nominal_axes = [axis_eta, axis_pt, axis_charge]
+nominal_axes = [axis_eta, axis_pt, common.axis_charge]
 nominal_cols = ["trigMuons_eta0", "trigMuons_pt0", "trigMuons_charge0"]
 
 if args.unfolding:
@@ -266,7 +262,7 @@ def build_graph(df, dataset):
             df = muon_calibration.define_matched_reco_muon_kinematics(df, reco_sel_GF)
 
             ####################################################
-            # nuisances from the muon momemtum scale calibration 
+            # nuisances from the muon momemtum scale calibration
             if (args.muonCorrData in ["massfit", "lbl_massfit"]):
                 input_kinematics = [
                     f"{reco_sel_GF}_recoPt",
@@ -294,32 +290,34 @@ def build_graph(df, dataset):
 
                 df = muon_calibration.add_resolution_uncertainty(df, axes, results, cols, smearing_uncertainty_helper, reco_sel_GF)
 
-                # add the ad-hoc Z non-closure nuisances from the jpsi massfit to muon scale unc
-                df = df.DefinePerSample("AFlag", "0x01")
-                df = df.Define(
-                    "Z_non_closure_parametrized_A", z_non_closure_parametrized_helper,
-                    [*input_kinematics, "nominal_weight", "AFlag"]
-                )
-                hist_Z_non_closure_parametrized_A = df.HistoBoost(
-                    "nominal_Z_non_closure_parametrized_A",
-                    axes, [*cols, "Z_non_closure_parametrized_A"],
-                    tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
-                    storage=hist.storage.Double()
-                )
-                results.append(hist_Z_non_closure_parametrized_A)
+                if args.nonClosureScheme in ["A-M-separated", "A-only"]:
+                    # add the ad-hoc Z non-closure nuisances from the jpsi massfit to muon scale unc
+                    df = df.DefinePerSample("AFlag", "0x01")
+                    df = df.Define(
+                        "Z_non_closure_parametrized_A", z_non_closure_parametrized_helper,
+                        [*input_kinematics, "nominal_weight", "AFlag"]
+                    )
+                    hist_Z_non_closure_parametrized_A = df.HistoBoost(
+                        "nominal_Z_non_closure_parametrized_A",
+                        axes, [*cols, "Z_non_closure_parametrized_A"],
+                        tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
+                        storage=hist.storage.Double()
+                    )
+                    results.append(hist_Z_non_closure_parametrized_A)
 
-                df = df.DefinePerSample("MFlag", "0x04")
-                df = df.Define(
-                    "Z_non_closure_parametrized_M", z_non_closure_parametrized_helper,
-                    [*input_kinematics, "nominal_weight", "MFlag"]
-                )
-                hist_Z_non_closure_parametrized_M = df.HistoBoost(
-                    "nominal_Z_non_closure_parametrized_M",
-                    axes, [*cols, "Z_non_closure_parametrized_M"],
-                    tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
-                    storage=hist.storage.Double()
-                )
-                results.append(hist_Z_non_closure_parametrized_M)
+                if args.nonClosureScheme in ["A-M-separated", "binned-plus-M", "M-only"]:
+                    df = df.DefinePerSample("MFlag", "0x04")
+                    df = df.Define(
+                        "Z_non_closure_parametrized_M", z_non_closure_parametrized_helper,
+                        [*input_kinematics, "nominal_weight", "MFlag"]
+                    )
+                    hist_Z_non_closure_parametrized_M = df.HistoBoost(
+                        "nominal_Z_non_closure_parametrized_M",
+                        axes, [*cols, "Z_non_closure_parametrized_M"],
+                        tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
+                        storage=hist.storage.Double()
+                    )
+                    results.append(hist_Z_non_closure_parametrized_M)
             ####################################################
 
     if hasattr(dataset, "out_of_acceptance"):

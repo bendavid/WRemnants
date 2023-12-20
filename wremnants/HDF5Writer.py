@@ -1,4 +1,4 @@
-from wremnants.combine_helpers import setSimultaneousABCD, projectABCD
+from wremnants.combine_helpers import projectABCD
 from utilities import boostHistHelpers as hh, common, logging
 from utilities.io_tools import output_tools, combinetf_input
 
@@ -18,7 +18,7 @@ logger = logging.child_logger(__name__)
 
 class HDF5Writer(object):
     # keeps multiple card tools and writes them out in a single file to fit (appending the histograms)
-    def __init__(self, card_name="card"):
+    def __init__(self, card_name="card", sparse=False):
         self.cardName = card_name
         self.cardTools = []
         # settings for writing out hdf5 files
@@ -48,6 +48,41 @@ class HDF5Writer(object):
         if self.clipSystVariationsSignal>0.:
             self.clipSig = np.abs(np.log(clipSystVariationsSignal))
 
+        self.sparse = sparse
+
+
+    def init_data_dicts(self):
+        channels = self.get_channels()
+        self.dict_data_obs = {}
+        self.dict_data_obs_cov = {}
+        self.dict_pseudodata = {c : [] for c in channels}
+        self.dict_sumw2 = {c : {} for c in channels}
+        self.dict_norm = {c : {} for c in channels}
+
+        if self.sparse:
+            self.dict_logkavg_indices = {c : {} for c in channels}
+            self.dict_logkavg_values = {c : {} for c in channels}
+            self.dict_logkhalfdiff_indices = {c : {} for c in channels}
+            self.dict_logkhalfdiff_values = {c : {} for c in channels}
+            self.dict_logkavg = None
+            self.dict_logkhalfdiff = None
+        else:
+            self.dict_logkavg_indices = None
+            self.dict_logkavg_values = None
+            self.dict_logkhalfdiff_indices = None
+            self.dict_logkhalfdiff_values = None
+            self.dict_logkavg = {c : {} for c in channels}
+            self.dict_logkhalfdiff = {c : {} for c in channels}
+
+    def init_data_dicts_channel(self, channel, processes):
+        if self.sparse:
+            self.dict_logkavg_indices[channel] = {p : {} for p in processes}
+            self.dict_logkavg_values[channel] = {p : {} for p in processes}
+            self.dict_logkhalfdiff_indices[channel] = {p : {} for p in processes}
+            self.dict_logkhalfdiff_values[channel] = {p : {} for p in processes}
+        else:
+            self.dict_logkavg[channel] = {p : {} for p in processes}
+            self.dict_logkhalfdiff[channel] = {p : {} for p in processes}
 
     def set_fitresult(self, fitresult_filename, poi_type="pmaskedexp", gen_flow=False, mc_stat=True):
         if poi_type != "pmaskedexp":
@@ -92,7 +127,7 @@ class HDF5Writer(object):
         if return_variances and (h.storage_type != hist.storage.Weight):
             raise RuntimeError(f"Sumw2 not filled for {h} but needed for binByBin uncertainties")
 
-        if chanInfo.ABCD and set(chanInfo.fakerateAxes) != set(chanInfo.fit_axes):
+        if chanInfo.ABCD and set(chanInfo.getFakerateAxes()) != set(chanInfo.fit_axes[:len(chanInfo.getFakerateAxes())]):
             h = projectABCD(chanInfo, h, return_variances=return_variances)
         elif h.axes.name != axes:
             h = h.project(*axes)
@@ -115,14 +150,6 @@ class HDF5Writer(object):
         signals = self.get_signals() 
         bkgs = self.get_backgrounds() 
 
-        dict_data_obs = {}
-        dict_data_obs_cov = {}
-        dict_pseudodata = {c : [] for c in self.get_channels()}
-        dict_sumw2 = {c : {} for c in self.get_channels()}
-        dict_norm = {c : {} for c in self.get_channels()}
-        dict_logkavg = {c : {} for c in self.get_channels()}
-        dict_logkhalfdiff = {c : {} for c in self.get_channels()}
-
         # store list of axes for each channel
         hist_axes = {}
 
@@ -131,6 +158,8 @@ class HDF5Writer(object):
         nbins = 0
         npseudodata = 0
         pseudoDataNames = []
+
+        self.init_data_dicts()
 
         for chan, chanInfo in self.get_channels().items():
             masked = chanInfo.xnorm and not self.theoryFit
@@ -151,17 +180,9 @@ class HDF5Writer(object):
                 procsToRead=dg.groups.keys(),
                 label=chanInfo.nominalName, 
                 scaleToNewLumi=chanInfo.lumiScale, 
-                forceNonzero=forceNonzero)
-
-            if not masked and chanInfo.ABCD:
-                setSimultaneousABCD(chanInfo)
-
-                if dg.fakeName not in bkgs:
-                    bkgs.append(dg.fakeName)
-                if chanInfo.nameMT not in axes:
-                    axes.append(chanInfo.nameMT)
-                if common.passIsoName not in axes:
-                    axes.append(common.passIsoName)
+                forceNonzero=forceNonzero,
+                sumFakesPartial=not chanInfo.ABCD
+            )
 
             procs_chan = chanInfo.predictedProcesses()
 
@@ -191,12 +212,9 @@ class HDF5Writer(object):
                     norm_proc = np.maximum(norm_proc, 0.)
 
                 if not masked:                
-                    dict_sumw2[chan][proc] = sumw2_proc
+                    self.dict_sumw2[chan][proc] = sumw2_proc
 
-                dict_norm[chan][proc] = norm_proc
-
-            dict_logkavg[chan] = {p : {} for p in procs_chan}
-            dict_logkhalfdiff[chan] = {p : {} for p in procs_chan}
+                self.dict_norm[chan][proc] = norm_proc               
 
             ibins.append(nbinschan)
 
@@ -217,7 +235,7 @@ class HDF5Writer(object):
                                 idx = 0 if syst_idx is None else syst_idx
                                 pseudo_hist = data_pseudo_hist[{pseudo_axis_name : idx}] 
                                 data_pseudo = self.get_flat_values(pseudo_hist, chanInfo, axes, return_variances=False)
-                                dict_pseudodata[chan].append(data_pseudo)
+                                self.dict_pseudodata[chan].append(data_pseudo)
                                 if type(pseudo_axis) == hist.axis.StrCategory:
                                     syst_bin = pseudo_axis.bin(idx) if type(idx) == int else str(idx)
                                 else:
@@ -228,16 +246,23 @@ class HDF5Writer(object):
                         else:
                             # pseudodata from alternative histogram that has no syst axis
                             data_pseudo = self.get_flat_values(data_pseudo_hist, chanInfo, axes, return_variances=False)
-                            dict_pseudodata[chan].append(data_pseudo)
+                            self.dict_pseudodata[chan].append(data_pseudo)
                             logger.info(f"Write pseudodata {pseudo_data_name}")
                             pseudoDataNameList.append(pseudo_data_name)
-                                
+
                     if npseudodata == 0:
-                        npseudodata = len(dict_pseudodata[chan])
+                        npseudodata = len(self.dict_pseudodata[chan])
                         pseudoDataNames = pseudoDataNameList
-                    elif npseudodata != len(dict_pseudodata[chan]) or pseudoDataNames != pseudoDataNameList:
+                    elif npseudodata != len(self.dict_pseudodata[chan]) or pseudoDataNames != pseudoDataNameList:
                         raise RuntimeError("Different pseudodata settings for different channels not supported!")
 
+                    # release memory
+                    del chanInfo.pseudodata_datagroups
+                    for proc in chanInfo.datagroups.groups:
+                        for pseudo in chanInfo.pseudoData:
+                            if pseudo in dg.groups[proc].hists:
+                                logger.debug(f"Delete pseudodata histogram {pseudo}")
+                                del dg.groups[proc].hists[pseudo]
                 # data
                 if self.theoryFit:
                     if self.theoryFitData is None or self.theoryFitDataCov is None:
@@ -250,25 +275,40 @@ class HDF5Writer(object):
                     # in case pseudodata is given, write first pseudodata into data hist, otherwise write sum of expected processes
                     if chanInfo.pseudoData:
                         logger.warning("Writing combinetf hdf5 input without data, use first pseudodata.")
-                        data_obs = dict_pseudodata[chan][0]
+                        data_obs = self.dict_pseudodata[chan][0]
                     else:
                         logger.warning("Writing combinetf hdf5 input without data, use sum of processes.")
-                        data_obs = sum(dict_norm[chan].values())
+                        data_obs = sum(self.dict_norm[chan].values())
 
-                dict_data_obs[chan] = data_obs
+                self.dict_data_obs[chan] = data_obs
+
+            # free memory
+            if dg.dataName in dg.groups:
+                del dg.groups[dg.dataName].hists[chanInfo.nominalName]
+            for proc in procs_chan:
+                del dg.groups[proc].hists[chanInfo.nominalName]
+            
+            # release original histograms in the proxy objects
+            if chanInfo.pseudoData:
+                for pseudoData in chanInfo.pseudoData:
+                    dg.release_results(f"{chanInfo.nominalName}_{pseudoData}")
+
+            # initialize dictionaties for systematics
+            self.init_data_dicts_channel(chan, procs_chan)
 
             # lnN systematics
-            for name, syst in chanInfo.lnNSystematics.items():
-                logger.info(f"Now in channel {chan} at lnN systematic {name}")
+            for var_name, syst in chanInfo.lnNSystematics.items():
+                logger.info(f"Now in channel {chan} at lnN systematic {var_name}")
 
-                if chanInfo.isExcludedNuisance(name): 
+                if chanInfo.isExcludedNuisance(var_name): 
                     continue
                 procs_syst = [p for p in syst["processes"] if p in procs_chan]
                 if len(procs_syst) == 0:
                     continue
 
                 ksyst = syst["size"]
-                if type(ksyst) is list:
+                asymmetric = type(ksyst) is list
+                if asymmetric:
                     ksystup = ksyst[1]
                     ksystdown = ksyst[0]
                     if ksystup == 0. and ksystdown==0.:
@@ -287,18 +327,16 @@ class HDF5Writer(object):
                     if ksyst == 0.:
                         continue
                     logkavg_proc = math.log(ksyst)*np.ones([nbinschan],dtype=self.dtype)
-                    logkhalfdiff_proc = np.zeros([nbinschan],dtype=self.dtype)
 
                 for proc in procs_syst:
                     logger.debug(f"Now at proc {proc}!")
 
-                    # save for later
-                    norm_proc = dict_norm[chan][proc]
-                    #ensure that systematic tensor is sparse where normalization matrix is sparse
-                    dict_logkavg[chan][proc][name] = np.where(np.equal(norm_proc,0.), 0., logkavg_proc)
-                    dict_logkhalfdiff[chan][proc][name] = np.where(np.equal(norm_proc,0.), 0., logkhalfdiff_proc)
+                    self.book_logk_avg(logkavg_proc, chan, proc, var_name)
 
-                self.book_systematic(syst, name)
+                    if asymmetric:
+                        self.book_logk_halfdiff(logkhalfdiff_proc, chan, proc, var_name)
+
+                self.book_systematic(syst, var_name)
 
             # shape systematics
             for systKey, syst in chanInfo.systematics.items():
@@ -322,11 +360,12 @@ class HDF5Writer(object):
                     chanInfo.nominalName, systName, label="syst",
                     procsToRead=procs_syst, 
                     forceNonzero=forceNonzero and systName != "qcdScaleByHelicity",
-                    preOpMap=syst["actionMap"], preOpArgs=syst["actionArgs"],
+                    preOpMap=syst["preOpMap"], preOpArgs=syst["preOpArgs"], 
                     # Needed to avoid always reading the variation for the fakes, even for procs not specified
                     forceToNominal=forceToNominal,
                     scaleToNewLumi=chanInfo.lumiScale,
-                    nominalIfMissing=not chanInfo.xnorm # for masked channels not all systematics exist (we can skip loading nominal since Fake does not exist)
+                    nominalIfMissing=not chanInfo.xnorm, # for masked channels not all systematics exist (we can skip loading nominal since Fake does not exist)
+                    sumFakesPartial=not chanInfo.ABCD
                 )
 
                 for proc in procs_syst:
@@ -334,18 +373,16 @@ class HDF5Writer(object):
 
                     hvar = dg.groups[proc].hists["syst"]
                     
-                    if syst["doActionBeforeMirror"] and syst["action"]:
-                        logger.debug(f"Do action before mirror")
-                        hvar = syst["action"](hvar, **syst["actionArgs"])
                     if syst["decorrByBin"]:
                         raise NotImplementedError("By bin decorrelation is not supported for writing output in hdf5")
 
                     var_map = chanInfo.systHists(hvar, systKey)
+
                     var_names = [x[:-2] if "Up" in x[-2:] else (x[:-4] if "Down" in x[-4:] else x) 
                         for x in filter(lambda x: x != "", var_map.keys())]
                     # Deduplicate while keeping order
                     var_names = list(dict.fromkeys(var_names))
-                    norm_proc = dict_norm[chan][proc]
+                    norm_proc = self.dict_norm[chan][proc]
 
                     for var_name in var_names:
                         kfac = syst["scale"]
@@ -372,11 +409,7 @@ class HDF5Writer(object):
 
                         if syst["mirror"]:
                             logkavg_proc = get_logk(var_name)
-                            logkhalfdiff_proc = np.zeros_like(logkavg_proc)
                         elif syst["symmetrize"] is not None:
-                            if syst["symmetrize"] not in ["average", "conservative"]:
-                                raise ValueError("Invalid option for 'symmetrize'.  Valid options are 'average' and 'conservative'")
-
                             logkup_proc = get_logk(var_name, "Up")
                             logkdown_proc = get_logk(var_name, "Down")
 
@@ -386,8 +419,6 @@ class HDF5Writer(object):
                             else:
                                 # symmetrize by average of up and down variations
                                 logkavg_proc = 0.5*(logkup_proc - logkdown_proc)
-
-                            logkhalfdiff_proc = np.zeros_like(logkavg_proc)
                         else:
                             logkup_proc = get_logk(var_name, "Up")
                             logkdown_proc = get_logk(var_name, "Down")
@@ -398,20 +429,18 @@ class HDF5Writer(object):
                             logkup_proc = None
                             logkdown_proc = None
 
-                        #ensure that systematic tensor is sparse where normalization matrix is sparse
-                        logkavg_proc = np.where(np.equal(norm_proc,0.), 0., logkavg_proc)
-                        logkhalfdiff_proc = np.where(np.equal(norm_proc,0.), 0., logkhalfdiff_proc)
+                            self.book_logk_halfdiff(logkhalfdiff_proc, chan, proc, var_name)
 
-                        # save for later
-                        dict_logkavg[chan][proc][var_name] = logkavg_proc
-                        dict_logkhalfdiff[chan][proc][var_name] = logkhalfdiff_proc
-
+                        self.book_logk_avg(logkavg_proc, chan, proc, var_name)
                         self.book_systematic(syst, var_name)
 
                     # free memory
                     for var in var_map.keys():
                         var_map[var] = None
-                    dg.groups[proc].hists["syst"] = None
+                    del dg.groups[proc].hists["syst"]
+
+                # release original histograms in the proxy objects
+                dg.release_results(f"{chanInfo.nominalName}_{systName}")
 
         procs = signals + bkgs
         nproc = len(procs)
@@ -426,17 +455,17 @@ class HDF5Writer(object):
             masked = chanInfo.xnorm and not self.theoryFit
             if masked:
                 continue
-            data_obs[ibin:ibin+nbinschan] = dict_data_obs[chan]
+            data_obs[ibin:ibin+nbinschan] = self.dict_data_obs[chan]
 
-            for idx, hpseudo in enumerate(dict_pseudodata[chan]):
+            for idx, hpseudo in enumerate(self.dict_pseudodata[chan]):
                 pseudodata[ibin:ibin+nbinschan, idx] = hpseudo
 
             for iproc, proc in enumerate(procs):
-                if proc not in dict_norm[chan]:
+                if proc not in self.dict_norm[chan]:
                     continue
 
-                sumw[ibin:ibin+nbinschan] += dict_norm[chan][proc]
-                sumw2[ibin:ibin+nbinschan] += dict_sumw2[chan][proc]
+                sumw[ibin:ibin+nbinschan] += self.dict_norm[chan][proc]
+                sumw2[ibin:ibin+nbinschan] += self.dict_sumw2[chan][proc]
             
             ibin += nbinschan
 
@@ -446,7 +475,7 @@ class HDF5Writer(object):
         nbinsfull = sum(ibins)
 
         ibin = 0
-        if args.sparse:
+        if self.sparse:
             logger.info(f"Write out sparse array")
 
             idxdtype = 'int32'
@@ -465,9 +494,11 @@ class HDF5Writer(object):
             logk_sparse_values = np.zeros([logk_sparse_size],self.dtype)
 
             for nbinschan, chan in zip(ibins, self.get_channels()):
-                dict_norm_chan = dict_norm[chan]
-                dict_logkavg_chan = dict_logkavg[chan]
-                dict_logkhalfdiff_chan = dict_logkhalfdiff[chan]
+                dict_norm_chan = self.dict_norm[chan]
+                dict_logkavg_chan_indices = self.dict_logkavg_indices[chan]
+                dict_logkavg_chan_values = self.dict_logkavg_values[chan]
+                dict_logkhalfdiff_chan_indices = self.dict_logkhalfdiff_indices[chan]
+                dict_logkhalfdiff_chan_values = self.dict_logkhalfdiff_values[chan]
 
                 for iproc, proc in enumerate(procs):
                     if proc not in dict_norm_chan:
@@ -494,18 +525,17 @@ class HDF5Writer(object):
                     
                     norm_idx_map = np.cumsum(np.not_equal(norm_proc, 0.)) - 1 + oldlength
 
-                    dict_logkavg_proc = dict_logkavg_chan[proc]
-                    dict_logkhalfdiff_proc = dict_logkhalfdiff_chan[proc]
+                    dict_logkavg_proc_indices = dict_logkavg_chan_indices[proc]
+                    dict_logkavg_proc_values = dict_logkavg_chan_values[proc]
+                    dict_logkhalfdiff_proc_indices = dict_logkhalfdiff_chan_indices[proc]
+                    dict_logkhalfdiff_proc_values = dict_logkhalfdiff_chan_values[proc]
                     for isyst, syst in enumerate(systs):
-                        if syst not in dict_logkavg_proc.keys():
+                        if syst not in dict_logkavg_proc_indices.keys():
                             continue
 
-                        logkavg_proc = dict_logkavg_proc[syst]
-                        logkhalfdiff_proc = dict_logkhalfdiff_proc[syst]
+                        logkavg_proc_indices = dict_logkavg_proc_indices[syst]
+                        logkavg_proc_values = dict_logkavg_proc_values[syst]
 
-                        logkavg_proc_indices = np.transpose(np.nonzero(logkavg_proc))
-                        logkavg_proc_values = np.reshape(logkavg_proc[logkavg_proc_indices],[-1])
-                        
                         nvals_proc = len(logkavg_proc_values)
                         oldlength = logk_sparse_size
                         logk_sparse_size = oldlength + nvals_proc
@@ -525,34 +555,37 @@ class HDF5Writer(object):
                         
                         logk_sparse_values[oldlength:logk_sparse_size] = logkavg_proc_values
                         logkavg_proc_values = None
-                        
-                        logkhalfdiff_proc_indices = np.transpose(np.nonzero(logkhalfdiff_proc))
-                        logkhalfdiff_proc_values = np.reshape(logkhalfdiff_proc[logkhalfdiff_proc_indices],[-1])
-                                
-                        nvals_proc = len(logkhalfdiff_proc_values)
-                        oldlength = logk_sparse_size
-                        logk_sparse_size = oldlength + nvals_proc
-                        logk_sparse_normindices.resize([logk_sparse_size,1])
-                        logk_sparse_systindices.resize([logk_sparse_size,1])
-                        logk_sparse_values.resize([logk_sparse_size])
-                                
-                        #out_indices = np.array([[ibin,iproc,isyst,1]]) + np.pad(logkhalfdiff_proc_indices,((0,0),(0,3)),'constant')
-                        #first dimension of output indices are NOT in the dense [nbin,nproc] space, but rather refer to indices in the norm_sparse vectors
-                        #second dimension is flattened in the [2,nsyst] space, where logkhalfdiff corresponds to [1,isyst] flattened to nsyst + isyst
-                        #two dimensions are kept in separate arrays for now to reduce the number of copies needed later
-                        out_normindices = norm_idx_map[logkhalfdiff_proc_indices]
-                        logkhalfdiff_proc_indices = None
-                        
-                        logk_sparse_normindices[oldlength:logk_sparse_size] = out_normindices
-                        logk_sparse_systindices[oldlength:logk_sparse_size] = nsyst + isyst
-                        out_normindices = None
-                        
-                        logk_sparse_values[oldlength:logk_sparse_size] = logkhalfdiff_proc_values
-                    logkhalfdiff_proc_values = None        
-    
+
+                        if syst in dict_logkhalfdiff_proc_indices:
+                            logkhalfdiff_proc_indices = dict_logkhalfdiff_proc_indices[syst]
+                            logkhalfdiff_proc_values = dict_logkhalfdiff_proc_values[syst]
+                            
+                            nvals_proc = len(logkhalfdiff_proc_values)
+                            oldlength = logk_sparse_size
+                            logk_sparse_size = oldlength + nvals_proc
+                            logk_sparse_normindices.resize([logk_sparse_size,1])
+                            logk_sparse_systindices.resize([logk_sparse_size,1])
+                            logk_sparse_values.resize([logk_sparse_size])
+                                    
+                            #out_indices = np.array([[ibin,iproc,isyst,1]]) + np.pad(logkhalfdiff_proc_indices,((0,0),(0,3)),'constant')
+                            #first dimension of output indices are NOT in the dense [nbin,nproc] space, but rather refer to indices in the norm_sparse vectors
+                            #second dimension is flattened in the [2,nsyst] space, where logkhalfdiff corresponds to [1,isyst] flattened to nsyst + isyst
+                            #two dimensions are kept in separate arrays for now to reduce the number of copies needed later
+                            out_normindices = norm_idx_map[logkhalfdiff_proc_indices]
+                            logkhalfdiff_proc_indices = None
+                            
+                            logk_sparse_normindices[oldlength:logk_sparse_size] = out_normindices
+                            logk_sparse_systindices[oldlength:logk_sparse_size] = nsyst + isyst
+                            out_normindices = None
+                            
+                            logk_sparse_values[oldlength:logk_sparse_size] = logkhalfdiff_proc_values
+                            logkhalfdiff_proc_values = None
+
                     # free memory
-                    logkavg_proc = None
-                    logkhalfdiff_proc = None
+                    dict_logkavg_proc_indices = None
+                    dict_logkavg_proc_values = None
+                    dict_logkhalfdiff_proc_indices = None
+                    dict_logkhalfdiff_proc_values = None
 
                 # free memory
                 norm_proc = None
@@ -599,9 +632,9 @@ class HDF5Writer(object):
             logk = np.zeros([nbinsfull,nproc,2,nsyst], self.dtype)
 
             for nbinschan, chan in zip(ibins, self.get_channels()):
-                dict_norm_chan = dict_norm[chan]
-                dict_logkavg_chan = dict_logkavg[chan]
-                dict_logkhalfdiff_chan = dict_logkhalfdiff[chan]
+                dict_norm_chan = self.dict_norm[chan]
+                dict_logkavg_chan = self.dict_logkavg[chan]
+                dict_logkhalfdiff_chan = self.dict_logkhalfdiff[chan]
 
                 for iproc, proc in enumerate(procs):
                     if proc not in dict_norm_chan:
@@ -615,7 +648,8 @@ class HDF5Writer(object):
                             continue
 
                         logk[ibin:ibin+nbinschan,iproc,0,isyst] = dict_logkavg_proc[syst]
-                        logk[ibin:ibin+nbinschan,iproc,1,isyst] = dict_logkhalfdiff_proc[syst]
+                        if syst in dict_logkhalfdiff_proc.keys():
+                            logk[ibin:ibin+nbinschan,iproc,1,isyst] = dict_logkhalfdiff_proc[syst]
                         
                 ibin += nbinschan
 
@@ -735,7 +769,7 @@ class HDF5Writer(object):
         nbytes += writeFlatInChunks(kstat, f, "hkstat", maxChunkBytes = self.chunkSize)
         kstat = None
 
-        if args.sparse:
+        if self.sparse:
             nbytes += writeSparse(norm_sparse_indices, norm_sparse_values, norm_sparse_dense_shape, f, "hnorm_sparse", maxChunkBytes = self.chunkSize)
             norm_sparse_indices = None
             norm_sparse_values = None
@@ -749,7 +783,25 @@ class HDF5Writer(object):
             logk = None
 
         logger.info(f"Total raw bytes in arrays = {nbytes}")
-        
+
+
+    def book_logk_avg(self, *args):
+        self.book_logk(self.dict_logkavg, self.dict_logkavg_indices, self.dict_logkavg_values, *args)
+    
+    def book_logk_halfdiff(self, *args):
+        self.book_logk(self.dict_logkhalfdiff, self.dict_logkhalfdiff_indices, self.dict_logkhalfdiff_values, *args)
+
+    def book_logk(self, dict_logk, dict_logk_indices, dict_logk_values, logk, chan, proc, syst_name):
+        norm_proc = self.dict_norm[chan][proc]
+        #ensure that systematic tensor is sparse where normalization matrix is sparse
+        logk = np.where(np.equal(norm_proc,0.), 0., logk)
+        if self.sparse:
+            indices = np.transpose(np.nonzero(logk))
+            dict_logk_indices[chan][proc][syst_name] = indices
+            dict_logk_values[chan][proc][syst_name] = np.reshape(logk[indices],[-1])
+        else:
+            dict_logk[chan][proc][syst_name] = logk
+
     def book_systematic(self, syst, name):
         logger.debug(f"book systematic {name}")
         if syst.get('noProfile', False):

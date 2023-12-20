@@ -24,7 +24,7 @@ outdir = output_tools.make_plot_dir(args.outpath, args.outfolder)
 
 groups = Datagroups(args.infile, filterGroups=args.procFilters, excludeGroups=None if args.procFilters else ['QCD'])
 
-groups.setGenAxes([]) # set gen axes empty to not integrate over when loading
+groups.setGenAxes(sum_gen_axes=[]) # set gen axes empty to not integrate over when loading
 
 if "Wmunu" in groups.groups:
     groups.copyGroup("Wmunu", "Wmunu_qGen0", member_filter=lambda x: x.name.startswith("Wminus"))

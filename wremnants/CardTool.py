@@ -1,6 +1,5 @@
 from collections import OrderedDict
 from wremnants import histselections as sel
-from wremnants.combine_helpers import setSimultaneousABCD
 from utilities import boostHistHelpers as hh, common, logging
 from utilities.io_tools import output_tools
 import narf
@@ -67,12 +66,10 @@ class CardTool(object):
         self.keepSyst = None # to override previous one with exceptions for special cases
         self.lumiScale = 1.
         self.fit_axes = None
-        self.fakerateAxes = ["pt", "eta", "charge"]
         self.xnorm = xnorm
         self.ABCD = ABCD
         self.real_data = real_data
         self.absolutePathShapeFileInCard = False
-        self.fakerateIntegrationAxes = []
         self.excludeProcessForChannel = {} # can be used to exclue some POI when runnig a specific name (use case, force gen and reco charges to match)
         self.chargeIdDict = {"minus" : {"val" : -1, "id" : "q0", "badId" : "q1"},
                              "plus"  : {"val" : 1., "id" : "q1", "badId" : "q0"},
@@ -115,12 +112,20 @@ class CardTool(object):
             
     def setFitAxes(self, axes):
         self.fit_axes = axes[:]
+        self._setFakerateIntegrationAxes()
 
-    def setFakerateAxes(self, fakerate_axes=["pt", "eta", "charge"]):
-        self.fakerateAxes = fakerate_axes
+    def setFakerateAxes(self, fakerate_axes=["eta", "pt", "charge"]):
+        self.datagroups.fakerate_axes = fakerate_axes
+        self._setFakerateIntegrationAxes()
+
+    def getFakerateAxes(self):
+        return self.datagroups.fakerate_axes
+
+    def _setFakerateIntegrationAxes(self):
+        self.datagroups.setFakerateIntegrationAxes([x for x in self.fit_axes if x not in self.datagroups.fakerate_axes])
         
     def getFakerateIntegrationAxes(self):
-        return [x for x in self.fit_axes if x not in self.fakerateAxes]
+        return self.datagroups.fakerate_integration_axes
 
     def setProcsNoStatUnc(self, procs, resetList=True):
         if self.skipHist:
@@ -283,16 +288,14 @@ class CardTool(object):
                                                 }
             })
 
-    # action will be applied to the sum of all the individual samples contributing, actionMap should be used
-    # to apply a separate action per process. this is needed for example for the scale uncertainty split
-    # by pt or helicity
-    # action takes place after mirroring
-    # use doActionBeforeMirror to do something before it instead (so the mirroring will act on the modified histogram)
+    # preOp is a function to apply per process, preOpMap can be used with a dict for a speratate function for each process, 
+    #   it is executed before summing the processes. Arguments can be specified with preOpArgs 
+    # action will be applied to the sum of all the individual samples contributing, arguments can be specified with actionArgs
     # decorrelateByBin is to customize eta-pt decorrelation: pass dictionary with {axisName: [bin edges]}
     def addSystematic(self, name, systAxes=[], systAxesFlow=[], outNames=None, skipEntries=None, labelsByAxis=None, 
                       baseName="", mirror=False, mirrorDownVarEqualToUp=False, mirrorDownVarEqualToNomi=False, symmetrize = "average",
                       scale=1, processes=None, group=None, noi=False, noConstraint=False, noProfile=False,
-                      action=None, doActionBeforeMirror=False, actionArgs={}, actionMap={},
+                      preOp=None, preOpMap=None, preOpArgs={}, action=None, actionArgs={}, 
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
                       rename=None, splitGroup={}, decorrelateByBin={}, formatWithValue=None,
                       customizeNuisanceAttributes={},
@@ -301,23 +304,30 @@ class CardTool(object):
         # for now better not to use the options, although it might be useful to keep it implemented
         if mirrorDownVarEqualToUp or mirrorDownVarEqualToNomi:
             raise ValueError("mirrorDownVarEqualToUp and mirrorDownVarEqualToNomi currently lead to pathological results in the fit, please keep them False")
-        
-        if isinstance(processes, str):
-            processes = [processes]
-        # Need to make an explicit copy of the array before appending
-        procs_to_add = [x for x in (self.allMCProcesses() if processes is None else processes)]
-        procs_to_add = self.expandProcesses(procs_to_add)
-        if passToFakes and self.getFakeName() not in procs_to_add and not self.ABCD:
-            procs_to_add.append(self.getFakeName())
 
         if not mirror and (mirrorDownVarEqualToUp or mirrorDownVarEqualToNomi):
             raise ValueError("mirrorDownVarEqualToUp and mirrorDownVarEqualToNomi requires mirror=True")
 
         if mirrorDownVarEqualToUp and mirrorDownVarEqualToNomi:
             raise ValueError("mirrorDownVarEqualToUp and mirrorDownVarEqualToNomi cannot be both True")
-            
-        if action and actionMap:
-            raise ValueError("Only one of action and actionMap args are allowed")
+
+        if symmetrize not in [None, "average", "conservative"]:
+            raise ValueError("Invalid option for 'symmetrize'.  Valid options are 'average' and 'conservative'")
+
+        if preOp and preOpMap:
+            raise ValueError("Only one of preOp and preOpMap args are allowed")
+
+        if isinstance(processes, str):
+            processes = [processes]
+        # Need to make an explicit copy of the array before appending
+        procs_to_add = [x for x in (self.allMCProcesses() if processes is None else processes)]
+        procs_to_add = self.expandProcesses(procs_to_add)
+
+        if preOp:
+            preOpMap = {name : preOp for name in set([m.name for g in procs_to_add for m in self.datagroups.groups[g].members])}
+
+        if passToFakes and self.getFakeName() not in procs_to_add and not self.ABCD:
+            procs_to_add.append(self.getFakeName())
 
         # protection when the input list is empty because of filters but the systematic is built reading the nominal
         # since the nominal reads all filtered processes regardless whether a systematic is passed to them or not
@@ -346,9 +356,9 @@ class CardTool(object):
                 "mirrorDownVarEqualToUp" : mirrorDownVarEqualToUp,
                 "mirrorDownVarEqualToNomi" : mirrorDownVarEqualToNomi,
                 "symmetrize" : symmetrize,
+                "preOpMap" : preOpMap,
+                "preOpArgs" : preOpArgs,
                 "action" : action,
-                "doActionBeforeMirror" : doActionBeforeMirror,
-                "actionMap" : actionMap,
                 "actionArgs" : actionArgs,
                 "systNameReplace" : systNameReplace,
                 "noConstraint" : noConstraint,
@@ -368,8 +378,7 @@ class CardTool(object):
         self.datagroups.loadHistsForDatagroups(
             baseName=self.nominalName, syst=syst, label="syst",
             procsToRead=[proc],
-            scaleToNewLumi=self.lumiScale, 
-            fakerateIntegrationAxes=self.getFakerateIntegrationAxes())
+            scaleToNewLumi=self.lumiScale)
         return self.datagroups.getDatagroups()[proc].hists["syst"]
 
     def getNominalHistForSignal(self):
@@ -501,11 +510,11 @@ class CardTool(object):
         systAxesLabels = systInfo.get("labelsByAxis", systAxes)
 
         # Jan: moved above the mirror action, as this action can cause mirroring
-        if systInfo["action"] and not systInfo["doActionBeforeMirror"]:
+        if systInfo["action"]:
             hvar = systInfo["action"](hvar, **systInfo["actionArgs"])
         if self.outfile:
             self.outfile.cd() # needed to restore the current directory in case the action opens a new root file
-            
+
         axNames = systAxes[:]
         axLabels = systAxesLabels[:]
         if hvar.axes[-1].name == "mirror":
@@ -717,30 +726,24 @@ class CardTool(object):
             systInfo = self.systematics[syst]
             procDict = self.datagroups.getDatagroups()
             hnom = procDict[proc].hists[self.nominalName]
-            #logger.debug(f"{proc}: {syst}: {h.axes.name}")
-            if systInfo["doActionBeforeMirror"] and systInfo["action"]:
-                logger.debug("Applying action before mirroring:")
-                logger.debug(f"action={systInfo['action']}     actionArgs={systInfo['actionArgs']}")
-                h = systInfo["action"](h, **systInfo["actionArgs"])
-                self.outfile.cd() # needed to restore the current directory in case the action opens a new root file
             if systInfo["mirror"]:
                 h = hh.extendHistByMirror(h, hnom,
                                           downAsUp=systInfo["mirrorDownVarEqualToUp"],
-                                          downAsNomi=systInfo["mirrorDownVarEqualToNomi"])
+                                          downAsNomi=systInfo["mirrorDownVarEqualToNomi"])            
             if systInfo["decorrByBin"]:
                 decorrelateByBin = systInfo["decorrByBin"]
+
         logger.info(f"   {syst} for process {proc}")
         var_map = self.systHists(h, syst)
 
-        if systInfo and systInfo["symmetrize"] is not None:
-                if systInfo["symmetrize"] not in ["average", "conservative"]:
-                    raise ValueError("Invalid option for 'symmetrize'.  Valid options are 'average' and 'conservative'")
+        if syst != self.nominalName:
+            if not systInfo["mirror"] and systInfo["symmetrize"] is not None:
                 self.symmetrizeUpDown(var_map, hnom, conservative = systInfo["symmetrize"]=="conservative")
 
-        if check_systs and syst != self.nominalName:
-            self.checkSysts(var_map, proc,
-                            skipSameSide=systInfo["mirrorDownVarEqualToUp"],
-                            skipOneAsNomi=systInfo["mirrorDownVarEqualToNomi"])
+            if check_systs:
+                self.checkSysts(var_map, proc,
+                                skipSameSide=systInfo["mirrorDownVarEqualToUp"],
+                                skipOneAsNomi=systInfo["mirrorDownVarEqualToNomi"])
         setZeroStatUnc = False
         if proc in self.noStatUncProcesses:
             logger.warning(f"Zeroing statistical uncertainty for process {proc}")
@@ -764,8 +767,7 @@ class CardTool(object):
                 procsToRead=processes,
                 scaleToNewLumi=self.lumiScale, 
                 forceNonzero=forceNonzero,
-                sumFakesPartial=not self.ABCD,
-                fakerateIntegrationAxes=self.getFakerateIntegrationAxes())
+                sumFakesPartial=not self.ABCD)
             procDict = datagroups.getDatagroups()
             hists = [procDict[proc].hists[pseudoData] for proc in processes if proc not in processesFromNomi]
             # now add possible processes from nominal
@@ -774,17 +776,15 @@ class CardTool(object):
                 logger.warning(f"These processes are taken from nominal datagroups: {processesFromNomi}")
                 datagroupsFromNomi = self.datagroups
                 datagroupsFromNomi.loadHistsForDatagroups(
-                    baseName=self.nominalName, syst=self.nominalName, # CHECK: shouldn't it be syst=pseudoData?
+                    baseName=self.nominalName, syst=self.nominalName,
                     procsToRead=processesFromNomi, 
                     label=pseudoData,
                     scaleToNewLumi=self.lumiScale,
                     forceNonzero=forceNonzero,
-                    sumFakesPartial=not self.ABCD,
-                    fakerateIntegrationAxes=self.getFakerateIntegrationAxes())
+                    sumFakesPartial=not self.ABCD)
                 procDictFromNomi = datagroupsFromNomi.getDatagroups()
                 hists.extend([procDictFromNomi[proc].hists[pseudoData] for proc in processesFromNomi])
             # done, now sum all histograms
-
             hdata = hh.sumHists(hists)
             if self.pseudoDataAxes[idx] is None:
                 extra_ax = [ax for ax in hdata.axes.name if ax not in self.fit_axes]
@@ -853,10 +853,7 @@ class CardTool(object):
             label=self.nominalName, 
             scaleToNewLumi=self.lumiScale, 
             forceNonzero=forceNonzero,
-            sumFakesPartial=not self.ABCD,
-            fakerateIntegrationAxes=self.getFakerateIntegrationAxes())
-        if self.ABCD and not self.xnorm:
-            setSimultaneousABCD(self)
+            sumFakesPartial=not self.ABCD)
         
         self.writeForProcesses(self.nominalName, processes=self.datagroups.groups.keys(), label=self.nominalName, check_systs=check_systs)
         self.loadNominalCard()
@@ -880,10 +877,10 @@ class CardTool(object):
                 self.nominalName, systName, label="syst",
                 procsToRead=processes, 
                 forceNonzero=forceNonzero and systName != "qcdScaleByHelicity",
-                preOpMap=systMap["actionMap"], preOpArgs=systMap["actionArgs"],
-                forceToNominal=forceToNominal,
+                preOpMap=systMap["preOpMap"], preOpArgs=systMap["preOpArgs"], 
                 scaleToNewLumi=self.lumiScale,
-                fakerateIntegrationAxes=self.getFakerateIntegrationAxes(),
+                forceToNominal=forceToNominal,
+                sumFakesPartial=not self.ABCD
             )
             self.writeForProcesses(syst, label="syst", processes=processes, check_systs=check_systs)
 
@@ -1104,10 +1101,10 @@ class CardTool(object):
         if self.fit_axes:
             axes = self.fit_axes[:]
             if self.ABCD and not self.xnorm:
-                if self.nameMT not in axes:
-                    axes.append(self.nameMT)
                 if common.passIsoName not in axes:
                     axes.append(common.passIsoName)
+                if self.nameMT not in axes:
+                    axes.append(self.nameMT)
             # don't project h into itself when axes to project are all axes
             if any (ax not in h.axes.name for ax in axes):
                 logger.error("Request to project some axes not present in the histogram")

@@ -38,8 +38,7 @@ def make_muon_calibration_helpers(args,
     # max weight = 10 to protect against outliers
     uncertainty_helper = ROOT.wrem.calibration_uncertainty_helper[type(uncertainty_hist_cpp)](ROOT.std.move(uncertainty_hist_cpp), 9., 10.)
 
-    down_up_axis = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "downUpVar")
-    uncertainty_helper.tensor_axes = (uncertainty_hist.axes["calvar"], down_up_axis)
+    uncertainty_helper.tensor_axes = (uncertainty_hist.axes["calvar"], common.down_up_axis)
 
     return mc_helper, data_helper, uncertainty_helper
 
@@ -184,12 +183,14 @@ def make_muon_smearing_helpers(filename = f"{data_dir}/calibration/smearingrel_s
     with lz4.frame.open(filenamevar, "rb") as fin:
         smearing_variations = pickle.load(fin)
 
-    neig = smearing_variations.axes[-1].size
+    var_axis = smearing_variations.axes[-1]
+
+    neig = var_axis.size
     smearing_variations_boost = narf.hist_to_pyroot_boost(smearing_variations, tensor_rank = 1)
 
     helper_var = ROOT.wrem.SmearingUncertaintyHelper[type(smearing_variations_boost), neig](ROOT.std.move(smearing_variations_boost))
 
-    helper_var.tensor_axes = [smearing_variations.axes[-1]]
+    helper_var.tensor_axes = [var_axis]
 
     return helper, helper_var
 
@@ -207,10 +208,12 @@ def add_resolution_uncertainty(df, axes, results, nominal_cols, smearing_uncerta
         ]
     )
 
+    var_axes = smearing_uncertainty_helper.tensor_axes
+
     muonResolutionSyst_responseWeights = df.HistoBoost(
             "nominal_muonResolutionSyst_responseWeights", axes,
             [*nominal_cols, "muonResolutionSyst_weights"],
-            tensor_axes = smearing_uncertainty_helper.tensor_axes, storage=hist.storage.Double()
+            tensor_axes = var_axes, storage=hist.storage.Double()
         )
     results.append(muonResolutionSyst_responseWeights)
 
@@ -260,7 +263,7 @@ def make_jpsi_crctn_helper(filepath):
 
 def make_jpsi_crctn_unc_helper(
     filepath_correction, filepath_tflite, 
-    n_scale_params = 3, n_tot_params = 4, n_eta_bins = 48, scale = 1.0, isW = True,
+    n_scale_params = 3, n_tot_params = 4, n_eta_bins = 48, scale = 7.2, isW = True,
     scale_var_method = 'smearingWeightsSplines', dummy_mu_scale_var = False, dummy_var_mag = 1e-4
 ):
     f = uproot.open(filepath_correction)
