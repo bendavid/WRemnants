@@ -296,7 +296,7 @@ def build_graph(df, dataset):
 
     # gen match to bare muons to select only prompt muons from MC processes, but also including tau decays
     # status flags in NanoAOD: https://cms-nanoaod-integration.web.cern.ch/autoDoc/NanoAODv9/2016ULpostVFP/doc_TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8_RunIISummer20UL16NanoAODv9-106X_mcRun2_asymptotic_v17-v1.html
-    postFSRmuonDef = "GenPart_status == 1 && (GenPart_statusFlags & 1 || GenPart_statusFlags & (5<<1)) && abs(GenPart_pdgId) == 13"
+    postFSRmuonDef = "GenPart_status == 1 && (GenPart_statusFlags & 1 || GenPart_statusFlags & (1<<5)) && abs(GenPart_pdgId) == 13"
     if not dataset.is_data and not isQCDMC and not args.noGenMatchMC:
         df = df.Define("postFSRmuons", postFSRmuonDef)
         df = df.Filter("wrem::hasMatchDR2(goodMuons_eta0,goodMuons_phi0,GenPart_eta[postFSRmuons],GenPart_phi[postFSRmuons],0.09)")
