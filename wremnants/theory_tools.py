@@ -221,7 +221,7 @@ def define_postfsr_vars(df, mode=None):
             df = df.Define("postfsrLep_idx",     "ROOT::VecOps::ArgMax(GenPart_pt[postfsrLep])")
             df = df.Define("postfsrAntiLep_idx", "ROOT::VecOps::ArgMax(GenPart_pt[postfsrAntiLep])")
 
-            df = df.Define("postfsrLep_pt",     "event % 2 == 0 ? GenPart_pt[postfsrLep][postfsrLep_idx] : GenPart_pt[postfsrAntiLep][postfsrAntiLep_idx]")
+            df = df.Define("postfsrLep_pt",     "event % 2 == 0 ? static_cast<double>(GenPart_pt[postfsrLep][postfsrLep_idx]) : static_cast<double>(GenPart_pt[postfsrAntiLep][postfsrAntiLep_idx])")
             df = df.Define("postfsrLep_eta",    "event % 2 == 0 ? GenPart_eta[postfsrLep][postfsrLep_idx] : GenPart_eta[postfsrAntiLep][postfsrAntiLep_idx]")
             df = df.Define("postfsrLep_phi",    "event % 2 == 0 ? GenPart_phi[postfsrLep][postfsrLep_idx] : GenPart_phi[postfsrAntiLep][postfsrAntiLep_idx]")
             df = df.Define("postfsrLep_mass",   "event % 2 == 0 ? wrem::get_pdgid_mass(GenPart_pdgId[postfsrLep][postfsrLep_idx]) : wrem::get_pdgid_mass(GenPart_pdgId[postfsrAntiLep][postfsrAntiLep_idx])")
@@ -232,20 +232,20 @@ def define_postfsr_vars(df, mode=None):
             df = df.Define("postfsrOtherLep_phi",  "event % 2 == 0 ? GenPart_phi[postfsrAntiLep][postfsrAntiLep_idx] : GenPart_phi[postfsrLep][postfsrLep_idx]")
             df = df.Define("postfsrOtherLep_mass", "event % 2 == 0 ? wrem::get_pdgid_mass(GenPart_pdgId[postfsrLep][postfsrLep_idx]) : wrem::get_pdgid_mass(GenPart_pdgId[postfsrAntiLep][postfsrAntiLep_idx])")
         
-            df = df.Define("postfsrOtherLep_absEta", "std::fabs(postfsrOtherLep_eta)")
+            df = df.Define("postfsrOtherLep_absEta", "static_cast<double>(std::fabs(postfsrOtherLep_eta))")
         else:
             # find the leading charged lepton or antilepton idx
             df = df.Define("postfsrLep", "postfsrLeptons && (abs(GenPart_pdgId)==11 || abs(GenPart_pdgId)==13)")
             df = df.Define("postfsrLep_idx", "ROOT::VecOps::ArgMax(GenPart_pt[postfsrLep])")
 
-            df = df.Define("postfsrLep_pt", "GenPart_pt[postfsrLep][postfsrLep_idx]")
+            df = df.Define("postfsrLep_pt", "static_cast<double>(GenPart_pt[postfsrLep][postfsrLep_idx])")
             df = df.Define("postfsrLep_eta", "GenPart_eta[postfsrLep][postfsrLep_idx]")
             df = df.Define("postfsrLep_phi", "GenPart_phi[postfsrLep][postfsrLep_idx]")
             df = df.Define("postfsrLep_mass", "wrem::get_pdgid_mass(GenPart_pdgId[postfsrLep][postfsrLep_idx])")
             
             df = df.Define("postfsrLep_charge", "GenPart_pdgId[postfsrLep][postfsrLep_idx] > 0 ? -1 : 1")
 
-        df = df.Define("postfsrLep_absEta", "std::fabs(postfsrLep_eta)")
+        df = df.Define("postfsrLep_absEta", "static_cast<double>(std::fabs(postfsrLep_eta))")
         
         if mode in ["wmass", "wlike"]:
             if mode == "wlike":

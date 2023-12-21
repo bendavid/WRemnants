@@ -245,10 +245,8 @@ def build_graph(df, dataset):
 
     # gen match to bare muons to select only prompt muons from MC processes, but also including tau decays
     if not dataset.is_data and not isQCDMC and not args.noGenMatchMC:
-        if flavor == "mu":
-            df = df.Filter("wrem::hasMatchDR2(lep_eta,lep_phi,GenPart_eta[postfsrMuons],GenPart_phi[postfsrMuons],0.09)")
-        else:
-            df = df.Filter("wrem::hasMatchDR2(lep_eta,lep_phi,GenPart_eta[postfsrElectrons],GenPart_phi[postfsrElectrons],0.09)")
+        postFSRLeps = "postfsrMuons" if flavor == "mu" else "postfsrElectrons"
+        df = df.Filter(f"wrem::hasMatchDR2(lep_eta,lep_phi,GenPart_eta[{postFSRLeps}],GenPart_phi[{postFSRLeps}],0.09)")
 
     df = df.Define("noTrigMatch", "Sum(trigMatch)")
     results.append(df.HistoBoost("noTrigMatch", [axis_lin], ["noTrigMatch", "nominal_weight"]))

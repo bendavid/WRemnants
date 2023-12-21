@@ -89,11 +89,6 @@ for proc in procs:
     h2Dratios = []
 
     def make_correction(h1, h2, name):
-        if "charge" in h1.axes.name:
-            h1 = h1.project(*[a for a in h1.axes.name if a != "charge"])
-        if "charge" in h2.axes.name:
-            h2 = h2.project(*[a for a in h2.axes.name if a != "charge"])
-
         hratio = hh.divideHists(h1, h2)
         if not args.noSmoothing and not len(hratio.axes)>1:
             # 2D smoothing
