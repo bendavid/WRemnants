@@ -579,8 +579,8 @@ def setup(args, inputFile, fitvar, xnorm=False):
             ewUnc = ["virtual_ew", "horaceqedew_FSR"]
         else:
             ewUnc = ["horacenloew", ]
-        ewUncs = [*ewUnc if u=="default" else u for u in ewUncs]
-
+        ewUncs = [*[u for u in ewUncs if u!="default"], *ewUnc]
+        
     for ewUnc in ewUncs:
         if datagroups.flavor == "e":
             logger.warning("EW uncertainties are not implemented for electrons, proceed w/o EW uncertainty")

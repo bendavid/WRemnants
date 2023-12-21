@@ -245,6 +245,7 @@ def build_graph(df, dataset):
 
     # gen match to bare muons to select only prompt muons from MC processes, but also including tau decays
     if not dataset.is_data and not isQCDMC and not args.noGenMatchMC:
+        df = theory_tools.define_postfsr_vars(df)
         postFSRLeps = "postfsrMuons" if flavor == "mu" else "postfsrElectrons"
         df = df.Filter(f"wrem::hasMatchDR2(lep_eta,lep_phi,GenPart_eta[{postFSRLeps}],GenPart_phi[{postFSRLeps}],0.09)")
 

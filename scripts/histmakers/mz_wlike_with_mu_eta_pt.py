@@ -22,7 +22,7 @@ parser = common.set_parser_default(parser, "genVars", ["qGen", "ptGen", "absEtaG
 parser = common.set_parser_default(parser, "genBins", [18, 0])
 parser = common.set_parser_default(parser, "pt", [34, 26, 60])
 parser = common.set_parser_default(parser, "aggregateGroups", ["Diboson", "Top", "Wtaunu", "Wmunu"])
-parser = common.set_parser_default(parser, "theoryCorr", ["scetlib_dyturbo", "virtual_ew_wlike"])
+parser = common.set_parser_default(parser, "theoryCorr", ["scetlib_dyturbo", "virtual_ew_wlike", "horaceqedew_FSR"])
 
 args = parser.parse_args()
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
@@ -202,7 +202,6 @@ def build_graph(df, dataset):
 
         logger.debug(f"Exp weight defined: {weight_expr}")
         df = df.Define("exp_weight", weight_expr)
-        df = theory_tools.define_postfsr_vars(df, mode="wlike")
         df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
 
     results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"], storage=hist.storage.Double()))

@@ -58,7 +58,7 @@ def define_gen_level(df, gen_level, dataset_name, mode="wmass"):
             df = df.Define("absEtaOtherGen", "event % 2 == 0 ? genlanti.pt() : genl.pt()")
 
     elif gen_level == "postFSR":
-        df = theory_tools.define_postfsr_vars(df)
+        df = theory_tools.define_postfsr_vars(df, mode=mode)
 
         df = df.Alias("ptGen", f"postfsrLep_pt")
         df = df.Alias("absEtaGen", f"postfsrLep_absEta")           
