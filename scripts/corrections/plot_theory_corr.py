@@ -13,12 +13,14 @@ from utilities.styles import styles
 from wremnants import theory_corrections, plot_tools
 
 parser = common.plot_parser()
-parser.add_argument("--theoryCorr", nargs="*", default=["scetlib_dyturbo", "horacenloew"], choices=theory_corrections.valid_theory_corrections(),
+parser.add_argument("--theoryCorr", nargs="*", default=["scetlib_dyturbo", "horacenloew"], #choices=theory_corrections.valid_theory_corrections(),
     help="Apply corrections from indicated generator. First will be nominal correction.")
 parser.add_argument("--idxs", nargs="*", default=None, help="Indexes from systematic axis to be used for plotting.")
 parser.add_argument("--datasets", nargs="*", default=["ZmumuPostVFP"], 
     help="Apply corrections from indicated generator. First will be nominal correction.")
+parser.add_argument("--baseDir", type=str, default=f"{common.data_dir}/TheoryCorrections/", help="Base directory to the theory corrections")
 parser.add_argument("--noFlow", action='store_true', help="Do not show underlfow and overflow bins in plots")
+parser.add_argument("--showUncertainties", action='store_true', help="Show uncertainty bands")
 parser.add_argument("--axes", type=str, nargs="*", default=None, help="Which axes to plot, if not specified plot all axes")
 parser.add_argument("--xlim", type=float, nargs=2, default=[None,None], help="Min and max values for x axis (if not specified, range set automatically)")
 parser.add_argument("--ylim", type=float, nargs=2, default=[None,None], help="Min and max values for y axis (if not specified, range set automatically)")
@@ -33,7 +35,7 @@ outdir = output_tools.make_plot_dir(args.outpath, args.outfolder)
 
 colors = mpl.colormaps["tab10"]
 
-corr_dict = theory_corrections.load_corr_helpers(args.datasets, args.theoryCorr, make_tensor=False)
+corr_dict = theory_corrections.load_corr_helpers(args.datasets, args.theoryCorr, make_tensor=False, base_dir=args.baseDir)
 
 def project(flow=False):
     # average over bins
@@ -111,7 +113,7 @@ def make_plot_2d(h, name, proc, axes, corr=None, plot_error=False, clim=None, fl
     plot_tools.write_index_and_log(outdir, outfile, args=args)
 
 def make_plot_1d(hists, names, proc, axis, labels=None, corr=None, 
-    ratio=False, normalize=False, xmin=None, xmax=None, ymin=None, ymax=None, flow=True, density=False, uncertainty_bands=False
+    ratio=True, normalize=False, xmin=None, xmax=None, ymin=None, ymax=None, flow=True, density=False, uncertainty_bands=False
 ):
     logger.info(f"Make 1D plot for corr {corr} with {len(names)} entries for axis {axis}")
 
@@ -145,7 +147,7 @@ def make_plot_1d(hists, names, proc, axis, labels=None, corr=None,
         ymax = ymax + yrange*0.3
 
     if ratio:
-        ylabel = "1/{0}".format(names[0].split("_div_")[-1])
+        ylabel = "correction"# "1/{0}".format(names[0].split("_div_")[-1])
     else:
         ylabel = "a.u."
 
@@ -153,7 +155,7 @@ def make_plot_1d(hists, names, proc, axis, labels=None, corr=None,
         ylim=(ymin, ymax), xlim=(xmin, xmax))
 
     if ratio:
-        ax.plot([min(xedges), max(xedges)], [1,1], color="black", linestyle="--")
+        ax.plot([min(xedges), max(xedges)], [1,1], color="black", linestyle="--", zorder=-1)
 
     for i, h1d in enumerate(h1ds):
         y = h1d.values(flow=flow)
@@ -226,7 +228,7 @@ for dataset, corr_hists in corr_dict.items():
             if "1d" in args.plots:
                 for axis in axes:
                     make_plot_1d(hists, names, proc, axis, labels=labels, flow=not args.noFlow,
-                        xmin=args.xlim[0], xmax=args.xlim[1], ymin=args.ylim[0], ymax=args.ylim[1])
+                        xmin=args.xlim[0], xmax=args.xlim[1], ymin=args.ylim[0], ymax=args.ylim[1], uncertainty_bands=args.showUncertainties)
 
             if "2d" in args.plots and len(axes) >= 2:
                 for label, (n, h) in zip(labels, corrh_systs.items()):

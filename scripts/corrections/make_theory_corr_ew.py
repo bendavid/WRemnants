@@ -13,7 +13,7 @@ import pdb
 parser = argparse.ArgumentParser()
 parser.add_argument("-i", "--input", nargs="+", type=str, default=["w_z_gen_dists_scetlib_dyturboCorr_ewinput.hdf5"], help="File containing EW hists")
 parser.add_argument("--nums", nargs="+", type=str, default=["horace-nlo"], help="Numerators")
-parser.add_argument("--den", type=str, default="horace-lo-photos", help="Denominatos")
+parser.add_argument("--den", type=str, default="horace-lo-photos", help="Denominator")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for plots and correction files")
 parser.add_argument("--normalize", action="store_true", default=False, help="Normalize distributions before computing ratio")
 parser.add_argument("--noSmoothing", action="store_true", default=False, help="Disable smoothing of corrections")
@@ -87,9 +87,13 @@ for proc in procs:
         continue
 
     h2Dratios = []
-    corrhs = {}
 
     def make_correction(h1, h2, name):
+        if "charge" in h1.axes.name:
+            h1 = h1.project(*[a for a in h1.axes.name if a != "charge"])
+        if "charge" in h2.axes.name:
+            h2 = h2.project(*[a for a in h2.axes.name if a != "charge"])
+
         hratio = hh.divideHists(h1, h2)
         if not args.noSmoothing and not len(hratio.axes)>1:
             # 2D smoothing
@@ -108,21 +112,30 @@ for proc in procs:
             axis_charge = hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "charge")
         elif proc[0] == 'Z':
             axis_charge = hist.axis.Regular(1, -1., 1., underflow=False, overflow=False, name = "charge")
-        hcharge = hist.Hist(*hratio.axes, axis_charge, storage=hratio._storage_type())
+        hcharge = hist.Hist(*hratio.axes, axis_charge, storage=hratio.storage_type())
         hcharge.view(flow=True)[...,charge_dict[proc]] = hratio.view(flow=True)
 
+        hcharge_num = hist.Hist(*h1.axes, axis_charge, storage=h1.storage_type())
+        hcharge_num.view(flow=True)[...,charge_dict[proc]] = h1.view(flow=True)
+
+        hcharge_den = hist.Hist(*h2.axes, axis_charge, storage=h2.storage_type())
+        hcharge_den.view(flow=True)[...,charge_dict[proc]] = h2.view(flow=True)
+
         # Variations: 0=original MiNNLO, 1=Horace NLO
-        hones = hist.Hist(*hcharge.axes, storage=hist.storage.Double())
-        hones.values(flow=True)[...,charge_dict[proc]] = np.ones(hratio.values(flow=True).shape)
+        hones = hist.Hist(*hcharge.axes, storage=hcharge.storage_type())
+        hones.values(flow=True)[...] = np.ones(hcharge.values(flow=True).shape)
+        hones.variances(flow=True)[...] = np.zeros(hcharge.variances(flow=True).shape)
 
         # Add syst axis
         if name not in corrh:
             corrh[name] = {}
-        corrh[name][proc] = hist.Hist(*hcharge.axes, hist.axis.Regular(2, 0, 2, underflow=False, overflow=False, name="systIdx"), storage=hist.storage.Double())
-        corrh[name][proc].values(flow=True)[...,0] = hones.values(flow=True)
-        corrh[name][proc].values(flow=True)[...,1] = hcharge.values(flow=True)
+        corrh[name][proc]={}
+        corrh[name][proc]["ratio"] = hist.Hist(*hcharge.axes, hist.axis.Regular(2, 0, 2, underflow=False, overflow=False, name="systIdx"), storage=hist.storage.Double())
+        corrh[name][proc]["ratio"].values(flow=True)[...,0] = hones.values(flow=True)
+        corrh[name][proc]["ratio"].values(flow=True)[...,1] = hcharge.values(flow=True)
 
-        corrhs[name] = corrh[name]
+        corrh[name][proc]["num"] = hcharge_num
+        corrh[name][proc]["den"] = hcharge_den
 
     for num, hnum in zip(nums, hnums):
 
@@ -134,14 +147,29 @@ for proc in procs:
 
             make_correction(hnum1D, hden1D, f"{num}ew_{ax}")
 
-for num, corrh in corrhs.items():
-    outname = num.replace('-', '')
-    if 'Zmumu' in corrh:
-        outfile = f"{args.outpath}/{outname}"
-        output_tools.write_theory_corr_hist(outfile, 'Z', {f"{outname}_minnlo_ratio" : corrh['Zmumu']}, args)
+for name, corr_dict in corrh.items():
+    outname = name.replace('-', '')
+    outfile = f"{args.outpath}/{outname}"
+    if args.postfix:
+        outname += f"_{args.postfix}"
 
-    if 'Wplusmunu' in corrh and "Wminusmunu" in corrh:
-        corrh['W'] = corrh['Wplusmunu']+corrh['Wminusmunu']
-        outfile = f"{args.outpath}/{outname}"
-        output_tools.write_theory_corr_hist(outfile, 'W', {f"{outname}_minnlo_ratio" : corrh['W']}, args)
+    if 'Zmumu' in corr_dict:
+        output_tools.write_theory_corr_hist(outfile, 'Z', 
+            {
+                f"{outname}_minnlo_ratio" : corr_dict['Zmumu']["ratio"],
+                f"{outname}_num" : corr_dict['Zmumu']["num"],
+                f"{outname}_den" : corr_dict['Zmumu']["den"]
+            }, 
+            args)
 
+    if 'Wplusmunu' in corr_dict and "Wminusmunu" in corr_dict:
+        corr_dict['W']={}
+        for key in ["ratio", "num", "den"]:
+            corr_dict['W'][key] = corr_dict['Wplusmunu'][key]+corr_dict['Wminusmunu'][key]
+        output_tools.write_theory_corr_hist(outfile, 'W', 
+            {
+                f"{outname}_minnlo_ratio" : corr_dict['W']["ratio"],
+                f"{outname}_num" : corr_dict['W']["num"],
+                f"{outname}_den" : corr_dict['W']["den"]
+            }, 
+            args)

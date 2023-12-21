@@ -202,6 +202,7 @@ def build_graph(df, dataset):
 
         logger.debug(f"Exp weight defined: {weight_expr}")
         df = df.Define("exp_weight", weight_expr)
+        df = theory_tools.define_postfsr_vars(df, mode="wlike")
         df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
 
     results.append(df.HistoBoost("weight", [hist.axis.Regular(100, -2, 2)], ["nominal_weight"], storage=hist.storage.Double()))
