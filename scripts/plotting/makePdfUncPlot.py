@@ -49,7 +49,8 @@ args = parser.parse_args()
 for pdf in args.pdfs:
     if pdf not in theory_tools.pdfMap:
         raise ValueError(f"pdf {pdf} is not a valid hist (not defined in theory_tools.pdfMap)")
-
+    print(pdf)
+# args.pdf.append("herapdf20ext")
 band_hists = {}
 
 for dataset in args.datasets:
@@ -77,10 +78,41 @@ for dataset in args.datasets:
         moments = input_tools.read_all_and_scale(args.infile, args.datasets, ["nominal_gen_helicity_moments_scale"])
         coeffs =  theory_tools.moments_to_helicities(moments[0].project('ptVgen','absYVgen','helicity','muRfact','muFfact'))
         moments_pdf = input_tools.read_all_and_scale(args.infile, args.datasets, [f"helicity_{args.baseName}_{pdfName}" for pdfName in pdfNames])
+        
         coeffs_pdf = []
         for moments in moments_pdf:
             coeffs_pdf.append(theory_tools.moments_to_helicities(moments.project('ptVgen','absYVgen','helicity',axis_label)))
         uncHists = [[h[{axis_label : 0}], *theory_tools.hessianPdfUnc(h, axis_label, unc, scale)] for h,unc,scale in zip(coeffs_pdf, uncType, uncScale)]
+
+        coeffs_heraext = []
+        moments_heraext = input_tools.read_all_and_scale(args.infile, args.datasets, [f"helicity_{args.baseName}_pdfHERAPDF20ext"])
+        for moments in moments_heraext:
+            coeffs_heraext.append(theory_tools.moments_to_helicities(moments.project('ptVgen','absYVgen','helicity',axis_label)))
+        
+        uncType_hera = [pdfInfo["herapdf20ext"]["combine"]]
+        uncScale_hera = [pdfInfo["herapdf20ext"]["scale"] if "scale" in pdfInfo["herapdf20ext"] else 1.]
+        uncHists_hera = [[h[{axis_label : 0}], *theory_tools.hessianPdfUnc(h, axis_label, unc, scale)] for h,unc,scale in zip(coeffs_heraext, uncType_hera, uncScale_hera)]
+        
+        print(uncHists_hera)
+
+        for ipdf,pdf in enumerate(args.pdfs):
+            if "herapdf20" in pdf:
+                nom = uncHists[ipdf][0]
+                up = uncHists[ipdf][1]
+                down = uncHists[ipdf][2]
+
+                print(nom.shape)
+                print(nom[0,0,0], up[0,0,0], down[0,0,0])
+                print(uncHists_hera[0][0].values()[0,0,0],uncHists_hera[0][1].values()[0,0,0],uncHists_hera[0][2].values()[0,0,0])
+
+                up[...] = nom.values() + np.sqrt(np.square(up.values() - nom.values())+np.square(uncHists_hera[0][1].values() - nom.values()))
+
+                down[...] = nom.values() - np.sqrt(np.square(down.values() - nom.values())+np.square(uncHists_hera[0][2].values() - nom.values()))
+
+                print(uncHists[ipdf][0].values()[0,0,0],up.values()[0,0,0],down.values()[0,0,0])
+
+                uncHists[ipdf][1] = up
+                uncHists[ipdf][2] = down
 
         # add alphaS
         # alphaNames = []
@@ -97,11 +129,11 @@ for dataset in args.datasets:
         #     uncHists[ipdf].extend([alphaHists_hel[ipdf][...,0],alphaHists_hel[ipdf][...,1]])
         #     names[ipdf].extend([pdfNames[ipdf]+"alpha $\pm1\sigma$",""])
         #     colors[ipdf].extend([[cmap(i)]*2 for i in range(len(args.pdfs),2*len(args.pdfs))][0])
-        
+
         # add QCD scales
         uncHists.append([coeffs[{"muRfact" : 2.j, "muFfact" : 2.j}],coeffs[{"muRfact" : 0.5j, "muFfact" : 0.5j}],coeffs[{"muRfact" : 2.j, "muFfact" : 1.j}], coeffs[{"muRfact" : 0.5j, "muFfact" : 1.j}],coeffs[{"muRfact" : 1.j, "muFfact" : 2.j}],coeffs[{"muRfact" : 1.j, "muFfact" : 0.5j}]])
         names.append(["QCDscale_muRmuFUp","QCDscale_muRmuFDown","QCDscale_muRUp","QCDscale_muRDown","QCDscale_muFUp","QCDscale_muFDown"])
-        colors.append([[cmap(i)]*6 for i in range(1)][0])
+        colors.append([[cmap(i)]*6 for i in range(2+len(args.pdfs))][0])
         # uncHists.append([coeffs[{'muRfact':1.j,'muFfact':1.j}]])
         # names.append(["QCDscale_central"])
         # colors.append([[cmap(i)]*1 for i in range(2*len(args.pdfs),2*len(args.pdfs)+1)][0])
@@ -154,8 +186,16 @@ for dataset in args.datasets:
 
             if ihel == -1:
                 variations.append(np.stack([0.5*np.ones_like(np.minimum.reduce([h.values() for h in hists1D])/hists1D[0].values()),1.5*np.ones_like(np.maximum.reduce([h.values() for h in hists1D])/hists1D[0].values())],axis=-1).reshape(len(uncHists[0][0].axes["ptVgen"]),len(uncHists[0][0].axes["absYVgen"]),2))
+            # elif ihel == 4:
+            #     variations.append(np.stack([0.8*np.ones_like(np.minimum.reduce([h.values() for h in hists1D])/hists1D[0].values()),2.2*np.ones_like(np.maximum.reduce([h.values() for h in hists1D])/hists1D[0].values())],axis=-1).reshape(len(uncHists[0][0].axes["ptVgen"]),len(uncHists[0][0].axes["absYVgen"]),2))
             else:
-                variations.append(np.stack([np.minimum.reduce([h.values() for h in hists1D])/hists1D[0].values(),np.maximum.reduce([h.values() for h in hists1D])/hists1D[0].values()],axis=-1).reshape(len(uncHists[0][0].axes["ptVgen"]),len(uncHists[0][0].axes["absYVgen"]),2))
+                lower = np.minimum.reduce([h.values() for h in hists1D])/np.abs(hists1D[0].values())
+                upper = np.maximum.reduce([h.values() for h in hists1D])/np.abs(hists1D[0].values())
+                
+                variations.append(np.stack([lower,upper],axis=-1).reshape(len(uncHists[0][0].axes["ptVgen"]),len(uncHists[0][0].axes["absYVgen"]),2))
+                print("helicity", ihel)
+                print("down",lower)
+                print("up",upper)
 
     variations_all = np.stack(variations,axis=-2)
     print(variations_all.shape)

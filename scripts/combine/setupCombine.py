@@ -396,9 +396,15 @@ def setup(args, inputFile, fitvar, xnorm=False):
             passToFakes=passSystToFakes,
         )
         if args.theoryAgnostic:
+            import numpy as np
             # open file with theory bands
             with h5py.File(f"{common.data_dir}/angularCoefficients/theoryband_variations.hdf5", "r") as ff:
                 scale_hists = narf.ioutils.pickle_load_h5py(ff["theorybands"])
+                for tt in scale_hists:
+                    scale_hists[tt].values()[...,1] = scale_hists[tt].values()[...,1]-np.ones_like(scale_hists[tt].values()[...,1])
+                    scale_hists[tt].values()[...,0] = np.where(scale_hists[tt].values()[...,0]>0,scale_hists[tt].values()[...,0]*(-1.0),-np.ones_like(scale_hists[tt].values()[...,0])+scale_hists[tt].values()[...,0])
+
+
             # First do in acceptance bins, then OOA later (for OOA we need to group bins into macro regions)
             nuisanceBaseName = f"norm{label}"
             for sign in ["plus", "minus"]:
