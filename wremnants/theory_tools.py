@@ -196,17 +196,8 @@ def define_postfsr_vars(df, mode=None):
         return df
 
     # status flags in NanoAOD: https://cms-nanoaod-integration.web.cern.ch/autoDoc/NanoAODv9/2016ULpostVFP/doc_TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8_RunIISummer20UL16NanoAODv9-106X_mcRun2_asymptotic_v17-v1.html
-    # post fsr definition
-    # 1) is stable
-    # 2) isPrompt or isDirectPromptTauDecayProduct
-    # 3) is fromHardProcess
-    # 4) is lepton
-    df = df.Define("postfsrLeptons", """
-        GenPart_status == 1
-        && (GenPart_statusFlags & 1 || GenPart_statusFlags & (1 << 5))
-        && GenPart_statusFlags & (1 << 8)
-        && abs(GenPart_pdgId) >= 11 && abs(GenPart_pdgId) <= 16 
-        """)
+    # post fsr definition: is stable && (isPrompt or isDirectPromptTauDecayProduct) && is lepton
+    df = df.Define("postfsrLeptons", "GenPart_status == 1 && (GenPart_statusFlags & 1 || GenPart_statusFlags & (1 << 5)) && abs(GenPart_pdgId) >= 11 && abs(GenPart_pdgId) <= 16")
     df = df.Define("postfsrElectrons", "postfsrLeptons && abs(GenPart_pdgId) == 11")
     df = df.Define("postfsrMuons", "postfsrLeptons && abs(GenPart_pdgId) == 13")
 
