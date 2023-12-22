@@ -279,7 +279,7 @@ def build_graph(df, dataset):
     df = muon_calibration.define_corrected_muons(df, cvh_helper, jpsi_helper, args, dataset, smearing_helper, bias_helper)
 
     df = muon_selections.select_veto_muons(df, nMuons=1)
-    df = muon_selections.select_good_muons(df, 24, 100, dataset.group, nMuons=1, use_trackerMuons=args.trackerMuons, use_isolation=False)
+    df = muon_selections.select_good_muons(df, args.pt[1], args.pt[2], dataset.group, nMuons=1, use_trackerMuons=args.trackerMuons, use_isolation=False)
 
     # the corrected RECO muon kinematics, which is intended to be used as the nominal
     df = muon_calibration.define_corrected_reco_muon_kinematics(df)
