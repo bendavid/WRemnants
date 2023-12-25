@@ -209,7 +209,7 @@ class TheoryHelper(object):
             self.card_tool.addSystematic(scale_hist,
                 preOpMap=preop_map,
                 preOpArgs=preop_args,
-                symmetrize = "conservative",
+                symmetrize = "quadratic",
                 processes=[sample_group],
                 group=group_name,
                 splitGroup={"QCDscale": ".*"},
@@ -272,7 +272,7 @@ class TheoryHelper(object):
                 group="resumTransitionFOScale",
                 splitGroup={"resum": ".*"},
                 systAxes=[pt_ax, "vars"],
-                symmetrize = "conservative",
+                symmetrize = "quadratic",
                 passToFakes=self.propagate_to_fakes,
                 preOp = preop_func,
                 preOpArgs = preop_args,
@@ -489,7 +489,7 @@ class TheoryHelper(object):
         pdfInfo = theory_tools.pdf_info_map("ZmumuPostVFP", pdf)
         pdfName = pdfInfo["name"]
         pdf_hist = pdfName
-        symmetrize = "average"
+        symmetrize = "quadratic"
 
         if from_corr:
             theory_unc = input_tools.args_from_metadata(self.card_tool, "theoryCorr")
@@ -590,7 +590,7 @@ class TheoryHelper(object):
                 group="resumTransitionFOScale",
                 splitGroup={"resum": ".*"},
                 systAxes=["vars"],
-                symmetrize = "conservative",
+                symmetrize = "quadratic",
                 passToFakes=self.propagate_to_fakes,
                 preOp = lambda h: h[{"vars" : sel_vars}],
                 outNames=outNames,
