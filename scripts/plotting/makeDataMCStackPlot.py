@@ -165,7 +165,7 @@ if addVariation:
             action = None
         groups.addSummedProc(nominalName, relabel=args.baseName, name=name, label=label, exclude=exclude,
             color=color, reload=reload, rename=varname, procsToRead=datasets,
-            preOpMap=load_op, action=action, forceNonzero=True)
+            preOpMap=load_op, action=action, forceNonzero=True, applySelection=applySelection)
 
         exclude.append(varname)
         unstack.append(varname)

@@ -431,12 +431,10 @@ class Datagroups(object):
         return self.results
 
     def addSummedProc(self, refname, name, label=None, color=None, exclude=["Data"], relabel=None, 
-            procsToRead=None, reload=False, rename=None, action=None, actionArgs={}, preOpMap=None, preOpArgs={}, 
-            forceNonzero=True):
+            procsToRead=None, reload=False, rename=None, action=None, actionArgs={}, **kwargs):
         if reload:
             self.loadHistsForDatagroups(refname, syst=name, excludeProcs=exclude,
-                procsToRead=procsToRead, preOpMap=preOpMap, preOpArgs=preOpArgs, 
-                forceNonzero=forceNonzero)
+                procsToRead=procsToRead, **kwargs)
 
         if not rename:
             rename = name

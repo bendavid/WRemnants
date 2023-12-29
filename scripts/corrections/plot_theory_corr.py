@@ -7,25 +7,20 @@ from matplotlib.colors import LogNorm
 import hist
 from itertools import combinations
 
-from utilities import logging, boostHistHelpers as hh
+from utilities import common, logging, boostHistHelpers as hh
 from utilities.io_tools import output_tools
 from utilities.styles import styles
 from wremnants import theory_corrections, plot_tools
 
-parser = argparse.ArgumentParser()
-parser.add_argument("--theoryCorr", nargs="*", default=["scetlib_dyturbo", "horacenloew"], choices=theory_corrections.valid_theory_corrections(),
+parser = common.plot_parser()
+parser.add_argument("--theoryCorr", nargs="*", default=["scetlib_dyturbo", "horacenloew"], #choices=theory_corrections.valid_theory_corrections(),
     help="Apply corrections from indicated generator. First will be nominal correction.")
 parser.add_argument("--idxs", nargs="*", default=None, help="Indexes from systematic axis to be used for plotting.")
 parser.add_argument("--datasets", nargs="*", default=["ZmumuPostVFP"], 
     help="Apply corrections from indicated generator. First will be nominal correction.")
-parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
-                    help="Set verbosity level with logging, the larger the more verbose")
-parser.add_argument("--noColorLogger", action="store_true", help="Do not use logging with colors")
-parser.add_argument("-o", "--outpath", type=str, default=os.path.expanduser("~/www/WMassAnalysis"), help="Base path for output")
-parser.add_argument("-f", "--outfolder", type=str, default="./test", help="Subfolder for output")
-parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
-parser.add_argument("--cmsDecor", default="Preliminary", type=str, choices=[None,"Preliminary", "Work in progress", "Internal"], help="CMS label")
+parser.add_argument("--baseDir", type=str, default=f"{common.data_dir}/TheoryCorrections/", help="Base directory to the theory corrections")
 parser.add_argument("--noFlow", action='store_true', help="Do not show underlfow and overflow bins in plots")
+parser.add_argument("--showUncertainties", action='store_true', help="Show uncertainty bands")
 parser.add_argument("--axes", type=str, nargs="*", default=None, help="Which axes to plot, if not specified plot all axes")
 parser.add_argument("--xlim", type=float, nargs=2, default=[None,None], help="Min and max values for x axis (if not specified, range set automatically)")
 parser.add_argument("--ylim", type=float, nargs=2, default=[None,None], help="Min and max values for y axis (if not specified, range set automatically)")
@@ -40,7 +35,7 @@ outdir = output_tools.make_plot_dir(args.outpath, args.outfolder)
 
 colors = mpl.colormaps["tab10"]
 
-corr_dict = theory_corrections.load_corr_helpers(args.datasets, args.theoryCorr, make_tensor=False)
+corr_dict = theory_corrections.load_corr_helpers(args.datasets, args.theoryCorr, make_tensor=False, base_dir=args.baseDir)
 
 def project(flow=False):
     # average over bins
@@ -74,8 +69,15 @@ def make_plot_2d(h, name, proc, axes, corr=None, plot_error=False, clim=None, fl
         # plot relative errors instead
         h2d.values(flow=flow)[...] = np.sqrt(hh.relVariance(h2d.values(flow=flow), h2d.variances(flow=flow), fillOnes=True))
 
-    xlim = (xedges[0],xedges[-1])
-    ylim = (yedges[0],yedges[-1])
+    if args.xlim[0] is None:
+        xlim = (xedges[0],xedges[-1])
+    else:
+        xlim = args.xlim
+
+    if args.ylim[0] is None:
+        ylim = (yedges[0],yedges[-1])
+    else:
+        ylim = args.ylim
 
     fig, ax = plot_tools.figure(h2d, xlabel=xlabel, ylabel=ylabel, cms_label=args.cmsDecor, automatic_scale=False, width_scale=1.2, xlim=xlim, ylim=ylim)
 
@@ -99,7 +101,7 @@ def make_plot_2d(h, name, proc, axes, corr=None, plot_error=False, clim=None, fl
 
     cbar = fig.colorbar(colormesh, ax=ax)
 
-    ax.text(1.0, 1.003, styles.text_dict[proc], transform=ax.transAxes, fontsize=30,
+    ax.text(1.0, 1.003, styles.text_dict.get(proc, proc), transform=ax.transAxes, fontsize=30,
             verticalalignment='bottom', horizontalalignment="right")
 
     outfile = f"hist2d_{'_'.join(axes)}_{proc}_{name}"
@@ -111,7 +113,7 @@ def make_plot_2d(h, name, proc, axes, corr=None, plot_error=False, clim=None, fl
     plot_tools.write_index_and_log(outdir, outfile, args=args)
 
 def make_plot_1d(hists, names, proc, axis, labels=None, corr=None, 
-    ratio=False, normalize=False, xmin=None, xmax=None, ymin=None, ymax=None, flow=True, density=False, uncertainty_bands=False
+    ratio=True, normalize=False, xmin=None, xmax=None, ymin=None, ymax=None, flow=True, density=False, uncertainty_bands=False
 ):
     logger.info(f"Make 1D plot for corr {corr} with {len(names)} entries for axis {axis}")
 
@@ -145,7 +147,7 @@ def make_plot_1d(hists, names, proc, axis, labels=None, corr=None,
         ymax = ymax + yrange*0.3
 
     if ratio:
-        ylabel = "1/{0}".format(names[0].split("_div_")[-1])
+        ylabel = "correction"# "1/{0}".format(names[0].split("_div_")[-1])
     else:
         ylabel = "a.u."
 
@@ -153,7 +155,7 @@ def make_plot_1d(hists, names, proc, axis, labels=None, corr=None,
         ylim=(ymin, ymax), xlim=(xmin, xmax))
 
     if ratio:
-        ax.plot([min(xedges), max(xedges)], [1,1], color="black", linestyle="--")
+        ax.plot([min(xedges), max(xedges)], [1,1], color="black", linestyle="--", zorder=-1)
 
     for i, h1d in enumerate(h1ds):
         y = h1d.values(flow=flow)
@@ -163,7 +165,7 @@ def make_plot_1d(hists, names, proc, axis, labels=None, corr=None,
             err = np.sqrt(h1d.variances(flow=flow))
             ax.bar(x=xedges[:-1], height=2*err, bottom=y - err, width=np.diff(xedges), align='edge', linewidth=0, alpha=0.3, color=colors(i), zorder=-1)
 
-    ax.text(1.0, 1.003, styles.text_dict[proc], transform=ax.transAxes, fontsize=30,
+    ax.text(1.0, 1.003, styles.text_dict.get(proc, proc), transform=ax.transAxes, fontsize=30,
             verticalalignment='bottom', horizontalalignment="right")
     plot_tools.addLegend(ax, ncols=1+int(len(names)/7), text_size=12)
 
@@ -187,13 +189,13 @@ for dataset, corr_hists in corr_dict.items():
 
         # loop over charge, if exist
         if "charge" in corrh.axes.name:
-            corrh_charges = [corrh[{"charge":idx}] for idx in range(corrh.axes["charge"].size)]
+            corrh_charges = {idx : corrh[{"charge":idx}] for idx in range(corrh.axes["charge"].size)}
         else: 
-            corrh_charges = [corrh]
+            corrh_charges = {0 : corrh}
 
-        for corrh_charge in corrh_charges:
+        for charge_idx, corrh_charge in corrh_charges.items():
             # retreive 
-            if type(corrh_charge.axes[syst_axis]) == hist.axes.StrCategory:
+            if type(corrh_charge.axes[syst_axis]) == hist.axis.StrCategory:
                 idxs = [i for i, idx in enumerate(corrh_charge.axes[syst_axis]) if args.idxs is None or str(idx) in args.idxs or str(i) in args.idxs]
                 labels = idxs
             else:
@@ -219,15 +221,19 @@ for dataset, corr_hists in corr_dict.items():
             names = [f"{n}" for n in corrh_systs.keys()]
             axes = [n for n in corrh_charge.axes.name if n != syst_axis and (args.axes is None or n in args.axes)]
 
+            proc = dataset.replace("PostVFP","")
+            if len(corrh_charges) > 1:
+                proc = f"{proc[0]}{'minus' if charge_idx==0 else 'plus'}{proc[1:]}"
+
             if "1d" in args.plots:
                 for axis in axes:
-                    make_plot_1d(hists, names, dataset.replace("PostVFP",""), axis, labels=labels, flow=not args.noFlow,
-                        xmin=args.xlim[0], xmax=args.xlim[1], ymin=args.ylim[0], ymax=args.ylim[1])
+                    make_plot_1d(hists, names, proc, axis, labels=labels, flow=not args.noFlow,
+                        xmin=args.xlim[0], xmax=args.xlim[1], ymin=args.ylim[0], ymax=args.ylim[1], uncertainty_bands=args.showUncertainties)
 
             if "2d" in args.plots and len(axes) >= 2:
                 for label, (n, h) in zip(labels, corrh_systs.items()):
                     for ax1, ax2 in list(combinations(axes, 2)): 
-                        make_plot_2d(h, n, dataset.replace("PostVFP",""), [ax1, ax2], corr=label, flow=not args.noFlow, clim=args.clim)                
+                        make_plot_2d(h, n, proc, [ax1, ax2], corr=label, flow=not args.noFlow, clim=args.clim)                
 
 
         

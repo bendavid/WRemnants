@@ -4,6 +4,7 @@ from utilities.io_tools import output_tools
 
 parser,initargs = common.common_parser()
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.017 means 1.7\%)", default=1.017)
+parser.add_argument("--noGenMatchMC", action='store_true', help="Don't use gen match filter for prompt muons with MC samples (note: QCD MC never has it anyway)")
 parser.add_argument("--flavor", type=str, choices=["e", "mu"], help="Flavor (e or mu)", default="mu")
 
 parser = common.set_parser_default(parser, "genVars", ["ptVGen"])
@@ -108,8 +109,8 @@ if not args.noRecoil:
 
 def build_graph(df, dataset):
     logger.info(f"build graph for dataset: {dataset.name}")
-
     results = []
+    isQCDMC = dataset.group == "QCD"
 
     if dataset.is_data: df = df.DefinePerSample("weight", "1.0")
     else: df = df.Define("weight", "std::copysign(1.0, genWeight)")
@@ -241,6 +242,12 @@ def build_graph(df, dataset):
         df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
     else:
         df = df.DefinePerSample("nominal_weight", "1.0")
+
+    # gen match to bare muons to select only prompt muons from MC processes, but also including tau decays
+    if not dataset.is_data and not isQCDMC and not args.noGenMatchMC:
+        df = theory_tools.define_postfsr_vars(df)
+        postFSRLeps = "postfsrMuons" if flavor == "mu" else "postfsrElectrons"
+        df = df.Filter(f"wrem::hasMatchDR2(lep_eta,lep_phi,GenPart_eta[{postFSRLeps}],GenPart_phi[{postFSRLeps}],0.09)")
 
     df = df.Define("noTrigMatch", "Sum(trigMatch)")
     results.append(df.HistoBoost("noTrigMatch", [axis_lin], ["noTrigMatch", "nominal_weight"]))

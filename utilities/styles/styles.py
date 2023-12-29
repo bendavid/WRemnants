@@ -128,6 +128,8 @@ nuisance_groupings = {
 text_dict = {
     "Zmumu": r"$\mathrm{Z}\rightarrow\mu\mu$",
     "ZToMuMu": r"$\mathrm{Z}\rightarrow\mu\mu$",
+    "Wplusmunu": r"$\mathrm{W}^+\rightarrow\mu\nu$",
+    "Wminusmunu": r"$\mathrm{W}^-\rightarrow\mu\nu$",
     "WplusToMuNu": r"$\mathrm{W}^+\rightarrow\mu\nu$",
     "WminusToMuNu": r"$\mathrm{W}^-\rightarrow\mu\nu$"
 }

@@ -146,6 +146,16 @@ def expand_pdf_entries(pdf):
     last_entry = first_entry+info["entries"]
     return [info["branch"]+f"[{i}]" for i in range(first_entry, last_entry)]
 
+def define_scale_tensor(df):
+    if "scaleWeights_tensor" in df.GetColumnNames():
+        logger.debug("scaleWeight_tensor already defined, do nothing here.")
+        return df
+    # convert vector of scale weights to 3x3 tensor and clip weights to |weight|<10.
+    df = df.Define("scaleWeights_tensor", f"wrem::makeScaleTensor(LHEScaleWeight, theory_weight_truncate);")
+    df = df.Define("scaleWeights_tensor_wnom", "auto res = scaleWeights_tensor; res = nominal_weight*res; return res;")
+
+    return df
+
 theory_corr_weight_map = {
         "scetlib_dyturboMSHT20_pdfas" : pdfMap["msht20"]["alphas"],
         "scetlib_dyturboMSHT20Vars" : expand_pdf_entries("msht20"),
@@ -180,17 +190,88 @@ def define_prefsr_vars(df):
 
     return df
 
-def define_scale_tensor(df):
-    if "scaleWeights_tensor" in df.GetColumnNames():
-        logger.debug("scaleWeight_tensor already defined, do nothing here.")
+def define_postfsr_vars(df, mode=None):
+    if "postfsrLeptons" in df.GetColumnNames():
+        logger.debug("PostFSR leptons are already defined, do nothing here.")
         return df
-    # convert vector of scale weights to 3x3 tensor and clip weights to |weight|<10.
-    df = df.Define("scaleWeights_tensor", f"wrem::makeScaleTensor(LHEScaleWeight, theory_weight_truncate);")
-    df = df.Define("scaleWeights_tensor_wnom", "auto res = scaleWeights_tensor; res = nominal_weight*res; return res;")
+
+    # status flags in NanoAOD: https://cms-nanoaod-integration.web.cern.ch/autoDoc/NanoAODv9/2016ULpostVFP/doc_TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8_RunIISummer20UL16NanoAODv9-106X_mcRun2_asymptotic_v17-v1.html
+    # post fsr definition: is stable && (isPrompt or isDirectPromptTauDecayProduct) && is lepton
+    df = df.Define("postfsrLeptons", "GenPart_status == 1 && (GenPart_statusFlags & 1 || GenPart_statusFlags & (1 << 5)) && abs(GenPart_pdgId) >= 11 && abs(GenPart_pdgId) <= 16")
+    df = df.Define("postfsrElectrons", "postfsrLeptons && abs(GenPart_pdgId) == 11")
+    df = df.Define("postfsrMuons", "postfsrLeptons && abs(GenPart_pdgId) == 13")
+
+    if mode is not None:
+        # defition of more complex postfsr object 
+        # use fiducial gen met, see: https://twiki.cern.ch/twiki/bin/viewauth/CMS/ParticleLevelProducer
+        if mode in ["wlike", "dilepton"]:
+            # find the leading charged lepton and antilepton idx
+            df = df.Define("postfsrLep", "postfsrLeptons && (GenPart_pdgId==11 || GenPart_pdgId==13)")
+            df = df.Define("postfsrAntiLep", "postfsrLeptons && (GenPart_pdgId==-11 || GenPart_pdgId==-13)")
+            
+            df = df.Define("postfsrLep_idx",     "ROOT::VecOps::ArgMax(GenPart_pt[postfsrLep])")
+            df = df.Define("postfsrAntiLep_idx", "ROOT::VecOps::ArgMax(GenPart_pt[postfsrAntiLep])")
+
+            df = df.Define("postfsrLep_pt",     "event % 2 == 0 ? static_cast<double>(GenPart_pt[postfsrLep][postfsrLep_idx]) : static_cast<double>(GenPart_pt[postfsrAntiLep][postfsrAntiLep_idx])")
+            df = df.Define("postfsrLep_eta",    "event % 2 == 0 ? GenPart_eta[postfsrLep][postfsrLep_idx] : GenPart_eta[postfsrAntiLep][postfsrAntiLep_idx]")
+            df = df.Define("postfsrLep_phi",    "event % 2 == 0 ? GenPart_phi[postfsrLep][postfsrLep_idx] : GenPart_phi[postfsrAntiLep][postfsrAntiLep_idx]")
+            df = df.Define("postfsrLep_mass",   "event % 2 == 0 ? wrem::get_pdgid_mass(GenPart_pdgId[postfsrLep][postfsrLep_idx]) : wrem::get_pdgid_mass(GenPart_pdgId[postfsrAntiLep][postfsrAntiLep_idx])")
+            df = df.Define("postfsrLep_charge", "event % 2 == 0 ? -1 : 1")
+
+            df = df.Define("postfsrOtherLep_pt",   "event % 2 == 0 ? GenPart_pt[postfsrAntiLep][postfsrAntiLep_idx] : GenPart_pt[postfsrLep][postfsrLep_idx]")
+            df = df.Define("postfsrOtherLep_eta",  "event % 2 == 0 ? GenPart_eta[postfsrAntiLep][postfsrAntiLep_idx] : GenPart_eta[postfsrLep][postfsrLep_idx]")
+            df = df.Define("postfsrOtherLep_phi",  "event % 2 == 0 ? GenPart_phi[postfsrAntiLep][postfsrAntiLep_idx] : GenPart_phi[postfsrLep][postfsrLep_idx]")
+            df = df.Define("postfsrOtherLep_mass", "event % 2 == 0 ? wrem::get_pdgid_mass(GenPart_pdgId[postfsrLep][postfsrLep_idx]) : wrem::get_pdgid_mass(GenPart_pdgId[postfsrAntiLep][postfsrAntiLep_idx])")
+        
+            df = df.Define("postfsrOtherLep_absEta", "static_cast<double>(std::fabs(postfsrOtherLep_eta))")
+        else:
+            # find the leading charged lepton or antilepton idx
+            df = df.Define("postfsrLep", "postfsrLeptons && (abs(GenPart_pdgId)==11 || abs(GenPart_pdgId)==13)")
+            df = df.Define("postfsrLep_idx", "ROOT::VecOps::ArgMax(GenPart_pt[postfsrLep])")
+
+            df = df.Define("postfsrLep_pt", "static_cast<double>(GenPart_pt[postfsrLep][postfsrLep_idx])")
+            df = df.Define("postfsrLep_eta", "GenPart_eta[postfsrLep][postfsrLep_idx]")
+            df = df.Define("postfsrLep_phi", "GenPart_phi[postfsrLep][postfsrLep_idx]")
+            df = df.Define("postfsrLep_mass", "wrem::get_pdgid_mass(GenPart_pdgId[postfsrLep][postfsrLep_idx])")
+            
+            df = df.Define("postfsrLep_charge", "GenPart_pdgId[postfsrLep][postfsrLep_idx] > 0 ? -1 : 1")
+
+        df = df.Define("postfsrLep_absEta", "static_cast<double>(std::fabs(postfsrLep_eta))")
+        
+        if mode in ["wmass", "wlike"]:
+            if mode == "wlike":
+                # for wlike selection
+                df = df.Define("postfsrMET_wlike", "wrem::get_met_wlike(postfsrOtherLep_pt, postfsrOtherLep_phi, MET_fiducialGenPt, MET_fiducialGenPhi)")
+                df = df.Define("postfsrMET_pt", "postfsrMET_wlike.Mod()")
+                df = df.Define("postfsrMET_phi", "postfsrMET_wlike.Phi()")
+            else:
+                df = df.Alias("postfsrMET_pt", "MET_fiducialGenPt")
+                df = df.Alias("postfsrMET_phi", "MET_fiducialGenPhi")
+
+            df = df.Define("postfsrMT", "wrem::mt_2(postfsrLep_pt, postfsrLep_phi, postfsrMET_pt, postfsrMET_phi)")
+            df = df.Define("postfsrDeltaPhiMuonMet", "std::fabs(wrem::deltaPhi(postfsrLep_phi, postfsrMET_phi))")
+
+        # definition of boson kinematics
+        if mode in ["dilepton", "wlike"]:
+            # four vectors
+            df = df.Define("postfsrLep_mom4", "ROOT::Math::PtEtaPhiMVector(postfsrLep_pt, postfsrLep_eta, postfsrLep_phi, postfsrLep_mass)")
+            df = df.Define("postfsrAntiLep_mom4", "ROOT::Math::PtEtaPhiMVector(postfsrOtherLep_pt, postfsrOtherLep_eta, postfsrOtherLep_phi, postfsrOtherLep_mass)")
+
+            df = df.Define('postfsrGenV_mom4', 'postfsrLep_mom4 + postfsrAntiLep_mom4')
+            df = df.Define('postfsrMV', 'postfsrGenV_mom4.mass()')
+            df = df.Define('postfsrYV', 'postfsrGenV_mom4.Rapidity()')
+            df = df.Define('postfsrPTV', 'postfsrGenV_mom4.pt()')
+
+        if mode == "wmass":
+            df = df.Define("postfsrPTV", "wrem::pt_2(postfsrLep_pt, postfsrLep_phi, postfsrMET_pt, postfsrMET_phi)")
 
     return df
 
 def define_ew_vars(df):
+    if "ewLeptons" in df.GetColumnNames():
+        logger.debug("EW leptons are already defined, do nothing here.")
+        return df
+
     df = df.Define("ewLeptons", "wrem::ewLeptons(GenPart_status, GenPart_statusFlags, GenPart_pdgId, GenPart_pt, GenPart_eta, GenPart_phi)")
     df = df.Define("ewPhotons", "wrem::ewPhotons(GenPart_status, GenPart_statusFlags, GenPart_pdgId, GenPart_pt, GenPart_eta, GenPart_phi)")
     df = df.Define('ewGenV', 'wrem::ewGenVPhos(ewLeptons, ewPhotons)')

@@ -12,7 +12,6 @@ import pdb
 parser = argparse.ArgumentParser()
 parser.add_argument("-i", "--input", nargs="+", type=str, default=[f"{common.data_dir}/EWCorrections/dsig_dmll_dpTll_Zsel_ful.csv"], help="Input csv file with virtual corrections")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
-parser.add_argument("--axes", type=str, nargs="+",default=["mll", "pTll"], choices=["pTll", "mll", "pTl", "etal"], help="Axes for the EW corrections")
 parser.add_argument("--outpath", type=str, default=f"{common.data_dir}/TheoryCorrections", help="Output path")
 parser.add_argument("-p", "--postfix", type=str, help="Postfix for plots and correction files")
 parser.add_argument("--outname", type=str, default="", help="Output file name")
@@ -35,6 +34,16 @@ preFSR_dict = {
 overflow_axes = ["mll", "pTll", "pTl","etal"]
 underflow_axes = ["pTl","etal"]
 
+def ew_df_to_axis(df, name):
+    axis_name = preFSR_dict[name]
+    edges = np.array(sorted(set(np.append(df[f"{name}_min"], df[f"{name}_max"]))))
+    opts = dict(name=axis_name, overflow=name in overflow_axes, underflow=name in underflow_axes)
+    if len(edges) == max(df[f"{name}_max"])+1-min(df[f"{name}_min"]) and all(edges == np.arange(min(edges), max(edges)+1)):
+        axis = hist.axis.Regular(len(edges)-1, int(min(edges)), int(max(edges)), **opts)
+    else:
+        axis = hist.axis.Variable(edges, **opts)
+    return axis
+
 def read_ew_corrections_from_csv(filename, proc):
     if not os.path.exists(filename):
         logger.warning(f"File {filename} not found")
@@ -42,17 +51,11 @@ def read_ew_corrections_from_csv(filename, proc):
 
     df = pd.read_csv(filename)
 
-    def ew_df_to_axis(df, name):
-        axis_name = preFSR_dict[name]
-        edges = np.array(sorted(set(np.append(df[f"{name}_min"], df[f"{name}_max"]))))
-        opts = dict(name=axis_name, overflow=name in overflow_axes, underflow=name in underflow_axes)
-        if len(edges) == max(df[f"{name}_max"])+1-min(df[f"{name}_min"]) and all(edges == np.arange(min(edges), max(edges)+1)):
-            axis = hist.axis.Regular(len(edges)-1, int(min(edges)), int(max(edges)), **opts)
-        else:
-            axis = hist.axis.Variable(edges, **opts)
-        return axis
-
-    ew_axes = [ew_df_to_axis(df, a) for a in args.axes]
+    # obtain axes names from column names that appear with min and max in the form "AXIS_min" "AXIS_max"
+    ew_axes_names = [k for k in df.keys() if k.endswith("min")]
+    ew_axes_names = [a.replace("_min","") for a in ew_axes_names if a.replace("min","max") in df.keys()]
+    # get the axes with the binning
+    ew_axes = [ew_df_to_axis(df, a) for a in ew_axes_names]
 
     hratio = hist.Hist(
         *ew_axes,
