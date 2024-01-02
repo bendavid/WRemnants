@@ -135,6 +135,7 @@ logger.info(f"Minnlo norm in corr region is {nom_sum(minnloh)}, corrh norm is {n
 
 corrh = hist.Hist(*corrh_unc.axes, name=corrh_unc.name, storage=hist.storage.Double(), data=corrh_unc.values(flow=True))
 
+# Do it like this so name is modified in the output dict
 if args.postfix:
     args.generator += args.postfix
 outfile = f"{args.outpath}/{args.generator}"
@@ -170,7 +171,6 @@ norm_ratio = to_val(num_yield)/to_val(denom_yield)
 
 logger.info(f"Average correction is {np.average(corrh.values())}")
 logger.info(f"Normalization change (corr/minnlo) is {norm_ratio}")
-logger.info(f"Wrote file {outfile}")
 
 if args.plotdir:
     colors = {
