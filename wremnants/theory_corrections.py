@@ -130,10 +130,6 @@ def postprocess_corr_hist(corrh):
 
     renorm_fact_resum_transition_scale_vars = renorm_fact_resum_scale_vars + transition_vars_exclusive
 
-    # avoid mucking with other correction hists...
-    if not all(x in corrh.axes["vars"] for x in renorm_fact_resum_scale_vars):
-        return corrh
-
     if all(var in corrh.axes["vars"] for var in renorm_scale_vars):
         additional_var_hists.update(compute_envelope(corrh, "renorm_scale_envelope", renorm_scale_vars))
 

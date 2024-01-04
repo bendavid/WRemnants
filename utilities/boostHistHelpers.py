@@ -83,7 +83,6 @@ def divideHists(h1, h2, cutoff=1e-5, allowBroadcast=True, rel_unc=False, cutoff_
     else:
         outh.values(flow=flow)[...] = val
 
-
     return outh
 
 def relVariance(hvals, hvars, cutoff=1e-5, fillOnes=False):
