@@ -93,8 +93,9 @@ def make_parser(parser=None):
     #
     # WIP parser.add_argument("--noNormNuisanceOOA", action='store_true', help="Remove normalization uncertainty on out-of-acceptance template bins. Only implemented with --poiAsNoi")
     parser.add_argument("--noPDFandQCDtheorySystOnSignal", action='store_true', help="Removes PDF and theory uncertainties on signal processes with norm uncertainties when using --poiAsNoi")
-    parser.add_argument("--theoryAgnosticPolVar", action='store_true', help="Prepare variations from polynomials (EDIT THIS MESSAGE)")
+    parser.add_argument("--theoryAgnosticPolVar", action='store_true', help="Prepare variations from polynomials")
     parser.add_argument("--noPolVarOnFake", action="store_true", help="Do not propagate POI variations to fakes in the theory agnostic fit with polynomial variations")
+    parser.add_argument("--theoryAgnosticSymmetrize", action='store_true', help="Symmetrize up/Down variations in CardTool (using average)")
     return parser
 
 def setup(args, inputFile, fitvar, xnorm=False):
@@ -166,8 +167,10 @@ def setup(args, inputFile, fitvar, xnorm=False):
             # Important: don't set the gen axes with datagroups.setGenAxes(args.genAxes) when doing poiAsNoi (to be checked, it is currently done few lines above) 
             constrainMass = False
             hasSeparateOutOfAcceptanceSignal = False
+            for g in datagroups.groups.keys():                
+                logger.debug(f"{g}: {[m.name for m in datagroups.groups[g].members]}")
             # check if the out-of-acceptance signal process exists as an independent process
-            if any(m.name.startswith("Bkg") for m in datagroups.groups[base_group].members):
+            if any(m.name.endswith("OOA") for m in datagroups.groups[base_group].members):
                 hasSeparateOutOfAcceptanceSignal = True
                 if wmass:
                     # out of acceptance contribution
@@ -177,7 +180,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
                     # out of acceptance contribution
                     datagroups.copyGroup(base_group, f"{base_group}OOA", member_filter=lambda x: x.name.endswith("OOA"))
                     datagroups.groups[base_group].deleteMembers([m for m in datagroups.groups[base_group].members if m.name.endswith("OOA")])
-            # FIXME: at some point we should decide what name to use
             if any(x.endswith("OOA") for x in args.excludeProcGroups) and hasSeparateOutOfAcceptanceSignal:
                 datagroups.deleteGroup(f"{base_group}OOA") # remove out of acceptance signal
     elif args.unfolding or args.theoryAgnostic:
@@ -272,8 +274,8 @@ def setup(args, inputFile, fitvar, xnorm=False):
         return any(name.startswith(init) for init in startsWith) and all(excl not in name for excl in excludeMatch)
 
     dibosonMatch = ["WW", "WZ", "ZZ"] 
-    WMatch = ["W", "BkgW"] # TODO: the name of out-of-acceptance might be changed at some point, maybe to WmunuOutAcc, so W will match it as well (and can exclude it using "OutAcc" if needed)
-    ZMatch = ["Z", "BkgZ"]
+    WMatch = ["W"] # TODO: the name of out-of-acceptance might be changed at some point, maybe to WmunuOutAcc, so W will match it as well (and can exclude it using "OutAcc" if needed)
+    ZMatch = ["Z"]
     signalMatch = WMatch if wmass else ZMatch
 
     cardTool.addProcessGroup("single_v_samples", lambda x: assertSample(x, startsWith=[*WMatch, *ZMatch], excludeMatch=dibosonMatch))
@@ -287,8 +289,8 @@ def setup(args, inputFile, fitvar, xnorm=False):
     cardTool.addProcessGroup("signal_samples_inctau", lambda x: assertSample(x, startsWith=signalMatch,        excludeMatch=[*dibosonMatch]))
     cardTool.addProcessGroup("MCnoQCD", lambda x: x not in ["QCD", "Data"] + (["Fake"] if simultaneousABCD else []) )
     # FIXME/FOLLOWUP: the following groups may actually not exclude the OOA when it is not defined as an independent process with specific name
-    cardTool.addProcessGroup("signal_samples_noOutAcc",        lambda x: assertSample(x, startsWith=["W" if wmass else "Z"], excludeMatch=[*dibosonMatch, "tau"]))
-    cardTool.addProcessGroup("signal_samples_inctau_noOutAcc", lambda x: assertSample(x, startsWith=["W" if wmass else "Z"], excludeMatch=[*dibosonMatch]))
+    cardTool.addProcessGroup("signal_samples_noOutAcc",        lambda x: assertSample(x, startsWith=signalMatch, excludeMatch=[*dibosonMatch, "tau", "OOA"]))
+    cardTool.addProcessGroup("signal_samples_inctau_noOutAcc", lambda x: assertSample(x, startsWith=signalMatch, excludeMatch=[*dibosonMatch, "OOA"]))
 
     if not (args.theoryAgnostic or args.unfolding) :
         logger.info(f"All MC processes {cardTool.procGroups['MCnoQCD']}")
@@ -404,13 +406,14 @@ def setup(args, inputFile, fitvar, xnorm=False):
                         cardTool.addSystematic(f"theoryAgnosticWithPol_{coeffKey}_{genVcharge}",
                                                group=groupName,
                                                mirror=False,
+                                               symmetrize="average" if args.theoryAgnosticSymmetrize else None,
                                                passToFakes=False if args.noPolVarOnFake else passSystToFakes,
-                                               processes=["signal_samples"],
+                                               processes=["signal_samples_noOutAcc" if hasSeparateOutOfAcceptanceSignal else "signal_samples"],
                                                baseName=f"{groupName}_{coeffKey}_{genVcharge}_",
                                                noConstraint=True,
                                                systAxes=["nPolVarSyst", "downUpVar"], 
                                                labelsByAxis=["v", "downUpVar"],
-                                               splitGroup={f"{groupName}_{coeffKey}" : f"{groupName}_{coeffKey}"}
+                                               #splitGroup={f"{groupName}_{coeffKey}" : f"{groupName}_{coeffKey}"}
                                                )
                         
             else:

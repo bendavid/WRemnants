@@ -45,7 +45,7 @@ def make_datagroups_2016(dg, combine=False, pseudodata_pdfset = None, applySelec
         )
     if dg.mode in ["vgen", "wmass"]:
         dg.addGroup("Wmunu",
-            members = dg.get_members_from_results(startswith=["Wplusmunu", "Wminusmunu"]),
+            members = dg.get_members_from_results(startswith=["Wplusmunu", "Wminusmunu", "Wmunu"]),
             selectOp = sigOp,
         )
         dg.addGroup("Wtaunu",

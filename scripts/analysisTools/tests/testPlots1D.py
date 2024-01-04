@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from wremnants.datasets.datagroups2016 import make_datagroups_2016
+from wremnants.datasets.datagroups import Datagroups
 from wremnants import histselections as sel
 #from wremnants import plot_tools,theory_tools,syst_tools
 from utilities import boostHistHelpers as hh,common, logging
@@ -85,7 +85,8 @@ if __name__ == "__main__":
                         help='Choose what processes to plot, otherwise all are done')
     parser.add_argument('--plot', nargs='+', type=str,
                         help='Choose what distribution to plot by name')
-    parser.add_argument("-x", "--x-axis-name", dest="xAxisName", nargs='+', type=str, help="x axis name")
+    parser.add_argument("-x", "--xAxisName", nargs='+', type=str, help="x axis name")
+    parser.add_argument("-r", "--ratioRange", nargs=2, type=float, default=[0.9,1.1], help="Min and max of ratio range")
     args = parser.parse_args()
     
     logger = logging.setup_logger(os.path.basename(__file__), args.verbose)
@@ -99,11 +100,15 @@ if __name__ == "__main__":
     adjustSettings_CMS_lumi()
     canvas1D = ROOT.TCanvas("canvas1D", "", 800, 900)
 
-    groups = make_datagroups_2016(fname)
+    groups = Datagroups(fname)
     datasets = groups.getNames()
     if args.processes is not None and len(args.processes):
         datasets = list(filter(lambda x: x in args.processes, datasets))
     logger.info(f"Will plot datasets {datasets}")
+
+    ratioMin = args.ratioRange[0]
+    ratioMax = args.ratioRange[1]
+    ratioPadYaxisTitle=f"Data/pred::{ratioMin},{ratioMax}"
 
     for ip,p in enumerate(args.plot):
 
@@ -121,5 +126,5 @@ if __name__ == "__main__":
         hdata = rootHists["Data"]
         hmc = {d : rootHists[d] for d in datasets if d != "Data"}
         plotDistribution1D(hdata, hmc, datasets, outdir, canvas1Dshapes=canvas1D,
-                           xAxisName=args.xAxisName[ip], plotName=p)
+                           xAxisName=args.xAxisName[ip], plotName=p, ratioPadYaxisTitle=ratioPadYaxisTitle)
 
