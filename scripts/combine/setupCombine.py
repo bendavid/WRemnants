@@ -54,7 +54,8 @@ def make_parser(parser=None):
     parser.add_argument("--scalePdf", default=1, type=float, help="Scale the PDF hessian uncertainties by this factor")
     parser.add_argument("--pdfUncFromCorr", action='store_true', help="Take PDF uncertainty from correction hist (Requires having run that correction)")
     parser.add_argument("--massVariation", type=float, default=100, help="Variation of boson mass")
-    parser.add_argument("--ewUnc", type=str, nargs="*", default=["default"], choices=["default","horacenloew", "winhacnloew", "virtual_ew", "virtual_ew_wlike"], help="Include EW uncertainty")
+    parser.add_argument("--ewUnc", type=str, nargs="*", default=["default"], help="Include EW uncertainty", 
+        choices=["default","horacenloew", "horaceqedew", "winhacnloew", "virtual_ew", "virtual_ew_wlike", "winhacloew_FSR", "horaceqedew_FSR", "horacelophotosmecoffew_FSR"])
     parser.add_argument("--widthUnc", action='store_true', help="Include uncertainty on W and Z width")
     parser.add_argument("--skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
     parser.add_argument("--noQCDscaleFakes", action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
@@ -395,9 +396,15 @@ def setup(args, inputFile, fitvar, xnorm=False):
             passToFakes=passSystToFakes,
         )
         if args.theoryAgnostic:
+            import numpy as np
             # open file with theory bands
             with h5py.File(f"{common.data_dir}/angularCoefficients/theoryband_variations.hdf5", "r") as ff:
                 scale_hists = narf.ioutils.pickle_load_h5py(ff["theorybands"])
+                for tt in scale_hists:
+                    scale_hists[tt].values()[...,1] = scale_hists[tt].values()[...,1]-np.ones_like(scale_hists[tt].values()[...,1])
+                    scale_hists[tt].values()[...,0] = np.where(scale_hists[tt].values()[...,0]>0,scale_hists[tt].values()[...,0]*(-1.0),-np.ones_like(scale_hists[tt].values()[...,0])+scale_hists[tt].values()[...,0])
+
+
             # First do in acceptance bins, then OOA later (for OOA we need to group bins into macro regions)
             nuisanceBaseName = f"norm{label}"
             for sign in ["plus", "minus"]:
@@ -405,7 +412,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                     rename=f"{nuisanceBaseName}{sign}",
                                     **noi_args,
                                     mirror=False,
-                                    symmetrize = "conservative",
+                                    symmetrize = "quadratic",
                                     systAxes=poi_axes+["downUpVar"],
                                     processes=["signal_samples"],
                                     baseName=f"{nuisanceBaseName}{sign}_",
@@ -573,25 +580,25 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if "default" in ewUncs:
         # set default EW uncertainty depending on the analysis type
         if wlike:
-            ewUnc = "virtual_ew_wlike"
+            ewUnc = ["virtual_ew_wlike", "horaceqedew_FSR"]
         elif dilepton:
-            ewUnc = "virtual_ew"
+            ewUnc = ["virtual_ew", "horaceqedew_FSR"]
         else:
-            ewUnc = "horacenloew"
-        ewUncs = [ewUnc if u=="default" else u for u in ewUncs]
-
+            ewUnc = ["horacenloew", ]
+        ewUncs = [*[u for u in ewUncs if u!="default"], *ewUnc]
+        
     for ewUnc in ewUncs:
         if datagroups.flavor == "e":
             logger.warning("EW uncertainties are not implemented for electrons, proceed w/o EW uncertainty")
             continue
-        if ewUnc=="winhacnloew" and not wmass:
+        if "winhac" in ewUnc and not wmass:
             logger.warning("Winhac is not implemented for any other process than W, proceed w/o winhac EW uncertainty")
             continue
-        elif ewUnc.startswith("virtual_ew") and wmass:
+        if ewUnc.startswith("virtual_ew") and wmass:
             logger.warning("Virtual EW corrections are not implemented for any other process than Z, uncertainty only applied to this background")
 
         cardTool.addSystematic(f"{ewUnc}Corr", 
-            processes=['w_samples'] if ewUnc=="winhacnloew" else ['single_v_samples'],
+            processes=['w_samples'] if ewUnc.startswith("winhac") else ['single_v_samples'],
             mirror=True,
             group="theory_ew",
             systAxes=["systIdx"],

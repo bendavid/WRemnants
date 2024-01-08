@@ -14,24 +14,26 @@ using namespace ROOT;
 namespace wrem {
 
 // pdg value
+constexpr double electron_mass = 5.110e-04;
 constexpr double muon_mass = 0.1056583745;
+constexpr double tau_mass = 1.77682;
 
-    template <typename T>
-    ROOT::VecOps::RVec<T> absVal(const ROOT::VecOps::RVec<T> & val) {
+template <typename T>
+ROOT::VecOps::RVec<T> absVal(const ROOT::VecOps::RVec<T> & val) {
 
-        ROOT::VecOps::RVec<T> res(val.size(), 0.0); // initialize to 0
-        for (unsigned int i = 0; i < res.size(); ++i) {
-            res[i] = std::abs(val[i]);
-        }
-        return res;
-
+    ROOT::VecOps::RVec<T> res(val.size(), 0.0); // initialize to 0
+    for (unsigned int i = 0; i < res.size(); ++i) {
+        res[i] = std::abs(val[i]);
     }
+    return res;
 
-    // template <typename T>
-    // bool printVar(const T& var) {
-    //     std::cout << var << std::endl;
-    //     return 1;
-    // }
+}
+
+// template <typename T>
+// bool printVar(const T& var) {
+//     std::cout << var << std::endl;
+//     return 1;
+// }
 
 float pt_2(float pt1, float phi1, float pt2, float phi2) {
 
