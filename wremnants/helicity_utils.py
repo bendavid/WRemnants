@@ -11,7 +11,7 @@ from .correctionsTensor_helper import makeCorrectionsTensor
 from .theory_tools import moments_to_angular_coeffs
 from utilities import common, logging
 from utilities import boostHistHelpers as hh
-from utilities.io_tools import input_tool
+from utilities.io_tools import input_tools
 import numpy as np
 import h5py
 import hdf5plugin
