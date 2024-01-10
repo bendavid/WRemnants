@@ -29,7 +29,7 @@ class Datagroups(object):
         elif infile.endswith(".hdf5"):
             logger.info("Load input file")
             self.h5file = h5py.File(infile, "r")
-            self.results = narf.ioutils.pickle_load_h5py(self.h5file["results"])
+            self.results = input_tools.load_results_h5py(self.h5file)
         else:
             raise ValueError(f"{infile} has unsupported file type")
 
