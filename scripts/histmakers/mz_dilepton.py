@@ -203,9 +203,9 @@ def build_graph(df, dataset):
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "nonTrigMuons")
 
     if args.useDileptonTriggerSelection:
-        df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0", "nonTrigMuons_eta0", "nonTrigMuons_phi0")
+        df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0", "nonTrigMuons_eta0", "nonTrigMuons_phi0", era=era)
     else:
-        df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0")
+        df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0", era=era)
 
     df = df.Define("ptll", "ll_mom4.pt()")
     df = df.Define("yll", "ll_mom4.Rapidity()")

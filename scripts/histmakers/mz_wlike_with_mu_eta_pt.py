@@ -171,7 +171,7 @@ def build_graph(df, dataset):
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "trigMuons")
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "nonTrigMuons")
 
-    df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0")
+    df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0", era=era)
 
     if dataset.is_data:
         df = df.DefinePerSample("nominal_weight", "1.0")
