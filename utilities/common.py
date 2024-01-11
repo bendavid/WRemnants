@@ -178,6 +178,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--onlyMainHistograms", action='store_true', help="Only produce some histograms, skipping (most) systematics to run faster when those are not needed")
     parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="DeepMETReso")
     parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
+    parser.add_argument("--appendOutputFile", type=str, default="", help="Append analysis output to specified output file")
     parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP", "2017", "2018"], help="Data set to process", default="2016PostVFP")
     parser.add_argument("--nonClosureScheme", type=str, default = "A-only", choices=["none", "A-M-separated", "A-M-combined", "binned", "binned-plus-M", "A-only", "M-only"], help = "source of the Z non-closure nuisances")
     parser.add_argument("--correlatedNonClosureNP", action="store_false", help="disable the de-correlation of Z non-closure nuisance parameters after the jpsi massfit")

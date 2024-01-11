@@ -261,7 +261,7 @@ def make_qcd_uncertainty_helper_by_helicity(is_w_like = False, filename=None):
 
     # load moments from file
     with h5py.File(filename, "r") as h5file:
-        results = narf.ioutils.pickle_load_h5py(h5file["results"])
+        results = input_tools.load_results_h5py(h5file)
         moments = results["Z"] if is_w_like else results["W"]
 
     moments_nom = moments[{"muRfact" : 1.j, "muFfact" : 1.j}].values()
@@ -316,7 +316,7 @@ def make_helicity_test_corrector(is_w_like = False, filename = None):
 
     # load moments from file
     with h5py.File(filename, "r") as h5file:
-        results = narf.ioutils.pickle_load_h5py(h5file["results"])
+        results = input_tools.load_results_h5py(h5file)
         moments = results["Z"] if is_w_like else results["W"]
 
     coeffs = theory_tools.moments_to_angular_coeffs(moments)
