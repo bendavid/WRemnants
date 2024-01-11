@@ -174,6 +174,8 @@ def postprocess_corr_hist(corrh):
 def get_corr_name(generator):
     # Hack for now
     label = generator.replace("1D", "")
+    if "dataPtll" in generator:
+        return "MC_data_ratio"
     return f"{label}_minnlo_ratio" if "Helicity" not in generator else f"{label.replace('Helicity', '')}_minnlo_coeffs"
 
 def rebin_corr_hists(hists, ndim=-1, binning=None):
@@ -343,8 +345,6 @@ def make_helicity_test_corrector(is_w_like = False, filename = None):
     corr_coeffs.values()[..., 6, 1, 2] *= 1.7
     corr_coeffs.values()[..., 7, 1, 2] *= 1.8
     corr_coeffs.values()[..., 8, 1, 2] *= 1.9
-
-    print("corr_coeffs", corr_coeffs)
 
     helper = makeCorrectionsTensor(corr_coeffs, ROOT.wrem.CentralCorrByHelicityHelper, tensor_rank=3)
 

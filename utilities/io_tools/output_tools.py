@@ -133,8 +133,6 @@ def copy_to_eos(outpath, outfolder=None):
 
 def write_theory_corr_hist(output_name, process, output_dict, args=None, file_meta_data=None): 
     outname = output_name
-    if args is not None and args.postfix is not None:
-        outname += f"_{args.postfix}"
     output_filename = f"{outname}Corr{process}.pkl.lz4"
     logger.info(f"Write correction file {output_filename}")
     result_dict = {process : output_dict, "meta_data" : narf.ioutils.make_meta_info_dict(args, wd=common.base_dir)}

@@ -69,6 +69,7 @@ args = parser.parse_args()
 thisAnalysis = ROOT.wrem.AnalysisType.Wmass
 
 era = args.era
+
 datasets = getDatasets(maxFiles=args.maxFiles,
                        filt=args.filterProcs,
                        excl=args.excludeProcs, 

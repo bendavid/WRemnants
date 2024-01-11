@@ -141,7 +141,7 @@ def flip_hist_y_sign(h, yaxis="Y"):
     h.values()[...] = h.values()*scale[(None if ax.name != yaxis else slice(0, ax.size) for ax in h.axes)]
     return h 
 
-def read_dyturbo_vars_hist(base_name, var_axis, axes, charge=None):
+def read_dyturbo_vars_hist(base_name, var_axis=None, axes=("Y", "qT"), charge=None):
 
     # map from scetlib fo variations naming to dyturbo naming
     # *FIXME* this is sensitive to presence or absence of trailing zeros for kappas
@@ -155,6 +155,8 @@ def read_dyturbo_vars_hist(base_name, var_axis, axes, charge=None):
         }
 
     var_hist = None
+    if var_axis is None:
+        var_axis=hist.axis.StrCategory(list(scales_map.keys()), name="vars")
 
     for i, var in enumerate(var_axis):
         if var.startswith("pdf"):
@@ -351,8 +353,6 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
     htotal = hh.addHists(hresum, hnonsing, by_ax_name=False)
 
     return htotal
-
-
 
 def read_json(fIn):
 
