@@ -174,6 +174,8 @@ def postprocess_corr_hist(corrh):
 def get_corr_name(generator):
     # Hack for now
     label = generator.replace("1D", "")
+    if "dataPtll" in generator:
+        return "MC_data_ratio"
     return f"{label}_minnlo_ratio" if "Helicity" not in generator else f"{label.replace('Helicity', '')}_minnlo_coeffs"
 
 def rebin_corr_hists(hists, ndim=-1, binning=None):
@@ -259,7 +261,7 @@ def make_qcd_uncertainty_helper_by_helicity(is_w_like = False, filename=None):
 
     # load moments from file
     with h5py.File(filename, "r") as h5file:
-        results = narf.ioutils.pickle_load_h5py(h5file["results"])
+        results = input_tools.load_results_h5py(h5file)
         moments = results["Z"] if is_w_like else results["W"]
 
     moments_nom = moments[{"muRfact" : 1.j, "muFfact" : 1.j}].values()
@@ -314,7 +316,7 @@ def make_helicity_test_corrector(is_w_like = False, filename = None):
 
     # load moments from file
     with h5py.File(filename, "r") as h5file:
-        results = narf.ioutils.pickle_load_h5py(h5file["results"])
+        results = input_tools.load_results_h5py(h5file)
         moments = results["Z"] if is_w_like else results["W"]
 
     coeffs = theory_tools.moments_to_angular_coeffs(moments)
@@ -343,8 +345,6 @@ def make_helicity_test_corrector(is_w_like = False, filename = None):
     corr_coeffs.values()[..., 6, 1, 2] *= 1.7
     corr_coeffs.values()[..., 7, 1, 2] *= 1.8
     corr_coeffs.values()[..., 8, 1, 2] *= 1.9
-
-    print("corr_coeffs", corr_coeffs)
 
     helper = makeCorrectionsTensor(corr_coeffs, ROOT.wrem.CentralCorrByHelicityHelper, tensor_rank=3)
 
