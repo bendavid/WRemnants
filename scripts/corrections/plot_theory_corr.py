@@ -121,7 +121,7 @@ def make_plot_1d(hists, names, proc, axis, labels=None, corr=None,
         hists = [hists]
         names = [names]
 
-    h1ds = [project(flow)(h, [axis]) for h in hists]
+    h1ds = [project(flow)(h, [axis]) if set(hists[0].axes.name) != set([axis]) else h for h in hists]
 
     if flow:
         xedges = plot_tools.extendEdgesByFlow(h1ds[0])
@@ -161,6 +161,7 @@ def make_plot_1d(hists, names, proc, axis, labels=None, corr=None,
         y = h1d.values(flow=flow)
 
         ax.stairs(y, xedges, color=colors(i), label=labels[i])
+
         if uncertainty_bands:
             err = np.sqrt(h1d.variances(flow=flow))
             ax.bar(x=xedges[:-1], height=2*err, bottom=y - err, width=np.diff(xedges), align='edge', linewidth=0, alpha=0.3, color=colors(i), zorder=-1)
@@ -179,27 +180,43 @@ def make_plot_1d(hists, names, proc, axis, labels=None, corr=None,
 
 
 for dataset, corr_hists in corr_dict.items():
-    for corr, corrh in corr_hists.items():
-        for systAxName in ["systIdx", "tensor_axis_0", "vars"]:
-            if systAxName in corrh.axes.name:
-                syst_axis = systAxName
-                break
-        else:
-            raise RuntimeError(f"Systematics axis not found, available axes are {corrh.axes.name}")
+    base_proc = dataset.replace("PostVFP","")
 
-        # loop over charge, if exist
-        if "charge" in corrh.axes.name:
-            corrh_charges = {idx : corrh[{"charge":idx}] for idx in range(corrh.axes["charge"].size)}
-        else: 
-            corrh_charges = {0 : corrh}
+    # loop over charge, if multiple charges exist make plots for each charge separately
+    for charge_idx in [0, 1]:
 
-        for charge_idx, corrh_charge in corrh_charges.items():
+        all_hists = []
+        all_names = []
+        all_labels = []
+        all_axes = []
+        
+        for corr, corrh in corr_hists.items():
+            has_charge=False
+            sel = {} # bin selections
+            if charge_idx == 1 and ("charge" not in corrh.axes.name or corrh.axes["charge"].size <= 1):
+                continue # only one charge for this correction
+
+            proc = base_proc
+            if "charge" in corrh.axes.name:
+                sel.update({"charge": charge_idx})
+                if corrh.axes["charge"].size > 1:
+                    has_charge=True
+                    proc = f"{base_proc[0]}{'minus' if charge_idx==0 else 'plus'}{base_proc[1:]}"
+
+            for systAxName in ["systIdx", "tensor_axis_0", "vars"]:
+                if systAxName in corrh.axes.name:
+                    syst_axis = systAxName
+                    break
+            else:
+                raise RuntimeError(f"Systematics axis not found, available axes are {corrh.axes.name}")
+
+            corr = corr.split("_")[0]
             # retreive 
-            if type(corrh_charge.axes[syst_axis]) == hist.axis.StrCategory:
-                idxs = [i for i, idx in enumerate(corrh_charge.axes[syst_axis]) if args.idxs is None or str(idx) in args.idxs or str(i) in args.idxs]
+            if type(corrh.axes[syst_axis]) == hist.axis.StrCategory:
+                idxs = [i for i, idx in enumerate(corrh.axes[syst_axis]) if args.idxs is None or str(idx) in args.idxs or str(i) in args.idxs]
                 labels = idxs
             else:
-                idxs = [i for i in range(corrh_charge.axes[syst_axis].size) if args.idxs is None or str(i) in args.idxs]
+                idxs = [i for i in range(corrh.axes[syst_axis].size) if args.idxs is None or str(i) in args.idxs]
                 if corr in styles.syst_labels:
                     label = styles.syst_labels[corr]
                 else:
@@ -215,25 +232,32 @@ for dataset, corr_hists in corr_dict.items():
                 logger.warning(f"Some of the indices ({set(args.idxs) - set(idxs)}) have not been found in the systematic axis!")
 
             # split hists into systematics
-            corrh_systs = {idx: corrh_charge[{syst_axis:idx}] for idx in idxs}
+            corrh_systs = {idx: corrh[{**sel, syst_axis:idx}] for idx in idxs}
 
             hists = [h for h in corrh_systs.values()]
             names = [f"{n}" for n in corrh_systs.keys()]
-            axes = [n for n in corrh_charge.axes.name if n != syst_axis and (args.axes is None or n in args.axes)]
+            all_hists+=hists
+            all_names+=names
+            all_labels+=labels
 
-            proc = dataset.replace("PostVFP","")
-            if len(corrh_charges) > 1:
-                proc = f"{proc[0]}{'minus' if charge_idx==0 else 'plus'}{proc[1:]}"
-
-            if "1d" in args.plots:
-                for axis in axes:
-                    make_plot_1d(hists, names, proc, axis, labels=labels, flow=not args.noFlow,
-                        xmin=args.xlim[0], xmax=args.xlim[1], ymin=args.ylim[0], ymax=args.ylim[1], uncertainty_bands=args.showUncertainties)
-
+            axes = [n for n in corrh.axes.name if n not in [syst_axis, "charge"] and (args.axes is None or n in args.axes)]
+            all_axes+=axes
             if "2d" in args.plots and len(axes) >= 2:
                 for label, (n, h) in zip(labels, corrh_systs.items()):
                     for ax1, ax2 in list(combinations(axes, 2)): 
-                        make_plot_2d(h, n, proc, [ax1, ax2], corr=label, flow=not args.noFlow, clim=args.clim)                
+                        make_plot_2d(h, n, proc, [ax1, ax2], corr=corr, flow=not args.noFlow, clim=args.clim)                
 
+            # if "1d" in args.plots:
+            #     for axis in axes:
+            #         make_plot_1d(hists, names, proc, axis, labels=labels, flow=not args.noFlow, corr=corr, 
+            #             xmin=args.xlim[0], xmax=args.xlim[1], ymin=args.ylim[0], ymax=args.ylim[1], uncertainty_bands=args.showUncertainties)
 
-        
+        if has_charge:
+            proc = f"{base_proc[0]}{'minus' if charge_idx==0 else 'plus'}{base_proc[1:]}"
+
+        if "1d" in args.plots:
+            for axis in set(all_axes):
+                make_plot_1d(all_hists, all_names, proc, axis, labels=all_labels, flow=not args.noFlow, corr="all",
+                    xmin=args.xlim[0], xmax=args.xlim[1], ymin=args.ylim[0], ymax=args.ylim[1], uncertainty_bands=args.showUncertainties)
+
+            

@@ -282,6 +282,7 @@ def define_ew_vars(df):
     df = df.Define('ewPTll', '(ewLeptons[0]+ewLeptons[1]).pt()')
     df = df.Define('ewPTlly', 'ewGenV.pt()')
     df = df.Define('ewYll', '(ewLeptons[0]+ewLeptons[1]).Rapidity()')
+    df = df.Define('ewAbsYll', 'std::fabs(ewYll)')
     df = df.Define('ewYlly', 'ewGenV.Rapidity()')
 
     return df

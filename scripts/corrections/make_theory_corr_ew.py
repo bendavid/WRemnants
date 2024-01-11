@@ -66,6 +66,18 @@ for proc in procs:
             histo = hh.scaleHist(histo, res[proc_name]["dataset"]["xsec"]*10e6/res[proc_name]['weight_sum'], createNew=False)
             logger.info(f'Integral for {name} after scaling {np.sum(histo.values(flow=True))}')
 
+        if "ewMll" in histo.axes.name:
+            rebinN=4 # make one bin out of 4
+            edges = histo.axes["ewMll"].edges
+            if proc[0] == "Z":
+                # keep low and high bin edges of [0,50,60, ... 120] for technical reason
+                rebin_edges = np.append(np.append(edges[:2],edges[2:-1][::rebinN]),edges[-1:])
+            else:
+                rebin_edges = edges[::rebinN]
+
+            logger.info(f"Rebin axis ewMll by {rebinN}")
+            histo = hh.rebinHist(histo, "ewMll", rebin_edges)
+
         return histo
     
     nums = []

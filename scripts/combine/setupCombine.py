@@ -55,7 +55,8 @@ def make_parser(parser=None):
     parser.add_argument("--pdfUncFromCorr", action='store_true', help="Take PDF uncertainty from correction hist (Requires having run that correction)")
     parser.add_argument("--massVariation", type=float, default=100, help="Variation of boson mass")
     parser.add_argument("--ewUnc", type=str, nargs="*", default=["default"], help="Include EW uncertainty", 
-        choices=["default","horacenloew", "horaceqedew", "winhacnloew", "virtual_ew", "virtual_ew_wlike", "winhacloew_FSR", "horaceqedew_FSR", "horacelophotosmecoffew_FSR"])
+        choices=["default", "horacenloew", "horaceqedew", "winhacnloew", "virtual_ew", "virtual_ew_wlike", 
+            "winhacloew_FSR", "horaceqedew_FSR", "horacelophotosmecoffew_FSR", "powhegnloewew", "powhegnloewew_ISR"])
     parser.add_argument("--widthUnc", action='store_true', help="Include uncertainty on W and Z width")
     parser.add_argument("--skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
     parser.add_argument("--noQCDscaleFakes", action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
