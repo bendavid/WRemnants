@@ -182,8 +182,8 @@ bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibrat
 corr_helpers = theory_corrections.load_corr_helpers([d.name for d in datasets if d.name in common.vprocs], args.theoryCorr)
 
 # For polynominal variations
-theoryAgnostic_helpers_minus = wremnants.makehelicityWeightHelper_devel(genVcharge=-1, fileTag=args.theoryAgnosticFileTag)
-theoryAgnostic_helpers_plus  = wremnants.makehelicityWeightHelper_devel(genVcharge=1,  fileTag=args.theoryAgnosticFileTag)
+theoryAgnostic_helpers_minus = wremnants.makehelicityWeightHelper_polvar(genVcharge=-1, fileTag=args.theoryAgnosticFileTag)
+theoryAgnostic_helpers_plus  = wremnants.makehelicityWeightHelper_polvar(genVcharge=1,  fileTag=args.theoryAgnosticFileTag)
 
 # recoil initialization
 if not args.noRecoil:
