@@ -16,7 +16,7 @@ import re
 import numpy as np
 
 parser = common.plot_parser()
-parser.add_argument("infile", help="Output file of the analysis stage, containing ND boost histogrdams")
+parser.add_argument("infile", help="Output file of the analysis stage, containing ND boost histograms")
 parser.add_argument("--ratioToData", action='store_true', help="Use data as denominator in ratio")
 parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal')", default="nominal")
 parser.add_argument("--nominalRef", type=str, help="Specify the nominal his if baseName is a variation hist (for plotting alt hists)")

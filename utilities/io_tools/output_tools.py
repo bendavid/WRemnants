@@ -49,9 +49,8 @@ def writeMetaInfoToRootFile(rtfile, exclude_diff='notebooks', args=None):
         out = ROOT.TNamed(str(key), str(value))
         out.Write()
 
-def write_analysis_output(results, outfile, args, update_name=True):
+def write_analysis_output(results, outfile, args):
     analysis_debug_output(results)
-    results.update({"meta_info" : narf.ioutils.make_meta_info_dict(args=args, wd=common.base_dir)})
 
     to_append = []
     if args.theoryCorr and not args.theoryCorrAltOnly:
@@ -63,7 +62,7 @@ def write_analysis_output(results, outfile, args, update_name=True):
     if hasattr(args, "ptqVgen") and args.ptqVgen:
         to_append.append("vars_qtbyQ")
 
-    if to_append and update_name:
+    if to_append and not args.forceDefaultName:
         outfile = outfile.replace(".hdf5", f"_{'_'.join(to_append)}.hdf5")
 
     if args.postfix:
@@ -75,9 +74,27 @@ def write_analysis_output(results, outfile, args, update_name=True):
             os.makedirs(args.outfolder)
         outfile = os.path.join(args.outfolder, outfile)
 
+    if args.appendOutputFile:
+        outfile = args.appendOutputFile
+        if os.path.isfile(outfile):
+            logger.info(f"Analysis output will be appended to file {outfile}")
+            open_as="a"
+        else:
+            logger.warning(f"Analysis output requested to be appended to file {outfile}, but the file does not exist yet, it will be created instead")
+            open_as="w"
+    else:
+        if os.path.isfile(outfile):
+            logger.warning(f"Output file {outfile} exists already, it will be overwritten")
+        open_as="w"
+
     time0 = time.time()
-    with h5py.File(outfile, 'w') as f:
-        narf.ioutils.pickle_dump_h5py("results", results, f)
+    with h5py.File(outfile, open_as) as f:
+        for k, v in results.items():
+            logger.debug(f"Pickle and dump {k}")
+            narf.ioutils.pickle_dump_h5py(k, v, f)
+
+        if "meta_info" not in f.keys():
+            narf.ioutils.pickle_dump_h5py("meta_info", narf.ioutils.make_meta_info_dict(args=args, wd=common.base_dir), f)
 
     logger.info(f"Writing output: {time.time()-time0}")
     logger.info(f"Output saved in {outfile}")
@@ -133,8 +150,6 @@ def copy_to_eos(outpath, outfolder=None):
 
 def write_theory_corr_hist(output_name, process, output_dict, args=None, file_meta_data=None): 
     outname = output_name
-    if args is not None and args.postfix is not None:
-        outname += f"_{args.postfix}"
     output_filename = f"{outname}Corr{process}.pkl.lz4"
     logger.info(f"Write correction file {output_filename}")
     result_dict = {process : output_dict, "meta_data" : narf.ioutils.make_meta_info_dict(args, wd=common.base_dir)}

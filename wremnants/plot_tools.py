@@ -217,7 +217,7 @@ def makeStackPlotWithRatio(
     
     if "Data" in histInfo and ratio_to_data:
         hep.histplot(
-            hh.divideHists(sum(stack), data_hist, cutoff=0.01, by_ax_name=False),
+            hh.divideHists(hh.sumHists(stack), data_hist, cutoff=0.01, by_ax_name=False),
             histtype="step",
             color=histInfo[stackedProcs[-1]].color,
             label=histInfo[stackedProcs[-1]].label,
@@ -239,7 +239,7 @@ def makeStackPlotWithRatio(
         linestyles = np.array(linestyles, dtype=object)
         linestyles[data_idx+1:data_idx+1+len(unstacked_linestyles)] = unstacked_linestyles
 
-        ratio_ref = data_hist if ratio_to_data else sum(stack) 
+        ratio_ref = data_hist if ratio_to_data else hh.sumHists(stack) 
         if baseline:
             hep.histplot(
                 hh.divideHists(ratio_ref, ratio_ref, cutoff=1e-8, rel_unc=True, flow=False, by_ax_name=False),
@@ -253,8 +253,6 @@ def makeStackPlotWithRatio(
             )
 
         for proc,style in zip(unstacked, linestyles):
-            if ratio_to_data and proc == "Data":
-                continue
             unstack = histInfo[proc].hists[histName]
             if not fitresult or proc not in to_read:
                 unstack = action(unstack)[select]
@@ -271,12 +269,14 @@ def makeStackPlotWithRatio(
                 binwnorm=binwnorm,
                 flow='none',
             )
-            hep.histplot(
-                hh.divideHists(unstack, ratio_ref, cutoff=0.01, rel_unc=True, flow=False, by_ax_name=False),
+            if ratio_to_data and proc == "Data":
+                continue
+            stack_ratio = hh.divideHists(unstack, ratio_ref, cutoff=0.01, rel_unc=True, flow=False, by_ax_name=False)
+            hep.histplot(stack_ratio,
                 histtype="errorbar" if style == "None" else "step",
                 color=histInfo[proc].color,
                 label=histInfo[proc].label,
-                yerr=True if style == "None" else False,
+                yerr=True if (style == "None" and stack_ratio.storage_type == hist.storage.Weight) else False,
                 linewidth=2,
                 linestyle=style,
                 ax=ax2,

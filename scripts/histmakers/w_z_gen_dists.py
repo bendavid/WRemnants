@@ -264,7 +264,7 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
-output_tools.write_analysis_output(resultdict, f"{os.path.basename(__file__).replace('py', 'hdf5')}", args, update_name=not args.forceDefaultName)
+output_tools.write_analysis_output(resultdict, f"{os.path.basename(__file__).replace('py', 'hdf5')}", args)
 
 logger.info("computing angular coefficients")
 z_moments = None
@@ -308,4 +308,4 @@ if not args.skipAngularCoeffs:
         if args.useTheoryAgnosticBinning:
             outfname += "_theoryAgnosticBinning"
         outfname += ".hdf5"
-        output_tools.write_analysis_output(moments_out, outfname, args, update_name=not args.forceDefaultName)
+        output_tools.write_analysis_output(moments_out, outfname, args)

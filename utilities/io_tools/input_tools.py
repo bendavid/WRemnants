@@ -16,6 +16,12 @@ logger = logging.child_logger(__name__)
 
 scetlib_tnp_match_expr = ["^gamma_.*[+|-]\d+", "^b_.*[+|-]\d+", "^s[+|-]\d+", "^h_.*\d+"]
 
+def load_results_h5py(h5file):
+    if "results" in h5file.keys():
+        return ioutils.pickle_load_h5py(h5file["results"])
+    else:
+        return {k: ioutils.pickle_load_h5py(v) for k,v in h5file.items()}
+
 def read_and_scale_pkllz4(fname, proc, histname, calculate_lumi=False, scale=1):
     with lz4.frame.open(fname) as f:
         results = pickle.load(f)
@@ -24,29 +30,29 @@ def read_and_scale_pkllz4(fname, proc, histname, calculate_lumi=False, scale=1):
 
 def read_hist_names(fname, proc):
     with h5py.File(fname, "r") as h5file:
-        results = ioutils.pickle_load_h5py(h5file["results"])
+        results = load_results_h5py(h5file)
         if proc not in results:
             raise ValueError(f"Invalid process {proc}! No output found in file {fname}")
         return results[proc]["output"].keys()
 
 def read_keys(fname):
     with h5py.File(fname, "r") as h5file:
-        results = ioutils.pickle_load_h5py(h5file["results"])
+        results = load_results_h5py(h5file)
         return results.keys()
 
 def read_xsec(fname, proc):
     with h5py.File(fname, "r") as h5file:
-        results = ioutils.pickle_load_h5py(h5file["results"])
+        results = load_results_h5py(h5file)
         return results[proc]["dataset"]["xsec"]
 
 def read_sumw(fname, proc):
     with h5py.File(fname, "r") as h5file:
-        results = ioutils.pickle_load_h5py(h5file["results"])
+        results = load_results_h5py(h5file)
         return results[proc]["weight_sum"]
 
 def read_and_scale(fname, proc, histname, calculate_lumi=False, scale=1, apply_xsec=True):
     with h5py.File(fname, "r") as h5file:
-        results = ioutils.pickle_load_h5py(h5file["results"])
+        results = load_results_h5py(h5file)
             
         return load_and_scale(results, proc, histname, calculate_lumi, scale, apply_xsec)
 
@@ -68,7 +74,7 @@ def load_and_scale(res_dict, proc, histname, calculate_lumi=False, scale=1., app
 
 def read_all_and_scale(fname, procs, histnames, lumi=False):
     h5file = h5py.File(fname, "r")
-    results = ioutils.pickle_load_h5py(h5file["results"])
+    results = load_results_h5py(h5file)
 
     hists = []
     for histname in histnames:
@@ -141,7 +147,7 @@ def flip_hist_y_sign(h, yaxis="Y"):
     h.values()[...] = h.values()*scale[(None if ax.name != yaxis else slice(0, ax.size) for ax in h.axes)]
     return h 
 
-def read_dyturbo_vars_hist(base_name, var_axis, axes, charge=None):
+def read_dyturbo_vars_hist(base_name, var_axis=None, axes=("Y", "qT"), charge=None):
 
     # map from scetlib fo variations naming to dyturbo naming
     # *FIXME* this is sensitive to presence or absence of trailing zeros for kappas
@@ -155,6 +161,8 @@ def read_dyturbo_vars_hist(base_name, var_axis, axes, charge=None):
         }
 
     var_hist = None
+    if var_axis is None:
+        var_axis=hist.axis.StrCategory(list(scales_map.keys()), name="vars")
 
     for i, var in enumerate(var_axis):
         if var.startswith("pdf"):
@@ -352,8 +360,6 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
 
     return htotal
 
-
-
 def read_json(fIn):
 
     if not os.path.exists(fIn):
@@ -417,6 +423,8 @@ def get_metadata(infile):
             results = pickle.load(f)
     elif infile.endswith(".hdf5"):
         h5file = h5py.File(infile, "r")
+        if "meta_info" in h5file.keys():
+            return ioutils.pickle_load_h5py(h5file["meta_info"])
         meta = h5file.get("results", h5file.get("meta", None))
         results = ioutils.pickle_load_h5py(meta) if meta else None
 

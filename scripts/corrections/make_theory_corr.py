@@ -135,9 +135,10 @@ logger.info(f"Minnlo norm in corr region is {nom_sum(minnloh)}, corrh norm is {n
 
 corrh = hist.Hist(*corrh_unc.axes, name=corrh_unc.name, storage=hist.storage.Double(), data=corrh_unc.values(flow=True))
 
+generator = args.generator
 if args.postfix:
-    args.generator += args.postfix
-outfile = f"{args.outpath}/{args.generator}"
+    generator += args.postfix
+outfile = f"{args.outpath}/{generator}"
 
 meta_dict = {}
 for f in [args.minnlo_file]+args.corr_files:
@@ -152,8 +153,8 @@ for f in [args.minnlo_file]+args.corr_files:
         pass
 
 output_dict = {
-    f"{args.generator}_minnlo_ratio" : corrh,
-    f"{args.generator}_hist" : numh,
+    f"{generator}_minnlo_ratio" : corrh,
+    f"{generator}_hist" : numh,
     "minnlo_ref_hist" : minnloh,
 }
 
@@ -170,7 +171,6 @@ norm_ratio = to_val(num_yield)/to_val(denom_yield)
 
 logger.info(f"Average correction is {np.average(corrh.values())}")
 logger.info(f"Normalization change (corr/minnlo) is {norm_ratio}")
-logger.info(f"Wrote file {outfile}")
 
 if args.plotdir:
     colors = {
@@ -194,7 +194,7 @@ if args.plotdir:
         final_state = "\\ell\\ell" if args.proc == 'z' else ("\\ell^{+}\\nu" if charge.imag > 0 else "\\ell^{-}\\nu")
 
         outdir = output_tools.make_plot_dir(*args.plotdir.rsplit("/", 1), eoscp=args.eoscp)
-        plot_name = f"corr2D_{args.generator}_MiNNLO_{proc}"
+        plot_name = f"corr2D_{generator}_MiNNLO_{proc}"
         plot_tools.save_pdf_and_png(outdir, plot_name)
         plot_tools.write_index_and_log(outdir, plot_name, args=args, analysis_meta_info=meta_dict)
         
@@ -203,7 +203,7 @@ if args.plotdir:
                 [minnloh[{"charge" : charge}].project(varm),
                     numh[{"vars" : 0, "charge" : charge}].project(varn),
                 ],
-                ["MiNNLO", args.generator, 
+                ["MiNNLO", generator, 
                 ],
                 colors=["orange", "mediumpurple"], 
                 linestyles=["solid", "dashed", ],
@@ -215,7 +215,7 @@ if args.plotdir:
                 yscale=1.1,
                 xlim=None, binwnorm=1.0, baseline=True
             )
-            plot_name = f"{varm}_{args.generator}_MiNNLO_{proc}"
+            plot_name = f"{varm}_{generator}_MiNNLO_{proc}"
             plot_tools.save_pdf_and_png(outdir, plot_name)
             plot_tools.write_index_and_log(outdir, plot_name, args=args,
                 analysis_meta_info=meta_dict)
