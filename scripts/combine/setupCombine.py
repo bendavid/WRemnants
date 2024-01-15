@@ -54,9 +54,10 @@ def make_parser(parser=None):
     parser.add_argument("--scalePdf", default=1, type=float, help="Scale the PDF hessian uncertainties by this factor")
     parser.add_argument("--pdfUncFromCorr", action='store_true', help="Take PDF uncertainty from correction hist (Requires having run that correction)")
     parser.add_argument("--massVariation", type=float, default=100, help="Variation of boson mass")
-    parser.add_argument("--ewUnc", type=str, nargs="*", default=["default"], help="Include EW uncertainty", 
-        choices=["default", "horacenloew", "horaceqedew", "winhacnloew", "virtual_ew", "virtual_ew_wlike", 
-            "winhacloew_FSR", "horaceqedew_FSR", "horacelophotosmecoffew_FSR", "powhegnloewew", "powhegnloewew_ISR"])
+    parser.add_argument("--ewUnc", type=str, nargs="*", default=["default"], help="Include EW uncertainty (other than FSR)", 
+        choices=["default", "horacenloew", "horaceqedew", "winhacnloew", "virtual_ew", "virtual_ew_wlike", "powhegnloewew", "powhegnloewew_ISR"])
+    parser.add_argument("--fsrUnc", type=str, nargs="*", default=["horaceqedew_FSR", "horacelophotosmecoffew_FSR"], help="Include FSR uncertainty", 
+        choices=["winhacloew_FSR", "horaceqedew_FSR", "horacelophotosmecoffew_FSR"])
     parser.add_argument("--widthUnc", action='store_true', help="Include uncertainty on W and Z width")
     parser.add_argument("--skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
     parser.add_argument("--noQCDscaleFakes", action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
@@ -581,14 +582,14 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if "default" in ewUncs:
         # set default EW uncertainty depending on the analysis type
         if wlike:
-            ewUnc = ["virtual_ew_wlike", "horaceqedew_FSR"]
+            ewUnc = ["virtual_ew_wlike", ]
         elif dilepton:
-            ewUnc = ["virtual_ew", "horaceqedew_FSR"]
+            ewUnc = ["virtual_ew", ]
         else:
-            ewUnc = ["horacenloew", ]
+            ewUnc = ["winhacnloew", ]
         ewUncs = [*[u for u in ewUncs if u!="default"], *ewUnc]
         
-    for ewUnc in ewUncs:
+    for ewUnc in [*ewUncs, *args.fsrUnc]:
         if datagroups.flavor == "e":
             logger.warning("EW uncertainties are not implemented for electrons, proceed w/o EW uncertainty")
             continue
@@ -604,11 +605,11 @@ def setup(args, inputFile, fitvar, xnorm=False):
             group="theory_ew",
             systAxes=["systIdx"],
             labelsByAxis=[f"{ewUnc}Corr"],
-            scale=2,
+            scale=1 if ewUnc.endswith("FSR") else 2,
             skipEntries=[(1, -1), (2, -1)] if ewUnc.startswith("virtual_ew") else [(0, -1), (2, -1)],
             passToFakes=passSystToFakes,
         )
-
+        
     to_fakes = passSystToFakes and not args.noQCDscaleFakes and not xnorm
     
     theory_helper = combine_theory_helper.TheoryHelper(cardTool, hasNonsigSamples=(wmass and not xnorm))
