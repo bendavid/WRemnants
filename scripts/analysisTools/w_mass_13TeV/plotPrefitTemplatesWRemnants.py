@@ -273,6 +273,7 @@ if __name__ == "__main__":
         nomihists = {}
         infile = safeOpenFile(fname)
         for proc in processes:
+            print(f"{charge}   {proc}")
             nomihists[proc] = safeGetObject(infile, f"{proc}/nominal_{proc}_{charge}", detach=True) # process name as subfolder
         if args.pseudodata:
             nomihists["Data"] = safeGetObject(infile, f"Data/{args.pseudodata}_{charge}", detach=True)

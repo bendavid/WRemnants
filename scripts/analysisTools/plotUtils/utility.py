@@ -19,6 +19,7 @@ colors_plots_ = {"Wmunu"      : ROOT.TColor.GetColor("#8B0000"), #ROOT.kRed+2,
                  "DYlowMass"  : ROOT.TColor.GetColor("#00BFFF"), #deepskyblue,
                  "Wtau"       : ROOT.TColor.GetColor("#FFA500"), #ROOT.kCyan+1, #backward compatibility
                  "Wtaunu"     : ROOT.TColor.GetColor("#FFA500"), # orange, use #FF8C00 for darkOrange #ROOT.kCyan+1,
+                 "WmunuOOA"   : ROOT.TColor.GetColor("#FF8C00"), # dark orange
                  "Ztautau"    : ROOT.TColor.GetColor("#00008B"), #ROOT.kSpring+9,
                  "Top"        : ROOT.TColor.GetColor("#008000"), #ROOT.kGreen+2,
                  "Diboson"    : ROOT.TColor.GetColor("#FFC0CB"), #ROOT.kViolet,
@@ -33,6 +34,7 @@ legEntries_plots_ = {"Wmunu"      : "W#rightarrow#mu#nu",
                      "DYlowMass"  : "Z#rightarrow#mu#mu 10<m<50 GeV",
                      "Wtau"       : "W#rightarrow#tau#nu", #backward compatibility
                      "Wtaunu"     : "W#rightarrow#tau#nu",
+                     "WmunuOOA"   : "W#rightarrow#mu#nu OOA",
                      "Ztautau"    : "Z#rightarrow#tau#tau",
                      "Top"        : "t quark",
                      "Diboson"    : "Diboson",
