@@ -106,16 +106,16 @@ def build_graph(df, dataset):
     isZ = dataset.name.startswith("Z") and dataset.name[1] not in ["W", "Z"] #in common.zprocs
 
     weight_expr = "std::copysign(1.0, genWeight)"
-    df = df.Define("weight", weight_expr)
-    df = df.DefinePerSample("unity","1.")
-    # This sum should happen before any change of the weight
-    weightsum = df.SumAndCount("weight")
 
     if "reweight_h2" in dataset.name:
         weight_expr = f"{weight_expr}*H2BugFixWeight[0]"
     elif "NNLOPS" in dataset.name:
         weight_expr = f"{weight_expr}*LHEScaleWeightAltSet1[4]"
 
+    df = df.Define("weight", weight_expr)
+    df = df.DefinePerSample("unity","1.")
+    # This sum should happen before any change of the weight
+    weightsum = df.SumAndCount("weight")
 
     df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
 

@@ -153,6 +153,7 @@ syst_labels = {
     "powhegnloewew" : {0: "nominal", 1: "powheg EW NLO / LO"},
     "powhegnloewew_ISR" : {0: "nominal", 1: "powheg EW NLO / NLO QED veto"},
     "horacenloew" : {0: "nominal", 1: "horace EW NLO / LO", 2: "horace EW NLO / LO doubled", },
+    "winhacnloew" : {0: "nominal", 1: "winhac EW NLO / LO", 2: "winhac EW NLO / LO doubled", },
     "matrix_radish" : "MATRIX+RadISH",
     "virtual_ew" : {
         0: r"NLOEW + HOEW, CMS, ($G_\mu, m_\mathrm{Z}, \mathrm{sin}^2\Theta_\mathrm{eff}$) scheme",

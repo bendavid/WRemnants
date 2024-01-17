@@ -462,7 +462,7 @@ def read_infile(input):
     elif input.endswith(".hdf5"):
         h5file = h5py.File(input, "r")
         infiles = [h5file]
-        result = ioutils.pickle_load_h5py(h5file["results"])
+        result = load_results_h5py(h5file)
     else:
         raise ValueError("Unsupported file type")
 
