@@ -166,7 +166,7 @@ dataDictV9_2018 = {
         "das_name" : "/ZZTo2Q2L_mllmin4p0_TuneCP5_13TeV-amcatnloFXFX-pythia8/RunIISummer20UL18NanoAODv9-106X_upgrade2018_realistic_v16_L1v1-v1/NANOAODSIM"
     },
     #'QCDmuEnrichPt15PostVFP' : { #Not copied
-    #    'filepaths' : ["{BASE_PATH}/../y2018/QCD_Pt-20_MuEnrichedPt15_TuneCP5_13TeV-pythia8/NANOAODSIM/106X_upgrade2018_realistic_v16_L1v1-v2/*/*.root/NanoV9MC2018_{NANO_PROD_TAG}"],
+    #    'filepaths' : ["{BASE_PATH}/../y2018/QCD_Pt-20_MuEnrichedPt15_TuneCP5_13TeV-pythia8/NanoV9MC2018_{NANO_PROD_TAG}/"],
     #    'xsec' : 238800,
     #    'group' : "QCD",
     #    "das_name" : "/QCD_Pt-20_MuEnrichedPt15_TuneCP5_13TeV-pythia8/RunIISummer20UL18NanoAODv9-106X_upgrade2018_realistic_v16_L1v1-v2/NANOAODSIM"
