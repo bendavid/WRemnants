@@ -91,6 +91,7 @@ if __name__ == "__main__":
     parser.add_argument(      "--y-title",      dest="ytitle",  default="Fit #theta - #theta_{0}",   type=str,  help="Title for Y axis")
     parser.add_argument(      "--y-setting",    dest="ysetting",  nargs=5, default=[-5.0,-3,0,3,5.0], type=float,  help="Settings to customize y axis: pass list of ymin,yhalfd,ycen,yhalfu,ymax, where horizontal lines are drawn")
     parser.add_argument(      "--y-offset",    dest="yoffset",  nargs=2, default=[0.5,0.5], type=float,  help="Offset (positive value) for each side of the y axis, wrt to extremes of --y-setting")
+    parser.add_argument(      "--postfitLegendLabelObs", type=str, default="Postfit observed",  help="Label for observed fit, usually when using --expected-infile (which can actually be another type of fit)")
     parser.add_argument(      "--postfitLegendLabelExp", type=str, default="Postfit expected",  help="Label for expected fit when using --expected-infile (which can actually be another type of fit)")
     parser.add_argument(     '--defaultYmax' , dest='defaultYmax', default=4.0, type=float, help='Set the default max value for y (but it is still overridden if some parameters are above)')
     #parser.add_argument(      "--y-setting",    dest="ysetting",  type=lambda s: [float(item) for item in s.split(',')], default="-5.0,-3,0,3,5.0",  help="Settings to customize y axis: comma-separated list of ymin,yhalfd,ycen,yhalfu,ymax, where horizontal lines are drawn")
@@ -491,7 +492,7 @@ if __name__ == "__main__":
             gr_observed.SetMarkerStyle(ROOT.kFullCircle)
             gr_observed.SetMarkerSize(1)
             gr_observed.Draw('P EZ')
-            leg.AddEntry(gr_observed,'Postfit observed')
+            leg.AddEntry(gr_observed,args.postfitLegendLabelObs)
 
             #lat.DrawLatex(clm, 0.95, '#bf{CMS} #it{Preliminary}')
             #lat.DrawLatex(0.80, 0.95, '16.8 fb^{-1} (13 TeV)')
