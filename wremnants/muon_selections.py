@@ -138,3 +138,8 @@ def select_standalone_muons(df, dataset, use_trackerMuons=False, muons="goodMuon
         df = df.Filter(f"Muon_standaloneNumberOfValidHits[{muons}][{idx}] >= {nHitsSA}")
 
     return df
+
+def hlt_string(era = "2016PostVFP"):
+    hltString = ("HLT_IsoTkMu24 || HLT_IsoMu24" if era == "2016PostVFP" else "HLT_IsoMu24")
+    return hltString
+    

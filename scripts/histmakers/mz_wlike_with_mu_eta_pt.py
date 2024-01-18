@@ -150,8 +150,7 @@ def build_graph(df, dataset):
             axes = [*nominal_axes, *unfolding_axes] 
             cols = [*nominal_cols, *unfolding_cols]
 
-    hltString="HLT_IsoTkMu24 || HLT_IsoMu24" if era == "2016PostVFP" else "HLT_IsoMu24"
-    df = df.Filter(hltString)
+    df = df.Filter(hlt_string(era))
 
     df = muon_selections.veto_electrons(df)
     df = muon_selections.apply_met_filters(df)

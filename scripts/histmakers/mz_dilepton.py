@@ -183,8 +183,7 @@ def build_graph(df, dataset):
 
             results.append(df_gen.HistoBoost(f"gen_{obs}", [all_axes[obs]], [obs, "nominal_weight"]))
             df_gen = syst_tools.add_theory_hists(results, df_gen, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, [all_axes[obs]], [obs], base_name=f"gen_{obs}", for_wmass=False)
-    hltString="HLT_IsoTkMu24 || HLT_IsoMu24" if era == "2016PostVFP" else "HLT_IsoMu24"
-    df = df.Filter(hltString)
+    df = df.Filter(hlt_string(era))
 
     df = muon_selections.veto_electrons(df)
     df = muon_selections.apply_met_filters(df)

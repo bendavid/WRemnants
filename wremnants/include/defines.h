@@ -19,7 +19,13 @@ namespace wrem {
         Dilepton
     };
         
-    const unsigned int MUON_PDGID = 13;
+    enum class Era {
+        Era_2016PostVFP,
+	Era_2018
+    };
+
+
+  Const unsigned int MUON_PDGID = 13;
     
     bool isOddEvent(ULong64_t evt) {
         return (evt%2) ? 1 : 0;
