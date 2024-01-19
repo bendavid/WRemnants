@@ -97,7 +97,7 @@ def select_z_candidate(df, mass_min=60, mass_max=120):
 
     return df
 
-def apply_triggermatching_muon(df, dataset, muon_eta, muon_phi, otherMuon_eta=None, otherMuon_phi=None, era = "2016PostVFP"):
+def apply_triggermatching_muon(df, dataset, muon_eta, muon_phi, otherMuon_eta=None, otherMuon_phi=None, era = "2016PostVFP"):≈ß
     df = df.Define("goodTrigObjs", f"wrem::goodMuonTriggerCandidate<wrem::Era::Era_{era}>(TrigObj_id,TrigObj_filterBits)")
     if otherMuon_eta is not None:
         # implement OR of trigger matching condition (for dilepton), also create corresponding flags
