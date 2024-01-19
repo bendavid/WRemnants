@@ -20,7 +20,8 @@ namespace wrem {
     };
         
     enum class Era {
-        Era_2016PostVFP,
+        Era_2016PreVFP,
+	Era_2016PostVFP,
 	Era_2017,
 	Era_2018
     };
