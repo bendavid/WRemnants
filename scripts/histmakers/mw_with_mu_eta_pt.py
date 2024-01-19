@@ -271,7 +271,7 @@ def build_graph(df, dataset):
 
     if not args.makeMCefficiency:
         # remove trigger, it will be part of the efficiency selection for passing trigger
-        df = df.Filter(hlt_string(era))
+        df = df.Filter(muon_selections.hlt_string(era))
 
     if args.halfStat:
         df = df.Filter("event % 2 == 1") # test with odd/even events
@@ -289,8 +289,8 @@ def build_graph(df, dataset):
     df = muon_selections.veto_electrons(df)
     df = muon_selections.apply_met_filters(df)
     if args.makeMCefficiency:
-        df = df.Define("GoodTrigObjs", f"wrem::goodMuonTriggerCandidate<Era::Era_{era}>(TrigObj_id,TrigObj_filterBits)")
-        hltString=hlt_string(era)
+        df = df.Define("GoodTrigObjs", f"wrem::goodMuonTriggerCandidate<wrem::Era::Era_{era}>(TrigObj_id,TrigObj_filterBits)")
+        hltString=muon_selections.hlt_string(era)
         df = df.Define("passTrigger", f"{hltString} && wrem::hasTriggerMatch(goodMuons_eta0,goodMuons_phi0,TrigObj_eta[GoodTrigObjs],TrigObj_phi[GoodTrigObjs])")
     else:
         df = muon_selections.apply_triggermatching_muon(df, dataset, "goodMuons_eta0", "goodMuons_phi0", era=era)
