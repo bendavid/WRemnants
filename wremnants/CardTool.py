@@ -77,6 +77,7 @@ class CardTool(object):
                              }
         self.charge_ax = "charge"
         self.procGroups = {}
+        self.foldEtaIntoAbsEta = False
 
     def getProcNames(self, grouped_procs):
         expanded_procs = []
@@ -106,6 +107,9 @@ class CardTool(object):
         if len(self.noStatUncProcesses):
             logger.info("Attention: histograms are not saved according to input options, thus statistical uncertainty won't be zeroed")
 
+    def setFoldEtaIntoAbsEta(self, fold=True):
+        self.foldEtaIntoAbsEta = fold
+            
     def setExcludeProcessForChannel(self, channel, POIregexp, canUpdate=False):
         if canUpdate or channel not in self.excludeProcessForChannel.keys():
             self.excludeProcessForChannel[channel] = re.compile(POIregexp)
@@ -1138,7 +1142,18 @@ class CardTool(object):
         if decorrByBin:
             hists.update(self.makeDecorrelatedSystHistograms(h, hnomi, syst, decorrByBin))
 
+        s = hist.tag.Slicer()
         for hname, histo in hists.items():
+            if self.foldEtaIntoAbsEta and "eta" in histo.axes.name:
+                axisNames = histo.axes.name
+                indexEta = axisNames.index("eta")
+                hpos = histo[{"eta": s[complex(0,0.001)::]}]
+                hneg = histo[{"eta": s[complex(0,-2.4001):complex(0,0.001):]}]
+                hnegVal = hneg.view(flow=False)[...]
+                hnegValFlipEta = np.flip(hnegVal, indexEta)
+                hneg.view(flow=False)[...] = hnegValFlipEta
+                histo = hh.addHists(hpos, hneg, createNew=False)
+
             if self.writeByCharge:
                 self.writeHistByCharge(histo, hname)
             else:
