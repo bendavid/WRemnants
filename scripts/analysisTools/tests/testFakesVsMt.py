@@ -608,15 +608,15 @@ def runStudy(charge, outfolder, rootfilename, args):
                      onlyLineColor=True, noErrorRatioDen=False, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=1)
         ##
         dphiMuonMetCut = args.dphiMuonMetCut * np.pi
-        hnarf = hnarf[{"DphiMuonMet" : s[complex(0, 0.01+dphiMuonMetCut):complex(0, np.pi):hist.sum]}] # test dphi cut
+        hnarf = hnarf[{"DphiMuonMet" : s[complex(0, 0.01+dphiMuonMetCut)::hist.sum]}] # test dphi cut
         rootHists[d] = narf.hist_to_root(hnarf) # this is a THnD with eta-pt-charge-mt-passIso-hasJets-DphiMuonMet
-        hnarf_forplots = hnarf_forplots[{"DphiMuonMet" : s[complex(0, 0.01+dphiMuonMetCut):complex(0, np.pi)]}] # cut but do not integrate
+        hnarf_forplots = hnarf_forplots[{"DphiMuonMet" : s[complex(0, 0.01+dphiMuonMetCut):]}] # cut but do not integrate
         hnarf_forplots = hnarf_forplots[{"mt" : s[::hist.rebin(2)]}]
         rootHists_forplots[d] = narf.hist_to_root(hnarf_forplots) # this is a THnD with eta-pt-charge-mt-passIso-hasJets-DphiMuonMet
         # prepare nominal histograms in signal region for some plots
         # integrate njet and Dphi in appropriate range
         hnarf_asNominal = hnarf_asNominal[{"hasJets" : s[::hist.sum], # jet inclusive                  
-                                           "DphiMuonMet" : s[complex(0, 0.01+dphiMuonMetCut):complex(0, np.pi):hist.sum]}]
+                                           "DphiMuonMet" : s[complex(0, 0.01+dphiMuonMetCut)::hist.sum]}]
         hnarf_forMtWithDataDrivenFakes = hnarf_asNominal.copy()
         mtThreshold = float(args.mtNominalRange.split(",")[-1])
         # now select signal region
@@ -625,11 +625,13 @@ def runStudy(charge, outfolder, rootfilename, args):
             hnarf_asNominal = sel.fakeHistABCD(hnarf_asNominal,
                                                thresholdMT=mtThreshold,
                                                axis_name_mt="mt",
-                                               integrateMT=True)
+                                               integrateLowMT=True,
+                                               integrateHighMT=True)
             hnarf_forMtWithDataDrivenFakes = sel.fakeHistABCD(hnarf_forMtWithDataDrivenFakes,
                                                               thresholdMT=mtThreshold,
                                                               axis_name_mt="mt",
-                                                              integrateMT=False)
+                                                              integrateLowMT=True,
+                                                              integrateHighMT=False)
         else:
             nMtBins = hnarf_asNominal.axes["mt"].size
             # just select signal region: pass isolation and mT > mtThreshold with overflow included
@@ -703,7 +705,7 @@ def runStudy(charge, outfolder, rootfilename, args):
     hdataMt = rootHists_forMtWithDataDrivenFakes["Data"]
     plotDistribution1D(hdataMt, hmcMt, datasetsNoQCD,
                        outfolder_dataMC, canvas1Dshapes=canvas1Dshapes,
-                       xAxisName=f"{args.met} m_{{T}} (GeV)", plotName=f"mT_passIso_jetInclusive_passMT_dataDriveFakes")
+                       xAxisName=f"{args.met} m_{{T}} (GeV)", plotName=f"mT_passIso_jetInclusive_passMT_dataDrivenFakes")
     
     
     # plot mT, eta, pt in some regions iso-nJet regions, for checks
@@ -1121,6 +1123,32 @@ def runStudy(charge, outfolder, rootfilename, args):
                  onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=1,
                  colorVec=colorVec, drawLineTopPanel=1.0)
 
+        # alternative plot using only nominal and the quadrature sum of the uncertainty
+        # the uncertainty band is ploted around the line at unity for convenience
+        hquadSum_unrolled = unroll2Dto1D(hFRFcorrUnc[f"quadsum_Up"],
+                                       newname=f"unrolled_{hFRFcorrUnc[f'quadsum_Up'].GetName()}",
+                                       cropNegativeBins=False)
+        hquadSum_unrolled.Add(nomi_unrolled, -1.0)
+        hUnityAndUnc = copy.deepcopy(nomi_unrolled.Clone(f"hUnityAndUnc_{charge}"))
+        for i in range(1, 1 + hUnityAndUnc.GetNbinsX()):
+            hUnityAndUnc.SetBinContent(i, 1.0)
+            hUnityAndUnc.SetBinError(i, hquadSum_unrolled.GetBinContent(i))
+        hUnityAndUnc.SetFillColor(ROOT.kGray+1)
+
+        hListV2 = [nomi_unrolled, hUnityAndUnc]
+        legEntriesV2 = ["Nomi", "Total Uncertainty on correction"]
+        drawNTH1(hListV2, legEntriesV2, "Unrolled eta-p_{T} bin", "FRF correction::0.5,1.6", f"FRFcorrAndUnc_etaPt_{charge}_v2",
+                 outfolder, leftMargin=0.06, rightMargin=0.01,
+                 legendCoords="0.06,0.99,0.91,0.99;6", lowerPanelHeight=0.0, skipLumi=True, passCanvas=canvas_unroll,
+                 drawVertLines="{a},{b}".format(a=hFRFcorr.GetNbinsY(),b=hFRFcorr.GetNbinsX()),
+                 textForLines=ptBinRanges, transparentLegend=False,
+                 useLineFirstHistogram=True,
+                 fillStyleSecondHistogram=1001,
+                 fillColorSecondHistogram=hUnityAndUnc.GetFillColor(),
+                 lineWidth=2,
+                 drawErrorAll=True)
+
+
     if hFRFcorrTestCap is not None:
         drawCorrelationPlot(hFRFcorrTestCap,
                             xAxisName,
@@ -1242,7 +1270,7 @@ def runStudyVsDphi(charge, outfolder, args):
     canvas_unroll.cd()
     canvas_unroll.SetBottomMargin(bottomMargin)
 
-    groups = make_datagroups_2016(args.inputfile[0], applySelection=False)
+    groups = Datagroups(args.inputfile[0])
     datasets = groups.getNames() # this has all the original defined groups
     datasetsForStudy = ["QCD", "Fake"]
     inputHistName = "mTStudyForFakes"
@@ -1263,9 +1291,10 @@ def runStudyVsDphi(charge, outfolder, args):
             hnarf = hnarf[{"hasJets": True}]
         else:
             hnarf = hnarf[{"hasJets": s[::hist.sum]}]
-        # rebin a bit more in eta-pt
-        hnarf = hnarf[{"eta" : s[::hist.rebin(2)]}]
-        hnarf = hnarf[{"pt" : s[::hist.rebin(2)]}]
+        # rebin a bit more in eta-pt (not for QCD MC since the binning is already chosen by hand)
+        if not args.useQCDMC:
+            hnarf = hnarf[{"eta" : s[::hist.rebin(2)]}]
+            hnarf = hnarf[{"pt" : s[::hist.rebin(2)]}]
         lowMtUpperBound = int(args.mtNominalRange.split(",")[1])
         hnarf = hnarf[{"mt" : s[:complex(0,lowMtUpperBound):hist.sum]}]
         chargeIndex = 0 if charge == "minus" else 1
