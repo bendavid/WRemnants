@@ -1747,19 +1747,6 @@ def drawNTH1(hists=[],
             for i in range(0,len(textForLines)):
                 ytext = ymax - ytextOffsetFromTop*(ymax - ymin)
                 bintext.DrawLatex(etarange*i + etarange/sliceLabelOffset, ytext, textForLines[i])
-    
-    # if len(drawVertLines):
-    #     nLines = len(drawVertLines)
-    #     sliceLabelOffset = 10.
-    #     for i in range(nLines):
-    #         vertline.DrawLine(float(drawVertLines[i]), 0.0, float(drawVertLines[i]), ymax)
-    #     if len(textForLines):
-    #         for i in range(len(textForLines)): # we need nLines
-    #             ytext = (1.1)*ymax/2.
-    #             if i == 0:
-    #                 bintext.DrawLatex(h1.GetXaxis().GetBinLowEdge(0) + sliceLabelOffset, ytext, textForLines[i])
-    #             else:                    
-    #                 bintext.DrawLatex(drawVertLines[i-1] + sliceLabelOffset, ytext, textForLines[i])
 
     # redraw legend, or vertical lines appear on top of it
     leg.Draw("same")

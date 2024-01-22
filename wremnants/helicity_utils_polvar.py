@@ -23,7 +23,7 @@ logger = logging.child_logger(__name__)
 
 data_dir = common.data_dir
 
-def makehelicityWeightHelper_polvar(genVcharge=-1, fileTag="x0p40_y3p50_add"):
+def makehelicityWeightHelper_polvar(genVcharge=-1, fileTag="x0p40_y3p50_V6"):
 
     if genVcharge not in [-1, 1]:
         errmsg = f"genVcharge must be -1 or 1, {genVcharge} was given"
@@ -32,7 +32,6 @@ def makehelicityWeightHelper_polvar(genVcharge=-1, fileTag="x0p40_y3p50_add"):
 
     charges = { -1. : "minus", 1. : "plus"}
     # these inputs should be copied somewhere
-    #fileTag = "x0p40_y3p50_add" # [x0p30_y3p00_V2, x0p40_y3p50_add]
     filenamePlus = f"/afs/cern.ch/user/b/bianchi/public/fout_syst_wp_{fileTag}.root"
     filenameMinus = f"/afs/cern.ch/user/b/bianchi/public/fout_syst_wm_{fileTag}.root"
     filenames = {-1 : filenamePlus,

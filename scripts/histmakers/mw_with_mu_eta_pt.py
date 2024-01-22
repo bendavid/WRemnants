@@ -36,7 +36,7 @@ parser.add_argument("--mtCut", type=int, default=40, help="Value for the transve
 #
 # TEST
 parser.add_argument("--theoryAgnosticPolVar", action='store_true', help="Prepare variations from polynomials")
-parser.add_argument("--theoryAgnosticFileTag", type=str, default="x0p40_y3p50_add", choices=["x0p40_y3p50_add", "x0p30_y3p00_V2", "x0p30_y3p00_V3", "x0p30_y3p00_V4", "x0p40_y3p50_V4"], help="Tag for input files")
+parser.add_argument("--theoryAgnosticFileTag", type=str, default="x0p40_y3p50_V4", choices=["x0p30_y3p00_V4", "x0p40_y3p50_V4", "x0p30_y3p00_V5", "x0p40_y3p50_V6"], help="Tag for input files")
 parser.add_argument("--theoryAgnosticSplitOOA", action='store_true', help="Define out-of-acceptance signal template as an independent process")
 args = parser.parse_args()
 

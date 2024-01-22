@@ -4,13 +4,15 @@ import os
 skipSetup = 1
 skipFit = 1
 # for plots
-skipImpacts = 1
+skipImpacts = 0
 skipCorrelation = 1
 skipDiffnuis = 1
-skipCompareDiffnuis = 0
+skipCompareDiffnuis = 1
 skipTemplates = 1 # check settings
 #
 justPrint = 1
+
+foldEtaIntoAbsEta = True
 
 ## histmaker
 # input files here: /afs/cern.ch/user/b/bianchi/public/
@@ -22,7 +24,7 @@ onlySignalAndOOA = True # (requires onlySignal=True to be effective) signal only
 doStatOnly = False
 noFake = False # irrelevant when onlySignal=True
 noPDFandQCDtheorySystOnSignal = False # irrelevant when doStatOnly=True
-tag = "x0p40_y3p50_V4" # "x0p40_y3p50_V4" # "x0p30_y3p00_V4"
+tag = "x0p30_y3p00_V4"  # "x0p40_y3p50_V6" # "x0p40_y3p50_V6" # "x0p40_y3p50_V4" # "x0p30_y3p00_V4"
 oneMCfileEveryN = 1
 testFolder = f"oneMCfileEvery{oneMCfileEveryN}" if oneMCfileEveryN > 1 else "fullStat"
 
@@ -78,7 +80,10 @@ baseCoeffs = ["UL", "A0", "A1", "A2", "A3", "A4"]
 #coeffs = [f"ULand{a}" for a in ["A0", "A1", "A2", "A3", "A4"]]
 #coeffs = [f"ULandA0andA4and{a}" for a in ["A1", "A2", "A3"]]
 #coeffs = ["and".join(x for x in baseCoeffs), "and".join(x for x in baseCoeffs if x != "A3")]
-coeffs = ["UL", "ULandA4", "ULandA0andA4", "and".join(x for x in baseCoeffs if x != "A3"), "and".join(x for x in baseCoeffs)]
+#coeffs = ["UL", "ULandA4", "ULandA0andA4", "and".join(x for x in baseCoeffs if x != "A3"), "and".join(x for x in baseCoeffs)]
+coeffs = ["and".join(x for x in baseCoeffs if x not in ["A1", "A3"])]
+#coeffs = ["and".join(x for x in baseCoeffs)]
+coeffs = ["and".join(x for x in baseCoeffs if x not in ["A1", "A2"])]
 
 def safeSystem(cmd, dryRun=False, quitOnFail=True):
     print(cmd)
@@ -123,7 +128,11 @@ for c in coeffs:
     customOpt = f" -x '{customOptExclude}' "
     if customOptExclude is None or customOptExclude == "":
         customOpt = ""
-    
+
+    if foldEtaIntoAbsEta:
+        customOpt += " --foldEtaIntoAbsEta"
+        subFolder += "_absEta"
+        
     mainOutputFolder = f"{outdir}/{subFolder}"
 
     cmdCard = f"/usr/bin/time -v python scripts/combine/setupCombine.py -i {inputFileHDF5} -o {mainOutputFolder}/ --absolutePathInCard {setuCombineOptions} {customOpt}"
