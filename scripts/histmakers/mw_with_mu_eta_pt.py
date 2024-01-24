@@ -178,9 +178,9 @@ bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibrat
 
 procsWithTheoryCorr = [d.name for d in datasets if d.name in common.vprocs]
 if len(procsWithTheoryCorr):
-    corr_helpers = theory_corrections.load_corr_helpers([d.name for d in datasets if d.name in common.vprocs], args.theoryCorr)
+    corr_helpers = theory_corrections.load_corr_helpers(procsWithTheoryCorr, args.theoryCorr)
 else:
-    corr_helpers = None
+    corr_helpers = {}
 
 # recoil initialization
 if not args.noRecoil:
@@ -229,10 +229,7 @@ def build_graph(df, dataset):
     # disable auxiliary histograms when unfolding to reduce memory consumptions
     auxiliary_histograms = not args.unfolding and not (args.theoryAgnostic and not args.poiAsNoi) and not args.noAuxiliaryHistograms
 
-    if len(procsWithTheoryCorr):
-        apply_theory_corr = args.theoryCorr and dataset.name in corr_helpers
-    else:
-        apply_theory_corr = False
+    apply_theory_corr = args.theoryCorr and dataset.name in corr_helpers
 
     cvh_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
     jpsi_helper = data_jpsi_crctn_helper if dataset.is_data else mc_jpsi_crctn_helper
