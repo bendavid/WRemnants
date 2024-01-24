@@ -4,8 +4,8 @@ import os
 skipSetup = 1
 skipFit = 1
 # for plots
-skipImpacts = 0
-skipCorrelation = 1
+skipImpacts = 1
+skipCorrelation = 0
 skipDiffnuis = 1
 skipCompareDiffnuis = 1
 skipTemplates = 1 # check settings
@@ -24,7 +24,7 @@ onlySignalAndOOA = True # (requires onlySignal=True to be effective) signal only
 doStatOnly = False
 noFake = False # irrelevant when onlySignal=True
 noPDFandQCDtheorySystOnSignal = False # irrelevant when doStatOnly=True
-tag = "x0p30_y3p00_V4"  # "x0p40_y3p50_V6" # "x0p40_y3p50_V6" # "x0p40_y3p50_V4" # "x0p30_y3p00_V4"
+tag = "x0p40_y3p50_V4"  # "x0p40_y3p50_V6" # "x0p40_y3p50_V6" # "x0p40_y3p50_V4" # "x0p30_y3p00_V4"
 oneMCfileEveryN = 1
 testFolder = f"oneMCfileEvery{oneMCfileEveryN}" if oneMCfileEveryN > 1 else "fullStat"
 
