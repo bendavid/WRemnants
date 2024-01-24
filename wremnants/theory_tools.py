@@ -335,8 +335,11 @@ def define_nominal_weight(df):
 def define_theory_corr(df, dataset_name, helpers, generators, modify_central_weight):
     df = df.Define(f"nominal_weight_uncorr", build_weight_expr(df, exclude_weights=["theory_corr_weight"]))
 
-    dataset_helpers = helpers.get(dataset_name, [])
-
+    if helpers is not None:
+        dataset_helpers = helpers.get(dataset_name, [])
+    else:
+        dataset_helpers = []
+        
     if not modify_central_weight or not generators or generators[0] not in dataset_helpers:
         df = df.DefinePerSample("theory_corr_weight", "1.0")
 
