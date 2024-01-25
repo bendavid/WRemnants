@@ -176,7 +176,11 @@ smearing_helper, smearing_uncertainty_helper = (None, None) if args.noSmearing e
 
 bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibration else None
 
-corr_helpers = theory_corrections.load_corr_helpers([d.name for d in datasets if d.name in common.vprocs], args.theoryCorr)
+procsWithTheoryCorr = [d.name for d in datasets if d.name in common.vprocs]
+if len(procsWithTheoryCorr):
+    corr_helpers = theory_corrections.load_corr_helpers(procsWithTheoryCorr, args.theoryCorr)
+else:
+    corr_helpers = {}
 
 # recoil initialization
 if not args.noRecoil:
