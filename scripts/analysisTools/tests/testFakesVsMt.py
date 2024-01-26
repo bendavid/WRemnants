@@ -554,26 +554,18 @@ def runStudy(fname, charges, mainOutputFolder, args):
             hnarf_asNominal = hnarf.copy()
             # rebin eta-pt for actual test with fakes, while collapsing other axes for the simple plots as needed,
             # this is only to avoid that THn are too big
-            if args.rebinEta >= hnarf.axes["eta"].size:
-                hnarf = hnarf[{"eta" : s[0:hist.overflow]}]
-            else:
-                hnarf = hnarf[{"eta" : s[::hist.rebin(args.rebinEta)]}]
-            if args.rebinPt >= hnarf.axes["pt"].size:
-                logger.warning("Collapsing pt axis into a single bin")
-                hnarf = hnarf[{"pt" : s[0:hist.overflow]}]
-            else:
-                hnarf = hnarf[{"pt" : s[::hist.rebin(args.rebinPt)]}]
+            hnarf = hnarf[{"eta" : s[::hist.rebin(args.rebinEta)]}]
+            hnarf = hnarf[{"pt" : s[::hist.rebin(args.rebinPt)]}]
             # for fake rate versus deltaPhi
             # TODO: move to the other function specific for deltaPhi studies?
             if d == ("QCD" if args.useQCDMC else "Fake"):
                 # note, with python/boost/hist slicing the second edge is excluded from projections,
                 # also when it is used as actual bin id, so s[1:1:hist.sum] doesn't work, while s[1:2:hist.sum] picks bin 1
                 hnarf_fakerateDeltaPhi = copy.deepcopy(hnarf)
-                if hnarf_fakerateDeltaPhi.axes["pt"].size > 1:
-                    if args.maxPt > 0 and hnarf_fakerateDeltaPhi.axes["pt"].edges[-1] > args.maxPt:
-                        hnarf_fakerateDeltaPhi = hnarf_fakerateDeltaPhi[{"pt": s[0:complex(0,args.maxPt)]}]
-                    else:
-                        hnarf_fakerateDeltaPhi = hnarf_fakerateDeltaPhi[{"pt": s[0:hist.overflow]}]
+                if args.maxPt > 0 and hnarf_fakerateDeltaPhi.axes["pt"].edges[-1] > args.maxPt:
+                    hnarf_fakerateDeltaPhi = hnarf_fakerateDeltaPhi[{"pt": s[0:complex(0,args.maxPt)]}]
+                else:
+                    hnarf_fakerateDeltaPhi = hnarf_fakerateDeltaPhi[{"pt": s[0:hist.overflow]}]
                 # rebin a bit more in pt and eta
                 if hnarf_fakerateDeltaPhi.axes["eta"].size >= 12:
                     hnarf_fakerateDeltaPhi = hnarf_fakerateDeltaPhi[{"eta" : s[::hist.rebin(2)]}]
@@ -977,9 +969,9 @@ def runStudy(fname, charges, mainOutputFolder, args):
                 ptBinRanges.append("[{ptmin},{ptmax}] GeV".format(ptmin=int(nominalFakerateFactor.GetYaxis().GetBinLowEdge(ipt+1)),
                                                                   ptmax=int(nominalFakerateFactor.GetYaxis().GetBinLowEdge(ipt+2))))
 
-            drawNTH1([nomiFRF_unrolled, highMtFRF_unrolled], [nominalFakerateFactor.GetTitle(), highMtFakerateFactor.GetTitle()], "Unrolled eta-p_{T} bin",
+            drawNTH1([highMtFRF_unrolled, nomiFRF_unrolled], [highMtFakerateFactor.GetTitle(), nominalFakerateFactor.GetTitle()], "Unrolled eta-p_{T} bin",
                      "Fakerate factor", f"FRFnomiAndHighMt_etaPt_{charge}", outfolder,
-                     leftMargin=0.06, rightMargin=0.01, labelRatioTmp="HighMt/nomi",
+                     leftMargin=0.06, rightMargin=0.01, labelRatioTmp="Nomi/highMt",
                      legendCoords="0.06,0.99,0.91,0.99;2", lowerPanelHeight=0.5, skipLumi=True, passCanvas=canvas_unroll,
                      drawVertLines="{a},{b}".format(a=nominalFakerateFactor.GetNbinsY(),b=nominalFakerateFactor.GetNbinsX()),
                      textForLines=ptBinRanges, transparentLegend=False,
@@ -1208,11 +1200,11 @@ def runStudy(fname, charges, mainOutputFolder, args):
 
         # now add plot to test FRF with correction compared to FRF measured before in high mt region
         #
-        # copy histogram with nominal FRF correction, which has bin errors = 0,
-        # then set errors to correction uncertainty by multiplying by histogram hUnityAndUnc
-        # then multiply by nominal FRF to get corrected FRF
         nomiFRFwithCorr_unrolled = copy.deepcopy(nomi_unrolled.Clone(f"nomiFRFwithCorr_unrolled_{charge}"))
-        nomiFRFwithCorr_unrolled.Multiply(hUnityAndUnc)
+        nomiFRFwithCorr_unrolled.Reset("ICESM")
+        for i in range(1, 1+ nomiFRFwithCorr_unrolled.GetNbinsX()):
+            nomiFRFwithCorr_unrolled.SetBinContent(i, nomi_unrolled.GetBinContent(i))
+            nomiFRFwithCorr_unrolled.SetBinError(i, hUnityAndUnc.GetBinError(i))
         nomiFRFwithCorr_unrolled.Multiply(nomiFRF_unrolled)
 
         drawNTH1([highMtFRF_unrolled, nomiFRF_unrolled, nomiFRFwithCorr_unrolled],
@@ -1357,20 +1349,18 @@ def runStudyVsDphi(fname, charges, mainOutputFolder, args):
             # rebin eta-pt for actual test with fakes, while collapsing other axes for the simple plots as needed,
             # this is only to avoid that THn are too big
             s = hist.tag.Slicer()
+            hnarf = hnarf[{"pt": s[0:complex(0,0.001+args.maxPt)]}]
             hnarf = hnarf[{"eta" : s[::hist.rebin(args.rebinEta)]}]
             hnarf = hnarf[{"pt" : s[::hist.rebin(args.rebinPt)]}]
             # note, with python/boost/hist slicing the second edge is excluded from projections,
             # also when it is used as actual bin id, so s[1:1:hist.sum] doesn't work, while s[1:2:hist.sum] picks bin 1
-            if hnarf.axes["pt"].size > 1:
-                if args.maxPt > 0 and hnarf.axes["pt"].edges[-1] > args.maxPt:
-                    hnarf = hnarf[{"pt": s[0:complex(0,args.maxPt)]}]
-                else:
-                    hnarf = hnarf[{"pt": s[0:hist.overflow]}]
             if "hasJets" in hnarf.axes.name:
                 if args.jetCut:
                     hnarf = hnarf[{"hasJets": True}]
                 else:
                     hnarf = hnarf[{"hasJets": s[::hist.sum]}]
+            if "absdz_cm" in hnarf.axes.name:
+                hnarf = hnarf[{"absdz_cm": s[::hist.sum]}]
             # rebin a bit more in eta-pt (not for QCD MC since the binning is already chosen by hand)
             nPtBins = hnarf.axes['pt'].size
             if not args.useQCDMC:
@@ -1380,6 +1370,7 @@ def runStudyVsDphi(fname, charges, mainOutputFolder, args):
                 logger.warning(f"Histogram has {nPtBins} pt bins")
             lowMtUpperBound = int(args.mtNominalRange.split(",")[1])
             hnarf = hnarf[{"mt" : s[:complex(0,lowMtUpperBound):hist.sum]}]
+            #hnarf = hnarf[{"mt" : s[::hist.sum]}]
             chargeIndex = 0 if charge == "minus" else 1
             hnarf = hnarf[{"charge" : s[chargeIndex:chargeIndex+1:hist.sum]}]
             # make all TH of FRF in bins of dphi

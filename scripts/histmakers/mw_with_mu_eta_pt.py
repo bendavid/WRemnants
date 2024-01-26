@@ -134,8 +134,7 @@ elif args.theoryAgnostic:
 axis_mt_fakes = hist.axis.Regular(120, 0., 120., name = "mt", underflow=False, overflow=True)
 axis_dphi_fakes = hist.axis.Regular(8, 0., np.pi, name = "DphiMuonMet", underflow=False, overflow=False)
 axis_hasjet_fakes = hist.axis.Boolean(name = "hasJets") # only need case with 0 jets or > 0 for now
-axis_custom_fakes = hist.axis.Regular(50, 0., 0.5, name = "absdz_cm", underflow=False, overflow=True)
-mTStudyForFakes_axes = [axis_eta, axis_pt, axis_charge, axis_mt_fakes, axis_passIso, axis_hasjet_fakes, axis_dphi_fakes, axis_custom_fakes]
+mTStudyForFakes_axes = [axis_eta, axis_pt, axis_charge, axis_mt_fakes, axis_passIso, axis_hasjet_fakes, axis_dphi_fakes]
 
 # for mt, met, ptW plots, to compute the fakes properly (but FR pretty stable vs pt and also vs eta)
 # may not exactly reproduce the same pt range as analysis, though
@@ -182,13 +181,14 @@ bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibrat
 
 procsWithTheoryCorr = [d.name for d in datasets if d.name in common.vprocs]
 if len(procsWithTheoryCorr):
-    corr_helpers = theory_corrections.load_corr_helpers([d.name for d in datasets if d.name in common.vprocs], args.theoryCorr)
+    corr_helpers = theory_corrections.load_corr_helpers(procsWithTheoryCorr, args.theoryCorr)
 else:
-    corr_helpers = None
+    corr_helpers = {}
     
 # For polynominal variations
-theoryAgnostic_helpers_minus = wremnants.makehelicityWeightHelper_polvar(genVcharge=-1, fileTag=args.theoryAgnosticFileTag)
-theoryAgnostic_helpers_plus  = wremnants.makehelicityWeightHelper_polvar(genVcharge=1,  fileTag=args.theoryAgnosticFileTag)
+if args.theoryAgnosticPolVar:
+    theoryAgnostic_helpers_minus = wremnants.makehelicityWeightHelper_polvar(genVcharge=-1, fileTag=args.theoryAgnosticFileTag)
+    theoryAgnostic_helpers_plus  = wremnants.makehelicityWeightHelper_polvar(genVcharge=1,  fileTag=args.theoryAgnosticFileTag)
 
 # recoil initialization
 if not args.noRecoil:
@@ -237,10 +237,7 @@ def build_graph(df, dataset):
     # disable auxiliary histograms when unfolding to reduce memory consumptions
     auxiliary_histograms = not args.unfolding and not (args.theoryAgnostic and not args.poiAsNoi) and not args.noAuxiliaryHistograms
 
-    if len(procsWithTheoryCorr):
-        apply_theory_corr = args.theoryCorr and dataset.name in corr_helpers
-    else:
-        apply_theory_corr = False
+    apply_theory_corr = args.theoryCorr and dataset.name in corr_helpers
 
     cvh_helper = data_calibration_helper if dataset.is_data else mc_calibration_helper
     jpsi_helper = data_jpsi_crctn_helper if dataset.is_data else mc_jpsi_crctn_helper
@@ -320,7 +317,7 @@ def build_graph(df, dataset):
 
     # gen match to bare muons to select only prompt muons from MC processes, but also including tau decays
     # status flags in NanoAOD: https://cms-nanoaod-integration.web.cern.ch/autoDoc/NanoAODv9/2016ULpostVFP/doc_TTToSemiLeptonic_TuneCP5_13TeV-powheg-pythia8_RunIISummer20UL16NanoAODv9-106X_mcRun2_asymptotic_v17-v1.html
-    postFSRmuonDef = "GenPart_status == 1 && (GenPart_statusFlags & 1 || GenPart_statusFlags & (5<<1)) && abs(GenPart_pdgId) == 13"
+    postFSRmuonDef = "GenPart_status == 1 && (GenPart_statusFlags & 1 || GenPart_statusFlags & (1 << 5)) && abs(GenPart_pdgId) == 13"
     if not dataset.is_data and not isQCDMC and not args.noGenMatchMC:
         df = df.Define("postFSRmuons", postFSRmuonDef)
         df = df.Filter("wrem::hasMatchDR2(goodMuons_eta0,goodMuons_phi0,GenPart_eta[postFSRmuons],GenPart_phi[postFSRmuons],0.09)")
@@ -420,9 +417,7 @@ def build_graph(df, dataset):
     df = df.Define("deltaPhiMuonMet", "std::abs(wrem::deltaPhi(goodMuons_phi0,MET_corr_rec_phi))")
 
     if auxiliary_histograms: 
-        # couple of histograms specific for tests with fakes
-        df = df.Define("goodMuons_absdz0", "std::abs(Muon_dz[goodMuons][0])")
-        mTStudyForFakes = df.HistoBoost("mTStudyForFakes", mTStudyForFakes_axes, ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "transverseMass", "passIso", "hasCleanJet", "deltaPhiMuonMet", "goodMuons_absdz0", "nominal_weight"])
+        mTStudyForFakes = df.HistoBoost("mTStudyForFakes", mTStudyForFakes_axes, ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "transverseMass", "passIso", "hasCleanJet", "deltaPhiMuonMet", "nominal_weight"])
         results.append(mTStudyForFakes)
 
     # add filter of deltaPhi(muon,met) before other histograms (but after histogram mTStudyForFakes)
@@ -483,6 +478,9 @@ def build_graph(df, dataset):
                            "passIso", "passMT", "passTrigger"]
             yieldsForWeffMC = df.HistoBoost("yieldsForWeffMC", axes_WeffMC, [*cols_WeffMC, "nominal_weight"])
             results.append(yieldsForWeffMC)
+            cols_WeffMCveto = ["GenPart_eta[postFSRmuons]", "GenPart_pt[postFSRmuons]", "GenPart_pdgId[postFSRmuons]", "passVeto"]
+            yieldsForWeffMCveto = df.HistoBoost("yieldsForWeffMCveto", axes_WeffMCveto, [*cols_WeffMCveto, "nominal_weight"])
+            results.append(yieldsForWeffMCveto)
 
         if not args.noRecoil and args.recoilUnc:
             df = recoilHelper.add_recoil_unc_W(df, results, dataset, cols, axes, "nominal")
