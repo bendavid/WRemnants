@@ -13,10 +13,16 @@ jobs:
 
     # delete old folders, keep the 5 newest ones
     steps:
+      - name: setup kerberos
+        run: |
+          kinit -kt ~/private/.keytab cmsmwbot@CERN.CH
+          klist -k -t -e ~/private/.keytab
+          klist
+          echo "xrdfs root://eosuser.cern.ch// ls $EOS_DIR"
+          xrdfs root://eosuser.cern.ch// ls $EOS_DIR
+
       - name: cleanup main
         run: scripts/ci/cleanup_directory.sh $EOS_DIR/ScheduledBuilds/ 5
 
       - name: cleanup unfolding
         run: scripts/ci/cleanup_directory.sh $EOS_DIR/ScheduledBuilds_unfolding/ 5
-
-          

@@ -150,8 +150,7 @@ def build_graph(df, dataset):
             axes = [*nominal_axes, *unfolding_axes] 
             cols = [*nominal_cols, *unfolding_cols]
 
-    hltString="HLT_IsoTkMu24 || HLT_IsoMu24" if era == "2016PostVFP" else "HLT_IsoMu24"
-    df = df.Filter(hltString)
+    df = df.Filter(muon_selections.hlt_string(era))
 
     df = muon_selections.veto_electrons(df)
     df = muon_selections.apply_met_filters(df)
@@ -171,7 +170,7 @@ def build_graph(df, dataset):
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "trigMuons")
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "nonTrigMuons")
 
-    df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0")
+    df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0", era=era)
 
     if dataset.is_data:
         df = df.DefinePerSample("nominal_weight", "1.0")
