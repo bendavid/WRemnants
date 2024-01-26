@@ -18,8 +18,8 @@ parser.add_argument("-p", "--postfix", type=str, help="Postfix for plots and cor
 parser.add_argument("--normalize", action="store_true", default=False, help="Normalize distributions before computing ratio")
 parser.add_argument("--noSmoothing", action="store_true", default=False, help="Disable smoothing of corrections")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
-parser.add_argument("--baseName", default="nominal_ew", type=str, help="histogram name")
-parser.add_argument("--project", default=["ewMll", "ewLogDeltaM"], nargs="*", type=str, help="axes to project to")
+parser.add_argument("--baseName", default="ew_MllPTll", type=str, help="histogram name")
+parser.add_argument("--project", default=["ewMll", "ewPTll"], nargs="*", type=str, help="axes to project to")
 parser.add_argument("--outpath", type=str, default=f"{common.data_dir}/TheoryCorrections", help="Output path")
 
 args = parser.parse_args()
@@ -87,7 +87,28 @@ for proc in procs:
 
                 logger.info(f"Rebin axis ewMll by {rebinN}")
                 histo = hh.rebinHist(histo, "ewMll", rebin_edges)
-
+        
+        base_dev = args.baseName.split("_")[0]
+        if base_dev not in ["nominal", "ew"]:                
+            for ax in histo.axes:
+                old_name = ax._ax.metadata["name"]
+                if base_dev == "lhe":
+                    # use pre FSR definition for lhe correction
+                    translate = {
+                        "ewMll":"massVgen",
+                        "ewAbsYll":"absYVgen",
+                        "ewPTll":"ptVgen",
+                    }
+                else:
+                    translate = {
+                        "ewMll":"dressed_MV",
+                        "ewAbsYll":"dressed_absYV",
+                        "ewPTll":"dressed_PTV",
+                    }
+                new_name = translate[old_name]
+                logger.info(f"Rename axis {old_name} for corrections to {new_name}")
+                ax._ax.metadata["name"] = new_name
+            
         return histo
     
     nums = []
