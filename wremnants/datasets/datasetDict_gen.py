@@ -74,6 +74,12 @@ genDataDict = {
                    'xsec' : xsec_powheg_ZToMuMu_NLOEW,
                    'group': "Zmumu",
     },
+    'Zmumu_MiNNLO-nloqedisr' : { 
+                   'filepaths' :
+                    ["{BASE_PATH}/DYJetsToMuMu_H2ErratumFix_NoQEDISR_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"],
+                   'xsec' : xsec_ZmmPostVFP,
+                   'group': "Zmumu",
+    },
     'Wplusmunu_horace-lo-photos' : { 
                    'filepaths' :
                     ["{BASE_PATH}/WplusJetsToMuNu_LO_TuneCP5_13TeV-horace-pythia8-photospp"],
@@ -116,6 +122,12 @@ genDataDict = {
                    'xsec' : xsec_winhac_WplusToMuNu_NLOEW,
                     'group': "Wmunu",
     },
+    'Wplusmunu_MiNNLO-noqedisr' : { 
+                   'filepaths' :
+                    ["{BASE_PATH}/WplusJetsToMuNu_H2ErratumFix_NoQEDISR_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"],
+                   'xsec' : xsec_WpmunuPostVFP,
+                    'group': "Wmunu",
+    },
     'Wminusmunu_horace-lo-photos' : { 
                    'filepaths' :
                     ["{BASE_PATH}/WminusJetsToMuNu_LO_TuneCP5_13TeV-horace-pythia8-photospp"],
@@ -156,6 +168,12 @@ genDataDict = {
                    'filepaths' :
                     ["{BASE_PATH}/WminusJetsToMuNu_NLOEW_TuneCP5_13TeV-winhac-pythia8"],
                    'xsec' : xsec_winhac_WminusToMuNu_NLOEW,
+                   'group': "Wmunu",
+    },
+    'Wminusmunu_MiNNLO-noqedisr' : { 
+                   'filepaths' :
+                    ["{BASE_PATH}/WminusJetsToMuNu_H2ErratumFix_NoQEDISR_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"],
+                   'xsec' : xsec_WmmunuPostVFP,
                    'group': "Wmunu",
     },
 }
