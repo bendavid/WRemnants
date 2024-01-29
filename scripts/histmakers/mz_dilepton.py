@@ -26,7 +26,7 @@ parser = common.set_parser_default(parser, "genVars", ["ptVGen", "absYVGen"])
 parser = common.set_parser_default(parser, "pt", [34,26.,60.])
 parser = common.set_parser_default(parser, "eta", [48,-2.4,2.4])
 parser = common.set_parser_default(parser, "aggregateGroups", ["Diboson", "Top", "Wtaunu", "Wmunu"])
-parser = common.set_parser_default(parser, "theoryCorr", ["scetlib_dyturbo", "virtual_ew", "horaceqedew_FSR"])
+parser = common.set_parser_default(parser, "theoryCorr", ["scetlib_dyturbo", "virtual_ew", "horaceqedew_FSR", "horacelophotosmecoffew_FSR"])
 
 args = parser.parse_args()
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)

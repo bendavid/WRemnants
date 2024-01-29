@@ -18,8 +18,8 @@ parser.add_argument("-p", "--postfix", type=str, help="Postfix for plots and cor
 parser.add_argument("--normalize", action="store_true", default=False, help="Normalize distributions before computing ratio")
 parser.add_argument("--noSmoothing", action="store_true", default=False, help="Disable smoothing of corrections")
 parser.add_argument("--debug", action='store_true', help="Print debug output")
-parser.add_argument("--baseName", default="nominal_ew", type=str, help="histogram name")
-parser.add_argument("--project", default=["ewMll", "ewLogDeltaM"], nargs="*", type=str, help="axes to project to")
+parser.add_argument("--baseName", default="ew_MllPTll", type=str, help="histogram name")
+parser.add_argument("--project", default=["ewMll", "ewPTll"], nargs="*", type=str, help="axes to project to")
 parser.add_argument("--outpath", type=str, default=f"{common.data_dir}/TheoryCorrections", help="Output path")
 
 args = parser.parse_args()
@@ -44,7 +44,6 @@ res, meta, _ = input_tools.read_infile(args.input)
 corrh = {}
 
 for proc in procs:
-
     # Make 2D ratio
     logger.info(f'Make 2D ratio for {proc}')
     def prepare_hist(name):
@@ -66,6 +65,50 @@ for proc in procs:
             histo = hh.scaleHist(histo, res[proc_name]["dataset"]["xsec"]*10e6/res[proc_name]['weight_sum'], createNew=False)
             logger.info(f'Integral for {name} after scaling {np.sum(histo.values(flow=True))}')
 
+        if "ewMll" in histo.axes.name:
+            edges = histo.axes["ewMll"].edges
+
+            if proc[0] == "W" and ("horace" in name or "winhac" in name):
+                logger.warning("horace and winhac samples with version <v5 have a wrong wmass by 30MeV too high, move axis edges by 30MeV")
+                edges = edges-0.03
+
+                axes = [hist.axis.Variable(edges, underflow=False, name='ewMll') if ax.name == "ewMll" else ax for ax in histo.axes]
+                new_histo = hist.Hist(*axes, storage=histo.storage_type())
+                new_histo.view(flow=True)[...] = histo.view(flow=True)
+                histo = new_histo
+
+            rebinN=4 # make one bin out of rebinN
+            if rebinN != 1:
+                if proc[0] == "Z":
+                    # keep low and high bin edges of [0,50,60, ... 120] for technical reason
+                    rebin_edges = np.append(np.append(edges[:2],edges[2:-1][::rebinN]),edges[-1:])
+                else:
+                    rebin_edges = edges[::rebinN]
+
+                logger.info(f"Rebin axis ewMll by {rebinN}")
+                histo = hh.rebinHist(histo, "ewMll", rebin_edges)
+        
+        base_dev = args.baseName.split("_")[0]
+        if base_dev not in ["nominal", "ew"]:                
+            for ax in histo.axes:
+                old_name = ax._ax.metadata["name"]
+                if base_dev == "lhe":
+                    # use pre FSR definition for lhe correction
+                    translate = {
+                        "ewMll":"massVgen",
+                        "ewAbsYll":"absYVgen",
+                        "ewPTll":"ptVgen",
+                    }
+                else:
+                    translate = {
+                        "ewMll":"dressed_MV",
+                        "ewAbsYll":"dressed_absYV",
+                        "ewPTll":"dressed_PTV",
+                    }
+                new_name = translate[old_name]
+                logger.info(f"Rename axis {old_name} for corrections to {new_name}")
+                ax._ax.metadata["name"] = new_name
+            
         return histo
     
     nums = []
@@ -144,9 +187,9 @@ for proc in procs:
 
 for name, corr_dict in corrh.items():
     outname = name.replace('-', '')
-    outfile = f"{args.outpath}/{outname}"
     if args.postfix:
         outname += f"_{args.postfix}"
+    outfile = f"{args.outpath}/{outname}"
 
     if 'Zmumu' in corr_dict:
         output_tools.write_theory_corr_hist(outfile, 'Z', 

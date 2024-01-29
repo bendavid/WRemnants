@@ -163,6 +163,62 @@ theory_corr_weight_map = {
         "scetlib_dyturboMSHT20an3loVars" : expand_pdf_entries("msht20an3lo"),
 }
 
+def define_dressed_vars(df, mode, flavor="mu"):
+    if "dressedGenV_mom4" in df.GetColumnNames():
+        logger.debug("LHE variables are already defined, do nothing here.")
+        return df
+
+    logger.info("Defining dressed variables")
+
+    # use postfsr neutrinos
+    df = define_postfsr_vars(df, mode)
+
+    lep_pdgId = 13 if flavor == "mu" else 11
+
+    if mode in ["wlike", "dilepton"]:
+        df = df.Define("dressedLep", f"GenDressedLepton_pdgId=={lep_pdgId}")
+        df = df.Define("dressedAntiLep", f"GenDressedLepton_pdgId==-{lep_pdgId}")
+        
+        df = df.Define("hasDressedLep", "ROOT::VecOps::Any(dressedLep)")
+        df = df.Define("hasDressedAntiLep", "ROOT::VecOps::Any(dressedAntiLep)")
+
+        df = df.Define("dressedLep_idx",     "ROOT::VecOps::ArgMax(GenDressedLepton_pt[dressedLep])")
+        df = df.Define("dressedAntiLep_idx", "ROOT::VecOps::ArgMax(GenDressedLepton_pt[dressedAntiLep])")
+
+        df = df.Define("dressedLep_pt", "hasDressedLep ? static_cast<double>(GenDressedLepton_pt[dressedLep][dressedLep_idx]) : 0")
+        df = df.Define("dressedLep_eta", "hasDressedLep ? GenDressedLepton_eta[dressedLep][dressedLep_idx] : 0")
+        df = df.Define("dressedLep_phi", "hasDressedLep ? GenDressedLepton_phi[dressedLep][dressedLep_idx] : 0")
+        df = df.Define("dressedLep_mass", "hasDressedLep ? GenDressedLepton_mass[dressedLep][dressedLep_idx] : 0")
+
+        df = df.Define("dressedAntiLep_pt", "hasDressedAntiLep ? static_cast<double>(GenDressedLepton_pt[dressedAntiLep][dressedAntiLep_idx]) : 0")
+        df = df.Define("dressedAntiLep_eta", "hasDressedAntiLep ? GenDressedLepton_eta[dressedAntiLep][dressedAntiLep_idx] : 0")
+        df = df.Define("dressedAntiLep_phi", "hasDressedAntiLep ? GenDressedLepton_phi[dressedAntiLep][dressedAntiLep_idx] : 0")
+        df = df.Define("dressedAntiLep_mass", "hasDressedAntiLep ? GenDressedLepton_mass[dressedAntiLep][dressedAntiLep_idx] : 0")
+
+        df = df.Define("dressedLep_mom4", "ROOT::Math::PtEtaPhiMVector(dressedLep_pt, dressedLep_eta, dressedLep_phi, dressedLep_mass)")
+        df = df.Define("dressedAntiLep_mom4", "ROOT::Math::PtEtaPhiMVector(dressedAntiLep_pt, dressedAntiLep_eta, dressedAntiLep_phi, dressedAntiLep_mass)")
+
+        df = df.Define('dressedGenV_mom4', 'dressedLep_mom4 + dressedAntiLep_mom4 + postfsrNeutrinos_mom4')
+    else:
+        df = df.Define("dressedLep", f"abs(GenDressedLepton_pdgId)=={lep_pdgId}")
+        df = df.Define("hasDressedLep", "ROOT::VecOps::Any(dressedLep)")
+        df = df.Define("dressedLep_idx", "ROOT::VecOps::ArgMax(GenDressedLepton_pt[dressedLep])")
+
+        df = df.Define("dressedLep_pt", "hasDressedLep ? static_cast<double>(GenDressedLepton_pt[dressedLep][dressedLep_idx]) : 0")
+        df = df.Define("dressedLep_eta", "hasDressedLep ? GenDressedLepton_eta[dressedLep][dressedLep_idx] : 0")
+        df = df.Define("dressedLep_phi", "hasDressedLep ? GenDressedLepton_phi[dressedLep][dressedLep_idx] : 0")
+        df = df.Define("dressedLep_mass", "hasDressedLep ? GenDressedLepton_mass[dressedLep][dressedLep_idx] : 0")
+
+        df = df.Define("dressedLep_mom4", "ROOT::Math::PtEtaPhiMVector(dressedLep_pt, dressedLep_eta, dressedLep_phi, dressedLep_mass)")
+
+        df = df.Define('dressedGenV_mom4', 'dressedLep_mom4 + postfsrNeutrinos_mom4')
+
+    df = df.Define('dressed_MV', 'dressedGenV_mom4.mass()')
+    df = df.Define('dressed_absYV', 'std::fabs(dressedGenV_mom4.Rapidity())')
+    df = df.Define('dressed_PTV', 'dressedGenV_mom4.pt()')
+
+    return df
+
 def define_prefsr_vars(df):
     if "prefsrLeps" in df.GetColumnNames():
         logger.debug("PreFSR leptons are already defined, do nothing here.")
@@ -200,6 +256,10 @@ def define_postfsr_vars(df, mode=None):
     df = df.Define("postfsrLeptons", "GenPart_status == 1 && (GenPart_statusFlags & 1 || GenPart_statusFlags & (1 << 5)) && abs(GenPart_pdgId) >= 11 && abs(GenPart_pdgId) <= 16")
     df = df.Define("postfsrElectrons", "postfsrLeptons && abs(GenPart_pdgId) == 11")
     df = df.Define("postfsrMuons", "postfsrLeptons && abs(GenPart_pdgId) == 13")
+    df = df.Define("postfsrNeutrinos", "postfsrLeptons && (abs(GenPart_pdgId)==12 || abs(GenPart_pdgId)==14 || abs(GenPart_pdgId)==16)")
+
+    df = df.Define("postfsrNeutrinos_mom4", """wrem::Sum4Vec(
+            GenPart_pt[postfsrNeutrinos], GenPart_eta[postfsrNeutrinos], GenPart_phi[postfsrNeutrinos])""")
 
     if mode is not None:
         # defition of more complex postfsr object 
@@ -282,6 +342,7 @@ def define_ew_vars(df):
     df = df.Define('ewPTll', '(ewLeptons[0]+ewLeptons[1]).pt()')
     df = df.Define('ewPTlly', 'ewGenV.pt()')
     df = df.Define('ewYll', '(ewLeptons[0]+ewLeptons[1]).Rapidity()')
+    df = df.Define('ewAbsYll', 'std::fabs(ewYll)')
     df = df.Define('ewYlly', 'ewGenV.Rapidity()')
 
     return df
@@ -369,8 +430,10 @@ def define_central_pdf_weight(df, dataset_name, pdf):
     return df.Define("central_pdf_weight", f"std::clamp<float>({pdfBranch}[0], -theory_weight_truncate, theory_weight_truncate)")
 
 def define_theory_weights_and_corrs(df, dataset_name, helpers, args):
-    df = define_prefsr_vars(df)
-        
+    if not 'powheg' in dataset_name:
+        # no preFSR particles in powheg samples
+        df = define_prefsr_vars(df)
+
     df = define_ew_vars(df)
 
     df = df.DefinePerSample("theory_weight_truncate", "10.")

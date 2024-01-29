@@ -8,6 +8,38 @@
 
 namespace wrem {
 
+
+ROOT::Math::PxPyPzEVector Sum4Vec(
+  const ROOT::VecOps::RVec<double>& pt, 
+  const ROOT::VecOps::RVec<double>& eta, 
+  const ROOT::VecOps::RVec<double>& phi,
+  const ROOT::VecOps::RVec<double>& mass  
+  ) {
+  const std::size_t ngenparts = pt.size();
+  ROOT::Math::PxPyPzEVector full_system(0,0,0,0);
+  for (std::size_t i = 0; i < ngenparts; ++i) {   
+    ROOT::Math::PtEtaPhiMVector p(pt[i], eta[i], phi[i], mass[i]);
+    full_system += p;
+  }
+  return full_system;
+}
+// overload method for massless particles
+ROOT::Math::PxPyPzEVector Sum4Vec(
+  const ROOT::VecOps::RVec<double>& pt, 
+  const ROOT::VecOps::RVec<double>& eta, 
+  const ROOT::VecOps::RVec<double>& phi
+  ) {
+  const std::size_t ngenparts = pt.size();
+  ROOT::Math::PxPyPzEVector full_system(0,0,0,0);
+  for (std::size_t i = 0; i < ngenparts; ++i) {   
+    ROOT::Math::PtEtaPhiMVector p(pt[i], eta[i], phi[i], 0);
+    full_system += p;
+  }
+  return full_system;
+}
+
+
+
 Eigen::TensorFixedSize<int, Eigen::Sizes<2>> prefsrLeptons(const ROOT::VecOps::RVec<int>& status,
         const ROOT::VecOps::RVec<int>& statusFlags, const ROOT::VecOps::RVec<int>& pdgId, const ROOT::VecOps::RVec<int>& motherIdx) {
 

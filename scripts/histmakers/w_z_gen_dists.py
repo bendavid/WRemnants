@@ -106,16 +106,16 @@ def build_graph(df, dataset):
     isZ = dataset.name.startswith("Z") and dataset.name[1] not in ["W", "Z"] #in common.zprocs
 
     weight_expr = "std::copysign(1.0, genWeight)"
-    df = df.Define("weight", weight_expr)
-    df = df.DefinePerSample("unity","1.")
-    # This sum should happen before any change of the weight
-    weightsum = df.SumAndCount("weight")
 
     if "reweight_h2" in dataset.name:
         weight_expr = f"{weight_expr}*H2BugFixWeight[0]"
     elif "NNLOPS" in dataset.name:
         weight_expr = f"{weight_expr}*LHEScaleWeightAltSet1[4]"
 
+    df = df.Define("weight", weight_expr)
+    df = df.DefinePerSample("unity","1.")
+    # This sum should happen before any change of the weight
+    weightsum = df.SumAndCount("weight")
 
     df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
 
@@ -142,13 +142,20 @@ def build_graph(df, dataset):
             massBins = theory_tools.make_ew_binning(mass = 91.1535, width = 2.4932, initialStep=0.010, bin_edges_low=[0,50,60], bin_edges_high=[120])
         else:
             massBins = theory_tools.make_ew_binning(mass = 80.3815, width = 2.0904, initialStep=0.010)
+            
         axis_ewMll = hist.axis.Variable(massBins, name = "ewMll", underflow=False)
-        axis_ewLogDeltaM = hist.axis.Regular(90, -5, 4, name = "ewLogDeltaM")
         axis_ewPtll = hist.axis.Variable(common.ptV_binning, underflow=False, name = "ewPTll") 
-        # axis_ewPtll = hist.axis.Regular(100, 0, 100, underflow=False, name = "ewPTll")
+        axis_ewAbsYll = hist.axis.Regular(50, 0, 5, name = "ewAbsYll")
 
-        results.append(df.HistoBoost("nominal_ew", [axis_ewMll, axis_ewLogDeltaM], ['ewMll', 'ewLogDeltaM', "nominal_weight"], storage=hist.storage.Weight()))
-        results.append(df.HistoBoost("nominal_ewMllPTll", [axis_ewMll, axis_ewPtll], ["ewMll", "ewPTll", "nominal_weight"], storage=hist.storage.Weight()))
+        results.append(df.HistoBoost("ew_MllPTll", [axis_ewMll, axis_ewPtll], ["ewMll", "ewPTll", "nominal_weight"], storage=hist.storage.Weight()))
+        results.append(df.HistoBoost("ew_YllPTll", [axis_ewAbsYll, axis_ewPtll], ["ewAbsYll", "ewPTll", "nominal_weight"], storage=hist.storage.Weight()))
+        results.append(df.HistoBoost("ew_YllMll", [axis_ewAbsYll, axis_ewMll], ["ewAbsYll", "ewMll", "nominal_weight"], storage=hist.storage.Weight()))
+
+        df = theory_tools.define_dressed_vars(df, mode="wmass" if isW else "dilepton")
+        results.append(df.HistoBoost("dressed_MllPTll", [axis_ewMll, axis_ewPtll], ["dressed_MV", "dressed_PTV", "nominal_weight"], storage=hist.storage.Weight()))
+        results.append(df.HistoBoost("dressed_YllPTll", [axis_ewAbsYll, axis_ewPtll], ["dressed_absYV", "dressed_PTV", "nominal_weight"], storage=hist.storage.Weight()))
+        results.append(df.HistoBoost("dressed_YllMll", [axis_ewAbsYll, axis_ewMll], ["dressed_absYV", "dressed_MV", "nominal_weight"], storage=hist.storage.Weight()))
+
         if args.auxiliaryHistograms:
             axis_ewMlly = hist.axis.Variable(massBins, name = "ewMlly")
             results.append(df.HistoBoost("nominal_ewMlly", [axis_ewMlly], ["ewMlly", "nominal_weight"], storage=hist.storage.Weight()))
@@ -234,9 +241,12 @@ def build_graph(df, dataset):
                 axis_pt = hist.axis.Regular(50, 20, 70, name = "postfsrLep_pt", overflow=True, underflow=True)
                 results.append(df_fiducial.HistoBoost("nominal_postfsr", [axis_eta, axis_pt], ["postfsrLep_absEta", "postfsrLep_pt", "nominal_weight"], storage=hist.storage.Weight()))
 
-    nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols, "nominal_weight"], storage=hist.storage.Weight())
+    if 'powheg' in dataset.name:
+        return results, weightsum
 
+    nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols, "nominal_weight"], storage=hist.storage.Weight())
     results.append(nominal_gen)
+
     if not 'horace' in dataset.name and not 'winhac' in dataset.name:
         if "LHEScaleWeight" in df.GetColumnNames():
             df = theory_tools.define_scale_tensor(df)

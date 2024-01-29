@@ -29,6 +29,67 @@ def add_recoil_uncertainty(card_tool, samples, passSystToFakes=False, pu_type="h
             passToFakes=passSystToFakes,
         )
 
+def add_electroweak_uncertainty(card_tool, ewUncs, flavor="mu", samples="single_v_samples", passSystToFakes=True, wlike=False):
+    info = dict(
+        systAxes=["systIdx"],
+        mirror=True,
+        group="theory_ew",
+        passToFakes=passSystToFakes,
+    )
+    # different uncertainty for W and Z samples
+    all_samples = card_tool.procGroups[samples]
+    z_samples = [p for p in all_samples if p[0]=="Z"]
+    w_samples = [p for p in all_samples if p[0]=="W"]
+    mode = card_tool.datagroups.mode
+    
+    for ewUnc in ewUncs:
+        if ewUnc == "default":
+            if z_samples:
+                if mode in ["wmass", "wlike", "lowpu_w"]:
+                    ewUnc = "virtual_ew_wlike"
+                else:
+                    ewUnc = "virtual_ew"
+                # add virtual EW uncertainty on Z samples
+                card_tool.addSystematic(f"{ewUnc}Corr", **info, 
+                    processes=z_samples,
+                    labelsByAxis=[f"{ewUnc}Corr"],
+                    scale=2,
+                    skipEntries=[(1, -1), (2, -1)],
+                )                
+            if w_samples:
+                # add winhac (approximate virtual EW) uncertainty on W samples
+                card_tool.addSystematic(f"winhacnloewCorr", **info, 
+                    processes=w_samples,
+                    labelsByAxis=[f"winhacnloewCorr"],
+                    scale=2,
+                    skipEntries=[(0, -1), (2, -1)],
+                )                     
+        else:
+            if "ISR" in ewUnc or "FSR" in ewUnc:
+                if flavor == "e":
+                    logger.warning("ISR/FSR EW uncertainties are not implemented for electrons, proceed w/o")
+                    continue
+                scale=1
+            else:
+                scale=2
+
+            if "winhac" in ewUnc:
+                if not w_samples:
+                    logger.warning("Winhac is not implemented for any other process than W, proceed w/o winhac EW uncertainty")
+                    continue
+                elif all_samples != w_samples:
+                    logger.warning("Winhac is only implemented for W samples, proceed w/o winhac EW uncertainty for other samples")
+                samples = w_samples
+            else:
+                samples = all_samples
+
+            card_tool.addSystematic(f"{ewUnc}Corr", **info,
+                processes=samples,
+                labelsByAxis=[f"{ewUnc}Corr"],
+                scale=scale,
+                skipEntries=[(1, -1), (2, -1)] if ewUnc.startswith("virtual_ew") else [(0, -1), (2, -1)],
+            )  
+
 def projectABCD(cardTool, h, return_variances=False, dtype="float64"):
     # in case the desired axes are different at low MT and high MT we need to project each seperately, and then concatenate
 
