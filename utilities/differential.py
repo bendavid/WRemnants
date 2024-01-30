@@ -62,7 +62,7 @@ def get_dilepton_axes(gen_vars, gen_axes, add_out_of_acceptance_axis=False):
 def get_theoryAgnostic_axes(ptV_bins=[], absYV_bins=[], ptV_flow=False, absYV_flow=False):
 
     ptV_bins_init = [0., 3., 6., 9.7, 12.4, 16., 21.4, 29.5, 60.] if not len(ptV_bins) else ptV_bins
-    absYV_bins_init = [0., 0.4, 0.8, 1.2, 1.6, 2.0, 2.4] if not len(absYV_bins) else absYV_bins
+    absYV_bins_init = [0., 0.4, 0.8, 1.2, 1.6, 2.0, 2.4, 3.0] if not len(absYV_bins) else absYV_bins
 
     # Note that the helicity axis is defined elsewhere, and must not be added to the list of axes returned here
     axis_ptVgen = hist.axis.Variable(

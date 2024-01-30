@@ -198,7 +198,8 @@ def getDataPath(mode=None):
     elif hostname == "cmsanalysis.pi.infn.it":
         # NOTE: If anyone wants to run lowpu analysis at Pisa they'd probably want a different path
         base_path = "/scratchnvme/wmass/NANOV9/postVFP"
-
+    elif hostname == "cmsasymow.pi.infn.it":
+        base_path = "/scratch/wmass/y2016"
     return base_path
 
 def is_zombie(file_path):

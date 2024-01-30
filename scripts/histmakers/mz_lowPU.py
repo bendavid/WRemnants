@@ -352,4 +352,4 @@ if not args.noScaleToData:
     scale_to_data(resultdict)
     aggregate_groups(datasets, resultdict, args.aggregateGroups)
 
-output_tools.write_analysis_output(resultdict, f"mz_lowPU_{flavor}.hdf5", args, update_name=not args.forceDefaultName)
+output_tools.write_analysis_output(resultdict, f"mz_lowPU_{flavor}.hdf5", args)

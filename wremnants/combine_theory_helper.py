@@ -209,7 +209,7 @@ class TheoryHelper(object):
             self.card_tool.addSystematic(scale_hist,
                 preOpMap=preop_map,
                 preOpArgs=preop_args,
-                symmetrize = "conservative",
+                symmetrize = "quadratic",
                 processes=[sample_group],
                 group=group_name,
                 splitGroup={"QCDscale": ".*"},
@@ -272,7 +272,7 @@ class TheoryHelper(object):
                 group="resumTransitionFOScale",
                 splitGroup={"resum": ".*"},
                 systAxes=[pt_ax, "vars"],
-                symmetrize = "conservative",
+                symmetrize = "quadratic",
                 passToFakes=self.propagate_to_fakes,
                 preOp = preop_func,
                 preOpArgs = preop_args,
@@ -489,6 +489,7 @@ class TheoryHelper(object):
         pdfInfo = theory_tools.pdf_info_map("ZmumuPostVFP", pdf)
         pdfName = pdfInfo["name"]
         pdf_hist = pdfName
+        symmetrize = "quadratic"
 
         if from_corr:
             theory_unc = input_tools.args_from_metadata(self.card_tool, "theoryCorr")
@@ -512,6 +513,7 @@ class TheoryHelper(object):
             passToFakes=self.propagate_to_fakes,
             preOpMap=operation,
             scale=pdfInfo.get("scale", 1)*scale,
+            symmetrize=symmetrize,
             systAxes=[pdf_ax],
         )
         if from_corr:
@@ -534,6 +536,7 @@ class TheoryHelper(object):
                     passToFakes=self.propagate_to_fakes,
                     preOpMap=operation,
                     scale=pdfInfo.get("scale", 1)*scale,
+                    symmetrize=symmetrize,
                     systAxes=[pdf_ax],
                 )
 
@@ -547,6 +550,7 @@ class TheoryHelper(object):
             splitGroup={f"{pdfName}AlphaS": '.*'},
             systAxes=["vars" if from_corr else "alphasVar"],
             scale=0.75 if asRange == "002" else 1.5,
+            symmetrize=symmetrize,
             passToFakes=self.propagate_to_fakes,
         )
         if from_corr:
@@ -586,7 +590,7 @@ class TheoryHelper(object):
                 group="resumTransitionFOScale",
                 splitGroup={"resum": ".*"},
                 systAxes=["vars"],
-                symmetrize = "conservative",
+                symmetrize = "quadratic",
                 passToFakes=self.propagate_to_fakes,
                 preOp = lambda h: h[{"vars" : sel_vars}],
                 outNames=outNames,

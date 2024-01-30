@@ -8,6 +8,38 @@
 
 namespace wrem {
 
+
+ROOT::Math::PxPyPzEVector Sum4Vec(
+  const ROOT::VecOps::RVec<double>& pt, 
+  const ROOT::VecOps::RVec<double>& eta, 
+  const ROOT::VecOps::RVec<double>& phi,
+  const ROOT::VecOps::RVec<double>& mass  
+  ) {
+  const std::size_t ngenparts = pt.size();
+  ROOT::Math::PxPyPzEVector full_system(0,0,0,0);
+  for (std::size_t i = 0; i < ngenparts; ++i) {   
+    ROOT::Math::PtEtaPhiMVector p(pt[i], eta[i], phi[i], mass[i]);
+    full_system += p;
+  }
+  return full_system;
+}
+// overload method for massless particles
+ROOT::Math::PxPyPzEVector Sum4Vec(
+  const ROOT::VecOps::RVec<double>& pt, 
+  const ROOT::VecOps::RVec<double>& eta, 
+  const ROOT::VecOps::RVec<double>& phi
+  ) {
+  const std::size_t ngenparts = pt.size();
+  ROOT::Math::PxPyPzEVector full_system(0,0,0,0);
+  for (std::size_t i = 0; i < ngenparts; ++i) {   
+    ROOT::Math::PtEtaPhiMVector p(pt[i], eta[i], phi[i], 0);
+    full_system += p;
+  }
+  return full_system;
+}
+
+
+
 Eigen::TensorFixedSize<int, Eigen::Sizes<2>> prefsrLeptons(const ROOT::VecOps::RVec<int>& status,
         const ROOT::VecOps::RVec<int>& statusFlags, const ROOT::VecOps::RVec<int>& pdgId, const ROOT::VecOps::RVec<int>& motherIdx) {
 
@@ -192,6 +224,18 @@ using helicity_scale_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<NHEL
     }
   };
 
+double get_pdgid_mass(const int& pdgId){
+  switch(std::abs(pdgId)) {
+    case 11:
+      return electron_mass;
+    case 13:
+      return muon_mass;
+    case 15:
+      return tau_mass;
+  }
+  return 0;
+}
+
 ROOT::VecOps::RVec<ROOT::Math::PxPyPzEVector> ewLeptons(
   const ROOT::VecOps::RVec<int>& status,
   const ROOT::VecOps::RVec<int>& statusFlags, 
@@ -222,18 +266,7 @@ ROOT::VecOps::RVec<ROOT::Math::PxPyPzEVector> ewLeptons(
     const bool is_selected = is_lepton && (is_status1 || is_tau) && is_prompt && is_fromHardProcess;
 
     if (is_selected) {
-      double mass = 0.;
-      switch(absPdgId) {
-        case 11:
-          mass = 5.110e-04;
-          break;
-        case 13:
-          mass = 0.10566;
-          break;
-        case 15:
-          mass = 1.77682;
-          break;
-      }
+      const double mass = get_pdgid_mass(ipdgId);
       ROOT::Math::PtEtaPhiMVector p4(pt[i], eta[i], phi[i], mass);
       leptons.emplace_back(p4);
     }

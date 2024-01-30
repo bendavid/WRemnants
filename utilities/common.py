@@ -20,13 +20,15 @@ xsec_ZmmMass10to50PostVFP = 6997.0
 Z_TAU_TO_LEP_RATIO = (1.-(1. - BR_TAUToMU - BR_TAUToE)**2)
 
 wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP", 
-    'Wplusmunu_horace-lo-photos', 'Wplusmunu_horace-nlo', 'Wplusmunu_horace-lo',
-    'Wminusmunu_horace-lo-photos', 'Wminusmunu_horace-nlo', 'Wminusmunu_horace-lo',
+    'Wplusmunu_horace-lo-photos', 'Wplusmunu_horace-lo-photos-mecoff', 'Wplusmunu_horace-nlo', 'Wplusmunu_horace-lo', 'Wplusmunu_horace-qed', 
+    'Wminusmunu_horace-lo-photos', 'Wminusmunu_horace-lo-photos-mecoff', 'Wminusmunu_horace-nlo', 'Wminusmunu_horace-lo', 'Wminusmunu_horace-qed',
     'Wplusmunu_winhac-lo-photos', 'Wplusmunu_winhac-lo', 'Wplusmunu_winhac-nlo', 
     'Wminusmunu_winhac-lo-photos', 'Wminusmunu_winhac-lo', 'Wminusmunu_winhac-nlo']
 zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS", 
-    'Zmumu_horace-lo-photos', 'Zmumu_horace-nlo', 'Zmumu_horace-lo', 'Zmumu_horace-new',
+    'Zmumu_horace-lo-photos', 'Zmumu_horace-lo-photos-mecoff', 'Zmumu_horace-nlo', 'Zmumu_horace-lo', 'Zmumu_horace-new', 'Zmumu_horace-qed',
     'Zmumu_horace-alpha-fsr-off-isr-off', 'Zmumu_horace-alpha-old-fsr-off-isr-off', 'Zmumu_horace-alpha-old-fsr-off-isr-pythia',
+    'Zmumu_renesance-lo', 'Zmumu_renesance-nlo',
+    'Zmumu_powheg-lo', 'Zmumu_powheg-nloew-qedveto', 'Zmumu_powheg-nloew'
     ]
 
 vprocs = wprocs+zprocs
@@ -159,7 +161,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
     parser.add_argument("--forceDefaultName", action='store_true', help="Don't modify the name of the output file with some default strings")
     parser.add_argument("--theoryCorr", nargs="*", type=str, action=NoneFilterAction,
-        default=["scetlib_dyturbo", "horacenloew"], choices=theory_corrections.valid_theory_corrections(), 
+        default=["scetlib_dyturbo", "winhacnloew", "virtual_ew_wlike", "horaceqedew_FSR", "horacelophotosmecoffew_FSR"], choices=theory_corrections.valid_theory_corrections(), 
         help="Apply corrections from indicated generator. First will be nominal correction.")
     parser.add_argument("--theoryCorrAltOnly", action='store_true', help="Save hist for correction hists but don't modify central weight")
     parser.add_argument("--widthVariations", action='store_true', help="Store variations of W and Z widths.")
@@ -177,6 +179,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--onlyMainHistograms", action='store_true', help="Only produce some histograms, skipping (most) systematics to run faster when those are not needed")
     parser.add_argument("--met", type=str, choices=["DeepMETReso", "RawPFMET"], help="MET (DeepMETReso or RawPFMET)", default="DeepMETReso")
     parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
+    parser.add_argument("--appendOutputFile", type=str, default="", help="Append analysis output to specified output file")
     parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP", "2017", "2018"], help="Data set to process", default="2016PostVFP")
     parser.add_argument("--nonClosureScheme", type=str, default = "A-only", choices=["none", "A-M-separated", "A-M-combined", "binned", "binned-plus-M", "A-only", "M-only"], help = "source of the Z non-closure nuisances")
     parser.add_argument("--correlatedNonClosureNP", action="store_false", help="disable the de-correlation of Z non-closure nuisance parameters after the jpsi massfit")

@@ -106,22 +106,16 @@ def build_graph(df, dataset):
     isZ = dataset.name.startswith("Z") and dataset.name[1] not in ["W", "Z"] #in common.zprocs
 
     weight_expr = "std::copysign(1.0, genWeight)"
-    df = df.Define("weight", weight_expr)
-    df = df.DefinePerSample("unity","1.")
-    # This sum should happen before any change of the weight
-    weightsum = df.SumAndCount("weight")
 
     if "reweight_h2" in dataset.name:
         weight_expr = f"{weight_expr}*H2BugFixWeight[0]"
     elif "NNLOPS" in dataset.name:
         weight_expr = f"{weight_expr}*LHEScaleWeightAltSet1[4]"
 
-    if args.applySelection:
-        if isZ:
-            df = df.Filter("ewLeptons[0].pt()>25 && ewLeptons[1].pt()>25 && std::fabs(ewLeptons[0].eta())<3.5 && std::fabs(ewLeptons[1].eta())<3.5")
-        elif isW:
-            df = df.Filter("""(ewLeptons[0].mass() == 0 || (ewLeptons[0].pt()>25 && std::fabs(ewLeptons[0].eta())<3.5))
-                           && (ewLeptons[1].mass() == 0 || (ewLeptons[1].pt()>25 && std::fabs(ewLeptons[1].eta())<3.5))""")
+    df = df.Define("weight", weight_expr)
+    df = df.DefinePerSample("unity","1.")
+    # This sum should happen before any change of the weight
+    weightsum = df.SumAndCount("weight")
 
     df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
 
@@ -148,12 +142,20 @@ def build_graph(df, dataset):
             massBins = theory_tools.make_ew_binning(mass = 91.1535, width = 2.4932, initialStep=0.010, bin_edges_low=[0,50,60], bin_edges_high=[120])
         else:
             massBins = theory_tools.make_ew_binning(mass = 80.3815, width = 2.0904, initialStep=0.010)
+            
         axis_ewMll = hist.axis.Variable(massBins, name = "ewMll", underflow=False)
-        axis_ewLogDeltaM = hist.axis.Regular(90, -5, 4, name = "ewLogDeltaM")
-        axis_ewPtll = hist.axis.Variable(common.ptV_binning, underflow=False, name = "ewPTll") # hist.axis.Regular(100, 0, 100, name = "ewPtll")
+        axis_ewPtll = hist.axis.Variable(common.ptV_binning, underflow=False, name = "ewPTll") 
+        axis_ewAbsYll = hist.axis.Regular(50, 0, 5, name = "ewAbsYll")
 
-        results.append(df.HistoBoost("nominal_ew", [axis_ewMll, axis_ewLogDeltaM], ['ewMll', 'ewLogDeltaM', "nominal_weight"], storage=hist.storage.Weight()))
-        results.append(df.HistoBoost("nominal_ewMllPTll", [axis_ewMll, axis_ewPtll], ["ewMll", "ewPTll", "nominal_weight"], storage=hist.storage.Weight()))
+        results.append(df.HistoBoost("ew_MllPTll", [axis_ewMll, axis_ewPtll], ["ewMll", "ewPTll", "nominal_weight"], storage=hist.storage.Weight()))
+        results.append(df.HistoBoost("ew_YllPTll", [axis_ewAbsYll, axis_ewPtll], ["ewAbsYll", "ewPTll", "nominal_weight"], storage=hist.storage.Weight()))
+        results.append(df.HistoBoost("ew_YllMll", [axis_ewAbsYll, axis_ewMll], ["ewAbsYll", "ewMll", "nominal_weight"], storage=hist.storage.Weight()))
+
+        df = theory_tools.define_dressed_vars(df, mode="wmass" if isW else "dilepton")
+        results.append(df.HistoBoost("dressed_MllPTll", [axis_ewMll, axis_ewPtll], ["dressed_MV", "dressed_PTV", "nominal_weight"], storage=hist.storage.Weight()))
+        results.append(df.HistoBoost("dressed_YllPTll", [axis_ewAbsYll, axis_ewPtll], ["dressed_absYV", "dressed_PTV", "nominal_weight"], storage=hist.storage.Weight()))
+        results.append(df.HistoBoost("dressed_YllMll", [axis_ewAbsYll, axis_ewMll], ["dressed_absYV", "dressed_MV", "nominal_weight"], storage=hist.storage.Weight()))
+
         if args.auxiliaryHistograms:
             axis_ewMlly = hist.axis.Variable(massBins, name = "ewMlly")
             results.append(df.HistoBoost("nominal_ewMlly", [axis_ewMlly], ["ewMlly", "nominal_weight"], storage=hist.storage.Weight()))
@@ -213,9 +215,38 @@ def build_graph(df, dataset):
                 results.append(df.HistoBoost("nominal_sublPhoton", [axis_photonPt, axis_photonEta], ["sublPhotonPt", "sublPhotonEta", "nominal_weight"], storage=hist.storage.Weight()))
                 results.append(df.HistoBoost("nominal_trailPhoton", [axis_photonPt, axis_photonEta], ["trailPhotonPt", "trailPhotonEta", "nominal_weight"], storage=hist.storage.Weight()))
 
-    nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols, "nominal_weight"], storage=hist.storage.Weight())
+            if args.applySelection:
+                # for fiducial EW corrections
+                # apply acceptance cuts on post FSR objects
+                if isZ:
+                    # mz_wlike_with_mu_eta_pt.py selection, don't cut on chosen lepton pt,eta as this will be used in binning
+                    df = theory_tools.define_postfsr_vars(df, mode="wlike")
+                    df_fiducial = df.Filter(f"""
+                        postfsrOtherLep_pt>26 && postfsrOtherLep_pt<60 
+                        && postfsrOtherLep_absEta<2.5
+                        && postfsrMV > 60 && postfsrMV < 120
+                        && postfsrMT > 45
+                        && postfsrDeltaPhiMuonMet > {np.pi/4.}
+                        """)
+                elif isW:
+                    # mw_with_mu_eta_pt.py selection, don't cut on chosen lepton pt,eta as this will be used in binning
+                    df = theory_tools.define_postfsr_vars(df, mode="wmass")
+                    df_fiducial = df.Filter(f"""
+                        postfsrMT > 40
+                        && postfsrDeltaPhiMuonMet > {np.pi/4.}
+                        """)
 
+                # postfsr definition
+                axis_eta = hist.axis.Regular(25, 0, 2.5, name = "postfsrLep_absEta", overflow=True, underflow=False)
+                axis_pt = hist.axis.Regular(50, 20, 70, name = "postfsrLep_pt", overflow=True, underflow=True)
+                results.append(df_fiducial.HistoBoost("nominal_postfsr", [axis_eta, axis_pt], ["postfsrLep_absEta", "postfsrLep_pt", "nominal_weight"], storage=hist.storage.Weight()))
+
+    if 'powheg' in dataset.name:
+        return results, weightsum
+
+    nominal_gen = df.HistoBoost("nominal_gen", nominal_axes, [*nominal_cols, "nominal_weight"], storage=hist.storage.Weight())
     results.append(nominal_gen)
+
     if not 'horace' in dataset.name and not 'winhac' in dataset.name:
         if "LHEScaleWeight" in df.GetColumnNames():
             df = theory_tools.define_scale_tensor(df)
@@ -243,7 +274,7 @@ def build_graph(df, dataset):
     return results, weightsum
 
 resultdict = narf.build_and_run(datasets, build_graph)
-output_tools.write_analysis_output(resultdict, f"{os.path.basename(__file__).replace('py', 'hdf5')}", args, update_name=not args.forceDefaultName)
+output_tools.write_analysis_output(resultdict, f"{os.path.basename(__file__).replace('py', 'hdf5')}", args)
 
 logger.info("computing angular coefficients")
 z_moments = None
@@ -287,4 +318,4 @@ if not args.skipAngularCoeffs:
         if args.useTheoryAgnosticBinning:
             outfname += "_theoryAgnosticBinning"
         outfname += ".hdf5"
-        output_tools.write_analysis_output(moments_out, outfname, args, update_name=not args.forceDefaultName)
+        output_tools.write_analysis_output(moments_out, outfname, args)

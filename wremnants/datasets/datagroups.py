@@ -1,4 +1,5 @@
 from utilities import boostHistHelpers as hh,common,logging
+from utilities.io_tools import input_tools
 import lz4.frame
 import pickle
 import h5py
@@ -29,7 +30,7 @@ class Datagroups(object):
         elif infile.endswith(".hdf5"):
             logger.info("Load input file")
             self.h5file = h5py.File(infile, "r")
-            self.results = narf.ioutils.pickle_load_h5py(self.h5file["results"])
+            self.results = input_tools.load_results_h5py(self.h5file)
         else:
             raise ValueError(f"{infile} has unsupported file type")
 
@@ -431,12 +432,10 @@ class Datagroups(object):
         return self.results
 
     def addSummedProc(self, refname, name, label=None, color=None, exclude=["Data"], relabel=None, 
-            procsToRead=None, reload=False, rename=None, action=None, actionArgs={}, preOpMap=None, preOpArgs={}, 
-            forceNonzero=True):
+            procsToRead=None, reload=False, rename=None, action=None, actionArgs={}, **kwargs):
         if reload:
             self.loadHistsForDatagroups(refname, syst=name, excludeProcs=exclude,
-                procsToRead=procsToRead, preOpMap=preOpMap, preOpArgs=preOpArgs, 
-                forceNonzero=forceNonzero)
+                procsToRead=procsToRead, **kwargs)
 
         if not rename:
             rename = name

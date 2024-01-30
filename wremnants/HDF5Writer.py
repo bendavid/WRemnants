@@ -372,11 +372,12 @@ class HDF5Writer(object):
                     logger.debug(f"Now at proc {proc}!")
 
                     hvar = dg.groups[proc].hists["syst"]
-                    
+
                     if syst["decorrByBin"]:
                         raise NotImplementedError("By bin decorrelation is not supported for writing output in hdf5")
 
                     var_map = chanInfo.systHists(hvar, systKey)
+
                     var_names = [x[:-2] if "Up" in x[-2:] else (x[:-4] if "Down" in x[-4:] else x) 
                         for x in filter(lambda x: x != "", var_map.keys())]
                     # Deduplicate while keeping order
@@ -384,7 +385,7 @@ class HDF5Writer(object):
                     norm_proc = self.dict_norm[chan][proc]
 
                     for var_name in var_names:
-                        kfac = syst["scale"]
+                        kfac=syst["scale"]
 
                         def get_logk(histname, var_type=""):
                             _hist = var_map[histname+var_type]
@@ -393,7 +394,7 @@ class HDF5Writer(object):
 
                             if not np.all(np.isfinite(_syst)):
                                 raise RuntimeError(f"{len(_syst)-sum(np.isfinite(_syst))} NaN or Inf values encountered in systematic {var_name}!")
-                            
+
                             # check if there is a sign flip between systematic and nominal
                             _logk = kfac*np.log(_syst/norm_proc)
                             _logk_view = np.where(np.equal(np.sign(norm_proc*_syst),1), _logk, self.logkepsilon*np.ones_like(_logk))
@@ -406,32 +407,50 @@ class HDF5Writer(object):
 
                             return _logk_view
 
+                        var_name_out = var_name
+
                         if syst["mirror"]:
                             logkavg_proc = get_logk(var_name)
                         elif syst["symmetrize"] is not None:
                             logkup_proc = get_logk(var_name, "Up")
-                            logkdown_proc = get_logk(var_name, "Down")
+                            logkdown_proc = -get_logk(var_name, "Down")
 
                             if syst["symmetrize"] == "conservative":
                                 # symmetrize by largest magnitude of up and down variations
-                                logkavg_proc = np.where(np.abs(logkup_proc) > np.abs(logkdown_proc), logkup_proc, -logkdown_proc)
-                            else:
+                                logkavg_proc = np.where(np.abs(logkup_proc) > np.abs(logkdown_proc), logkup_proc, logkdown_proc)
+                            elif syst["symmetrize"] == "average":
                                 # symmetrize by average of up and down variations
-                                logkavg_proc = 0.5*(logkup_proc - logkdown_proc)
+                                logkavg_proc = 0.5*(logkup_proc + logkdown_proc)
+                            elif syst["symmetrize"] in ["linear", "quadratic"]:
+                                # "linear" corresponds to a piecewise linear dependence of logk on theta
+                                # while "quadratic" corresponds to a quadratic dependence and leads
+                                # to a large variance
+                                diff_fact = np.sqrt(3.) if syst["symmetrize"]=="quadratic" else 1.
+
+                                # split asymmetric variation into two symmetric variations
+                                logkavg_proc = 0.5*(logkup_proc + logkdown_proc)
+                                logkdiffavg_proc = 0.5*diff_fact*(logkup_proc - logkdown_proc)
+
+                                var_name_out = var_name + "SymAvg"
+                                var_name_out_diff = var_name + "SymDiff"
+
+                                #special case, book the extra systematic
+                                self.book_logk_avg(logkdiffavg_proc, chan, proc, var_name_out_diff)
+                                self.book_systematic(syst, var_name_out_diff)
                         else:
                             logkup_proc = get_logk(var_name, "Up")
-                            logkdown_proc = get_logk(var_name, "Down")
+                            logkdown_proc = -get_logk(var_name, "Down")
 
-                            logkavg_proc = 0.5*(logkup_proc - logkdown_proc)
-                            logkhalfdiff_proc = 0.5*(logkup_proc + logkdown_proc)
+                            logkavg_proc = 0.5*(logkup_proc + logkdown_proc)
+                            logkhalfdiff_proc = 0.5*(logkup_proc - logkdown_proc)
 
                             logkup_proc = None
                             logkdown_proc = None
 
-                            self.book_logk_halfdiff(logkhalfdiff_proc, chan, proc, var_name)
+                            self.book_logk_halfdiff(logkhalfdiff_proc, chan, proc, var_name_out)
 
-                        self.book_logk_avg(logkavg_proc, chan, proc, var_name)
-                        self.book_systematic(syst, var_name)
+                        self.book_logk_avg(logkavg_proc, chan, proc, var_name_out)
+                        self.book_systematic(syst, var_name_out)
 
                     # free memory
                     for var in var_map.keys():
@@ -788,7 +807,7 @@ class HDF5Writer(object):
         self.book_logk(self.dict_logkavg, self.dict_logkavg_indices, self.dict_logkavg_values, *args)
     
     def book_logk_halfdiff(self, *args):
-        self.book_logk(self.dict_logkavg, self.dict_logkavg_indices, self.dict_logkavg_values, *args)
+        self.book_logk(self.dict_logkhalfdiff, self.dict_logkhalfdiff_indices, self.dict_logkhalfdiff_values, *args)
 
     def book_logk(self, dict_logk, dict_logk_indices, dict_logk_values, logk, chan, proc, syst_name):
         norm_proc = self.dict_norm[chan][proc]

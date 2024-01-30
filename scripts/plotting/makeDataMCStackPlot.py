@@ -16,7 +16,7 @@ import re
 import numpy as np
 
 parser = common.plot_parser()
-parser.add_argument("infile", help="Output file of the analysis stage, containing ND boost histogrdams")
+parser.add_argument("infile", help="Output file of the analysis stage, containing ND boost histograms")
 parser.add_argument("--ratioToData", action='store_true', help="Use data as denominator in ratio")
 parser.add_argument("-n", "--baseName", type=str, help="Histogram name in the file (e.g., 'nominal')", default="nominal")
 parser.add_argument("--nominalRef", type=str, help="Specify the nominal his if baseName is a variation hist (for plotting alt hists)")
@@ -165,7 +165,7 @@ if addVariation:
             action = None
         groups.addSummedProc(nominalName, relabel=args.baseName, name=name, label=label, exclude=exclude,
             color=color, reload=reload, rename=varname, procsToRead=datasets,
-            preOpMap=load_op, action=action, forceNonzero=True)
+            preOpMap=load_op, action=action, forceNonzero=True, applySelection=applySelection)
 
         exclude.append(varname)
         unstack.append(varname)

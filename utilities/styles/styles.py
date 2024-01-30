@@ -128,6 +128,8 @@ nuisance_groupings = {
 text_dict = {
     "Zmumu": r"$\mathrm{Z}\rightarrow\mu\mu$",
     "ZToMuMu": r"$\mathrm{Z}\rightarrow\mu\mu$",
+    "Wplusmunu": r"$\mathrm{W}^+\rightarrow\mu\nu$",
+    "Wminusmunu": r"$\mathrm{W}^-\rightarrow\mu\nu$",
     "WplusToMuNu": r"$\mathrm{W}^+\rightarrow\mu\nu$",
     "WminusToMuNu": r"$\mathrm{W}^-\rightarrow\mu\nu$"
 }
@@ -135,6 +137,8 @@ text_dict = {
 axis_labels = {
     "ewPTll": r"$\mathrm{Post\ FSR}\ p_\mathrm{T}^{\ell\ell}$",
     "ewMll": r"$\mathrm{Post\ FSR}\ m^{\ell\ell}$", 
+    "ewYll": r"$\mathrm{Post\ FSR}\ Y^{\ell\ell}$",
+    "ewAbsYll": r"$\mathrm{Post\ FSR}\ |Y^{\ell\ell}|$",
     "ptgen": r"$\mathrm{Pre\ FSR}\ p_\mathrm{T}^{\ell}$",
     "etagen": r"$\mathrm{Pre\ FSR}\ \eta^{\ell}$", 
     "ptVgen": r"$\mathrm{Pre\ FSR}\ p_\mathrm{T}^{\ell\ell}$",
@@ -146,7 +150,10 @@ axis_labels = {
 }
 
 syst_labels = {
-    "horacenloew" : {0: "nominal", 1: "horace EW NLO/LO", 2: "horace EW NLO/LO doubled", },
+    "powhegnloewew" : {0: "nominal", 1: "powheg EW NLO / LO"},
+    "powhegnloewew_ISR" : {0: "nominal", 1: "powheg EW NLO / NLO QED veto"},
+    "horacenloew" : {0: "nominal", 1: "horace EW NLO / LO", 2: "horace EW NLO / LO doubled", },
+    "winhacnloew" : {0: "nominal", 1: "winhac EW NLO / LO", 2: "winhac EW NLO / LO doubled", },
     "matrix_radish" : "MATRIX+RadISH",
     "virtual_ew" : {
         0: r"NLOEW + HOEW, CMS, ($G_\mu, m_\mathrm{Z}, \mathrm{sin}^2\Theta_\mathrm{eff}$) scheme",
