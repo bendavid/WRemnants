@@ -478,9 +478,6 @@ def build_graph(df, dataset):
                            "passIso", "passMT", "passTrigger"]
             yieldsForWeffMC = df.HistoBoost("yieldsForWeffMC", axes_WeffMC, [*cols_WeffMC, "nominal_weight"])
             results.append(yieldsForWeffMC)
-            cols_WeffMCveto = ["GenPart_eta[postFSRmuons]", "GenPart_pt[postFSRmuons]", "GenPart_pdgId[postFSRmuons]", "passVeto"]
-            yieldsForWeffMCveto = df.HistoBoost("yieldsForWeffMCveto", axes_WeffMCveto, [*cols_WeffMCveto, "nominal_weight"])
-            results.append(yieldsForWeffMCveto)
 
         if not args.noRecoil and args.recoilUnc:
             df = recoilHelper.add_recoil_unc_W(df, results, dataset, cols, axes, "nominal")
