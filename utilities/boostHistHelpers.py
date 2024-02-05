@@ -148,6 +148,47 @@ def multiplyHists(h1, h2, allowBroadcast=True, createNew=True, flow=True):
 
     return outh
 
+# TODO: Figure out the overflow
+def concatenateHists(h1, h2, allowBroadcast=True, by_ax_name=True):
+    if allowBroadcast:
+        h1 = broadcastSystHist(h1, h2, flow=False, by_ax_name=by_ax_name)
+        h2 = broadcastSystHist(h2, h1, flow=False, by_ax_name=by_ax_name)
+
+    axes = []
+    for ax1, ax2 in zip(h1.axes, h2.axes):
+        if ax1 == ax2:
+            axes.append(ax1)
+            continue
+
+        if type(ax1) != type(ax1):
+            raise ValueError("Cannot combine inconsistent axis types!")
+
+        if type(ax1) == hist.axis.StrCategory:
+            new_entries = list(ax1)+list(ax2)
+            if len(new_entries) != len(set(new_entries)):
+                raise ValueError("Cannot concatenate StrCategory axes with duplicate labels")
+            axes.append(hist.axis.StrCategory(new_entries, name=ax1.name))
+        else:
+            if ax1.edges[0] > ax2.edges[0]:
+                ax1,ax2 = ax2,ax1
+
+            if ax1.edges[-1] == ax2.edges[0]:
+                axes.append(hist.axis.Variable(np.concatenate((ax1.edges, ax2.edges[1:])), name=ax1.name, 
+                    underflow=ax1.traits.underflow, overflow=ax2.traits.overflow))
+            else:
+                raise ValueError(f"Cannot concatenate hists with inconsistent axes: {ax1.name} and {ax2.name}")
+
+    newh = hist.Hist(*axes, storage=h1.storage_type())
+    fill_by_centers(newh, h1)
+    fill_by_centers(newh, h2)
+
+    return newh
+
+def fill_by_centers(h, href):
+    to_fill = [list(y) if type(y) == hist.axis.StrCategory else x for x,y in zip(href.axes.centers, href.axes)]
+    h.view()[h.axes.index(*to_fill)] = href.view()
+    return h
+
 def addHists(h1, h2, allowBroadcast=True, createNew=True, scale1=None, scale2=None, flow=True, by_ax_name=True):
     if allowBroadcast:
         h1 = broadcastSystHist(h1, h2, flow=flow, by_ax_name=by_ax_name)
