@@ -128,7 +128,7 @@ def makeStackPlotWithRatio(
     plot_title = None, title_padding = 0, yscale=None, logy=False, logx=False, 
     fill_between=False, ratio_to_data=False, baseline=True, legtext_size=20, cms_decor="Preliminary", lumi=16.8,
     no_fill=False, bin_density=300, unstacked_linestyles=[],
-    ratio_error=True,
+    ratio_error=True, normalize_to_data=False,
 ):
     colors = [histInfo[k].color for k in stackedProcs if histInfo[k].hists[histName]]
     labels = [histInfo[k].label for k in stackedProcs if histInfo[k].hists[histName]]
@@ -202,6 +202,14 @@ def makeStackPlotWithRatio(
                 np.append((nom+std)/nom, ((nom+std)/nom)[-1]), 
                 np.append((nom-std)/nom, ((nom-std)/nom)[-1]),
             step='post',facecolor="none", zorder=2, hatch=hatchstyle, edgecolor="k", linewidth=0.0)
+
+    if normalize_to_data:
+        if "Data" not in histInfo:
+            raise ValueError("Can't normalize to data without a data histogram!")
+
+        vals = [x.value if hasattr(x, "value") else x for x in (data_hist.sum(), hh.sumHists(stack).sum())]
+        ratio = vals[0]/vals[1]
+        stack = [s*ratio for s in stack]
 
     hep.histplot(
         stack,

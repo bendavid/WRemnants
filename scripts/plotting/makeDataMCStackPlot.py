@@ -36,6 +36,7 @@ parser.add_argument("--prefit", action='store_true', help="Use the prefit uncert
 parser.add_argument("--noRatioErr", action='store_false', dest="ratioError", help="Don't show stat unc in ratio")
 parser.add_argument("--selection", type=str, help="Specify custom selections as comma seperated list (e.g. '--selection passIso=0,passMT=1' )")
 parser.add_argument("--presel", type=str, nargs="*", default=[], help="Specify custom selections on input histograms to integrate some axes, giving axis name and min,max (e.g. '--presel pt=ptmin,ptmax' ) or just axis name for bool axes")
+parser.add_argument("--normToData", action='store_true', help="Normalize MC to data")
 
 subparsers = parser.add_subparsers(dest="variation")
 variation = subparsers.add_parser("variation", help="Arguments for adding variation hists")
@@ -199,7 +200,7 @@ for h in args.hists:
             ratio_to_data=args.ratioToData, rlabel="Pred./Data" if args.ratioToData else "Data/Pred.",
             xlim=args.xlim, no_fill=args.noFill, cms_decor=args.cmsDecor,
             legtext_size=20*args.scaleleg, unstacked_linestyles=args.linestyle if hasattr(args, "linestyle") else [],
-            ratio_error=args.ratioError)
+            ratio_error=args.ratioError, normalize_to_data=args.normToData)
 
     fitresultstring=""
     if args.fitresult:

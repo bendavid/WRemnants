@@ -184,6 +184,12 @@ def concatenateHists(h1, h2, allowBroadcast=True, by_ax_name=True):
 
     return newh
 
+def concatenate_syst_hists(hists, has_nominal=True):
+    for h in hists[1:]:
+        hcat = concatenateHists(hists[0], h[...,has_nominal:], allowBroadcast=False)
+
+    return hcat
+
 def fill_by_centers(h, href):
     to_fill = [list(y) if type(y) == hist.axis.StrCategory else x for x,y in zip(href.axes.centers, href.axes)]
     h.view()[h.axes.index(*to_fill)] = href.view()
