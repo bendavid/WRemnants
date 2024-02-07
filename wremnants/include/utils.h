@@ -29,11 +29,11 @@ ROOT::VecOps::RVec<T> absVal(const ROOT::VecOps::RVec<T> & val) {
 
 }
 
-// template <typename T>
-// bool printVar(const T& var) {
-//     std::cout << var << std::endl;
-//     return 1;
-// }
+template <typename T>
+bool printVar(const T& var) {
+    std::cout << var << std::endl;
+    return 1;
+}
 
 float pt_2(float pt1, float phi1, float pt2, float phi2) {
 

@@ -33,6 +33,7 @@ parser.add_argument("--onlyTheorySyst", action="store_true", help="Keep only the
 parser.add_argument("--oneMCfileEveryN", type=int, default=None, help="Use 1 MC file every N, where N is given by this option. Mainly for tests")
 parser.add_argument("--noAuxiliaryHistograms", action="store_true", help="Remove auxiliary histograms to save memory (removed by default with --unfolding or --theoryAgnostic)")
 parser.add_argument("--mtCut", type=int, default=40, help="Value for the transverse mass cut in the event selection")
+parser.add_argument("--vetoGenPartPt", type=float, default=0.0, help="Minimum pT for the postFSR gen muon when defining the variation of the veto efficiency")
 #
 # TEST
 parser.add_argument("--theoryAgnosticPolVar", action='store_true', help="Prepare variations from polynomials")
@@ -182,7 +183,7 @@ bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibrat
 
 procsWithTheoryCorr = [d.name for d in datasets if d.name in common.vprocs]
 if len(procsWithTheoryCorr):
-    corr_helpers = theory_corrections.load_corr_helpers(procsWithTheoryCorr, args.theoryCorr)
+    corr_helpers = theory_corrections.load_corr_helpers(procsWithTheoryCorr, args.theoryCorr, allowMissingTheoryCorr=args.allowMissingTheoryCorr)
 else:
     corr_helpers = {}
     
@@ -230,6 +231,7 @@ def build_graph(df, dataset):
     isW = dataset.name in common.wprocs
     isWmunu = dataset.name in ["WplusmunuPostVFP", "WminusmunuPostVFP"]
     isZ = dataset.name in common.zprocs
+    isZveto = isZ or dataset.name in ["DYJetsToMuMuMass10to50PostVFP"]
     isWorZ = isW or isZ
     isTop = dataset.group == "Top"
     isQCDMC = dataset.group == "QCD"
@@ -401,6 +403,12 @@ def build_graph(df, dataset):
         df = theory_tools.define_postfsr_vars(df)
         df = df.Filter("wrem::hasMatchDR2(goodMuons_eta0,goodMuons_phi0,GenPart_eta[postfsrMuons],GenPart_phi[postfsrMuons],0.09)")
 
+    if isZveto:
+        df = df.Define("postfsrMuons_inAcc", f"postfsrMuons && abs(GenPart_eta) < 2.4 && GenPart_pt > {args.vetoGenPartPt}")
+        df = df.Define("ZvetoCondition", "Sum(postfsrMuons_inAcc) >= 2")
+        #df = df.Define("N_postfsrMuons_inAcc", "Sum(postfsrMuons_inAcc)")
+        #df = df.Filter("ZvetoCondition")
+
     if not args.noRecoil:
         leps_uncorr = ["Muon_pt[goodMuons][0]", "Muon_eta[goodMuons][0]", "Muon_phi[goodMuons][0]", "Muon_charge[goodMuons][0]"]
         leps_corr = ["goodMuons_pt0", "goodMuons_eta0", "goodMuons_phi0", "goodMuons_charge0"]
@@ -498,6 +506,9 @@ def build_graph(df, dataset):
             # luminosity, as shape variation despite being a flat scaling to facilitate propagation to fakes
             df = syst_tools.add_luminosity_unc_hists(results, df, args, axes, cols)
 
+            if isZveto:
+                # df = df.Filter("wrem::printVar(N_postfsrMuons_inAcc)")
+                df = syst_tools.add_scaledByCondition_unc_hists(results, df, args, axes, cols, "weight_ZmuonVeto", "ZmuonVeto", "ZvetoCondition", 2.0)
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples (but can still use it for dummy muon scale)
 

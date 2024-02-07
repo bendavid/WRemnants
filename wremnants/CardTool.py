@@ -1212,7 +1212,7 @@ class CardTool(object):
 
         hists = {name: h} # always keep original variation in output file for checks
         if decorrByBin:
-            hists.update(self.makeDecorrelatedSystHistograms(h, hnomi, syst, decorrByBin))
+            hists.update(self.makeDecorrelatedSystHistograms(h, hnomi, name, decorrByBin))
 
         s = hist.tag.Slicer()
         for hname, histo in hists.items():

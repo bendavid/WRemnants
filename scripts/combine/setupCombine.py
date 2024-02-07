@@ -72,6 +72,7 @@ def make_parser(parser=None):
     parser.add_argument("--effStatLumiScale", type=float, default=None, help="Rescale equivalent luminosity for efficiency stat uncertainty by this value (e.g. 10 means ten times more data from tag and probe)")
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
     parser.add_argument("--isoEfficiencySmoothing", action='store_true', help="If isolation SF was derived from smooth efficiencies instead of direct smoothing")
+    parser.add_argument("--scaleZmuonVeto", default=1, type=float, help="Scale the second muon veto uncertainties by this factor")
     # pseudodata
     parser.add_argument("--pseudoData", type=str, nargs="+", help="Histograms to use as pseudodata")
     parser.add_argument("--pseudoDataAxes", type=str, nargs="+", default=[None], help="Variation axes to use as pseudodata for each of the histograms")
@@ -128,7 +129,10 @@ def setup(args, inputFile, fitvar, xnorm=False):
 
     simultaneousABCD = wmass and args.ABCD and not xnorm
     constrainMass = (dilepton and not "mll" in fitvar) or args.fitXsec 
-    
+
+    if not wmass and args.scaleZmuonVeto:
+        raise ValueError("Option --scaleZmuonVeto was specified, but it only applies to wmass analysis. Please check")
+
     if wmass:
         base_group = "Wenu" if datagroups.flavor == "e" else "Wmunu"
     else:
@@ -284,6 +288,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     cardTool.addProcessGroup("single_v_samples", lambda x: assertSample(x, startsWith=[*WMatch, *ZMatch], excludeMatch=dibosonMatch))
     if wmass:
         cardTool.addProcessGroup("w_samples", lambda x: assertSample(x, startsWith=WMatch, excludeMatch=dibosonMatch))
+        cardTool.addProcessGroup("Zveto_samples", lambda x: assertSample(x, startsWith=[*ZMatch, "DYlowMass"], excludeMatch=dibosonMatch))
         cardTool.addProcessGroup("wtau_samples", lambda x: assertSample(x, startsWith=["Wtaunu"]))
         if not xnorm:
             cardTool.addProcessGroup("single_v_nonsig_samples", lambda x: assertSample(x, startsWith=ZMatch, excludeMatch=dibosonMatch))
@@ -641,6 +646,24 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                 systAxes=["downUpVar"],
                                 labelsByAxis=["downUpVar"],
                                 passToFakes=passSystToFakes)
+        # might also decorrelate vs eta bins
+        decorrVetoDict = {
+            "x" : {
+                "label" : "eta",
+                "edges": [round(-2.4+i*0.1,1) for i in range(49)]
+            }
+        }
+        cardTool.addSystematic("ZmuonVeto",
+                               processes=['Zveto_samples'],
+                               group="ZmuonVeto",
+                               mirror=True,
+                               systAxes=[],
+                               outNames=["ZmuonVetoDown", "ZmuonVetoUp"],
+                               passToFakes=passSystToFakes,
+                               scale=args.scaleZmuonVeto,
+                               decorrelateByBin=decorrVetoDict
+                               )
+
     else:
         cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15, group="CMS_background")
         cardTool.addLnNSystematic("luminosity", processes=['MCnoQCD'], size=1.017 if lowPU else 1.012, group="luminosity")
