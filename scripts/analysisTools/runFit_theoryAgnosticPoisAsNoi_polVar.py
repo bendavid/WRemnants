@@ -1,11 +1,11 @@
 import os
 
 # for setup and fit
-skipSetup = 1
+skipSetup = 0
 skipFit = 1
 # for plots
 skipImpacts = 1
-skipCorrelation = 0
+skipCorrelation = 1
 skipDiffnuis = 1
 skipCompareDiffnuis = 1
 skipTemplates = 1 # check settings
@@ -19,12 +19,12 @@ foldEtaIntoAbsEta = True
 # /usr/bin/time -v python scripts/histmakers/mw_with_mu_eta_pt.py -o /scratch/mciprian/CombineStudies/theoryAgnostic_pol/x0p40_y3p50_V4/ -v 4  --dataPath root://eoscms.cern.ch//store/cmst3/group/wmass/w-mass-13TeV/NanoAOD/ --theoryAgnostic --poiAsNoi --theoryAgnosticPolVar --theoryAgnosticFileTag x0p40_y3p50_V4 --filterProcs Data Wmunu --maxFiles -1 --theoryAgnosticSplitOOA  [ -p splitOOA|splitOOA_oneMCfileEvery2 ] [ --oneMCfileEveryN 2 ]
 
 splitOOA = True # use out-of-acceptance as a different process (it assumes the histograms were created accordingly)
-onlySignal = True #  out-of-acceptance is excluded when splitOOA = True
+onlySignal = False #  out-of-acceptance is excluded when splitOOA = True
 onlySignalAndOOA = True # (requires onlySignal=True to be effective) signal only but keep OOA as background, with all uncertainties if applied
 doStatOnly = False
 noFake = False # irrelevant when onlySignal=True
 noPDFandQCDtheorySystOnSignal = False # irrelevant when doStatOnly=True
-tag = "x0p40_y3p50_V4"  # "x0p40_y3p50_V6" # "x0p40_y3p50_V6" # "x0p40_y3p50_V4" # "x0p30_y3p00_V4"
+tag = "x0p30_y3p00_V4"  # "x0p40_y3p50_V6" # "x0p40_y3p50_V6" # "x0p40_y3p50_V4" # "x0p30_y3p00_V4"
 oneMCfileEveryN = 1
 testFolder = f"oneMCfileEvery{oneMCfileEveryN}" if oneMCfileEveryN > 1 else "fullStat"
 
@@ -44,8 +44,8 @@ else:
                    "exclude" : '.*recoil'
                    }
 
-baseOutdir = f"/scratch/mciprian/CombineStudies/theoryAgnostic_pol/{tag}/"
-basePlotDir = "scripts/analysisTools/plots/fromMyWremnants/fitResults/TESTS/theoryAgnostic_polVar/"
+baseOutdir = f"/scratch/mciprian/CombineStudies/theoryAgnostic_pol/mergeWmass_30Jan2023/{tag}/"
+basePlotDir = "scripts/analysisTools/plots/fromMyWremnants/fitResults/theoryAgnostic_polVar/mergeWmass_30Jan2023/"
 
 inputFileHDF5 = f"{baseOutdir}/mw_with_mu_eta_pt_scetlib_dyturboCorr_maxFiles_m1{splitOOAtag}.hdf5"
 if oneMCfileEveryN > 1:
@@ -80,8 +80,8 @@ baseCoeffs = ["UL", "A0", "A1", "A2", "A3", "A4"]
 #coeffs = [f"ULand{a}" for a in ["A0", "A1", "A2", "A3", "A4"]]
 #coeffs = [f"ULandA0andA4and{a}" for a in ["A1", "A2", "A3"]]
 #coeffs = ["and".join(x for x in baseCoeffs), "and".join(x for x in baseCoeffs if x != "A3")]
-#coeffs = ["UL", "ULandA4", "ULandA0andA4", "and".join(x for x in baseCoeffs if x != "A3"), "and".join(x for x in baseCoeffs)]
-coeffs = ["and".join(x for x in baseCoeffs if x not in ["A1", "A3"])]
+coeffs = ["UL", "ULandA4", "ULandA0andA4", "and".join(x for x in baseCoeffs if x not in ["A1", "A2"]), "and".join(x for x in baseCoeffs)]
+#coeffs = ["and".join(x for x in baseCoeffs if x not in ["A1", "A3"])]
 #coeffs = ["and".join(x for x in baseCoeffs)]
 coeffs = ["and".join(x for x in baseCoeffs if x not in ["A1", "A2"])]
 

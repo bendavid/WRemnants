@@ -68,6 +68,8 @@ def sortParameters(params):
     elif any(re.match('.*polVar.*',x) for x in params):
         #params = sorted(params, key = lambda x: (-1,utilities.getNFromString(x,chooseIndex=0)) if "_UL_" else (utilities.getNFromString(x,chooseIndex=0), utilities.getNFromString(x,chooseIndex=1)))
         pass
+    elif any(re.match('.*ZmuonVeto.*',x) for x in params):
+        params = sorted(params, key= lambda x: utilities.getNFromString(x), reverse=False)
     return params
 
 if __name__ == "__main__":
