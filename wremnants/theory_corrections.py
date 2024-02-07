@@ -21,7 +21,7 @@ def valid_theory_corrections():
     matches = [re.match("(^.*)Corr[W|Z]\.pkl\.lz4", os.path.basename(c)) for c in corr_files]
     return [m[1] for m in matches if m]+["none"]
 
-def load_corr_helpers(procs, generators, make_tensor=True, base_dir=f"{common.data_dir}/TheoryCorrections/"):
+def load_corr_helpers(procs, generators, make_tensor=True, base_dir=f"{common.data_dir}/TheoryCorrections/", allowMissingTheoryCorr=False):
     corr_helpers = {}
     for proc in procs:
         corr_helpers[proc] = {}
@@ -41,7 +41,11 @@ def load_corr_helpers(procs, generators, make_tensor=True, base_dir=f"{common.da
                 corr_helpers[proc][generator] = makeCorrectionsTensor(corrh, weighted_corr=generator in theory_tools.theory_corr_weight_map)
     for generator in generators:
         if not any([generator in corr_helpers[proc] for proc in procs]):
-            raise ValueError(f"Did not find correction for generator {generator} for any processes!")
+            err_msg = f"Did not find correction for generator {generator} for any processes!"
+            if allowMissingTheoryCorr:
+                logger.warning(f"{err_msg} Execution will continue since --allowMissingTheoryCorr was requested")
+            else:
+                raise ValueError(err_msg)
     return corr_helpers
 
 def make_corr_helper_fromnp(filename=f"{common.data_dir}/N3LLCorrections/inclusive_{{process}}_pT.npz", isW=True):

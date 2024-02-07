@@ -28,7 +28,8 @@ zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS",
     'Zmumu_horace-lo-photos', 'Zmumu_horace-lo-photos-mecoff', 'Zmumu_horace-nlo', 'Zmumu_horace-lo', 'Zmumu_horace-new', 'Zmumu_horace-qed',
     'Zmumu_horace-alpha-fsr-off-isr-off', 'Zmumu_horace-alpha-old-fsr-off-isr-off', 'Zmumu_horace-alpha-old-fsr-off-isr-pythia',
     'Zmumu_renesance-lo', 'Zmumu_renesance-nlo',
-    'Zmumu_powheg-lo', 'Zmumu_powheg-nloew-qedveto', 'Zmumu_powheg-nloew'
+          'Zmumu_powheg-lo', 'Zmumu_powheg-nloew-qedveto', 'Zmumu_powheg-nloew',
+          "ZmumuVetoPostVFP", "ZtautauVetoPostVFP"
     ]
 
 vprocs = wprocs+zprocs
@@ -41,7 +42,7 @@ vprocs_lowpu = wprocs_lowpu+zprocs_lowpu
 zprocs_recoil_lowpu = ["Zmumu", "Zee"]
 wprocs_recoil_lowpu = ["Wminusmunu", "Wminusenu", "Wplusmunu", "Wplusenu"]
 
-background_MCprocs = ["Top", "Diboson", "QCD", "DYlowMass"]
+background_MCprocs = ["Top", "Diboson", "QCD", "DYlowMass", "DYlowMassVeto"]
 zprocs_all = zprocs_lowpu+zprocs
 wprocs_all = wprocs_lowpu+wprocs
 vprocs_all = vprocs_lowpu+vprocs
@@ -119,7 +120,7 @@ def set_parser_default(parser, argument, newDefault):
 def common_parser(for_reco_highPU=False):
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-j", "--nThreads", type=int, help="number of threads")
+    parser.add_argument("-j", "--nThreads", type=int, default=0, help="number of threads")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
                         help="Set verbosity level with logging, the larger the more verbose")
     parser.add_argument("--noColorLogger", action="store_true", help="Do not use logging with colors")
@@ -130,10 +131,7 @@ def common_parser(for_reco_highPU=False):
     common_logger = logging.setup_logger(__file__, initargs.verbose, initargs.noColorLogger, initName="common_logger_wremnants")
     
     import ROOT
-    if not initargs.nThreads:
-        ROOT.ROOT.EnableImplicitMT()
-    elif initargs.nThreads != 1:
-        ROOT.ROOT.EnableImplicitMT(initargs.nThreads)
+    ROOT.ROOT.EnableImplicitMT(initargs.nThreads)
     import narf
     import wremnants
     from wremnants import theory_corrections,theory_tools
@@ -163,6 +161,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--theoryCorr", nargs="*", type=str, action=NoneFilterAction,
         default=["scetlib_dyturbo", "winhacnloew", "virtual_ew_wlike", "horaceqedew_FSR", "horacelophotosmecoffew_FSR"], choices=theory_corrections.valid_theory_corrections(), 
         help="Apply corrections from indicated generator. First will be nominal correction.")
+    parser.add_argument("--allowMissingTheoryCorr", action='store_true', help="To allow the histmaker to run on subset of processes, for which some generators passed to --theoryCorr may not exist (to avoid having to specify --theoryCorr to change the default)")
     parser.add_argument("--theoryCorrAltOnly", action='store_true', help="Save hist for correction hists but don't modify central weight")
     parser.add_argument("--widthVariations", action='store_true', help="Store variations of W and Z widths.")
     parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
