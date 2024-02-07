@@ -1368,62 +1368,66 @@ def runStudyVsDphi(fname, charges, mainOutputFolder, args):
                 hnarf = hnarf[{"pt" : s[::hist.rebin(2)]}]
             else:
                 logger.warning(f"Histogram has {nPtBins} pt bins")
+                
             lowMtUpperBound = int(args.mtNominalRange.split(",")[1])
             hnarf = hnarf[{"mt" : s[:complex(0,lowMtUpperBound):hist.sum]}]
             #hnarf = hnarf[{"mt" : s[::hist.sum]}]
             chargeIndex = 0 if charge == "minus" else 1
             hnarf = hnarf[{"charge" : s[chargeIndex:chargeIndex+1:hist.sum]}]
-            # make all TH of FRF in bins of dphi
-            histo_fakes_dphiBins = narf.hist_to_root(hnarf) # this is a THnD with eta-pt-passIso-DphiMuonMet
-            histo_FRFvsDphi = {}
-            nBinsDphi = histo_fakes_dphiBins.GetAxis(3).GetNbins()
-            for idp in range(nBinsDphi):
-                idpBin = idp +1
-                histo_fakes_dphiBins.GetAxis(3).SetRange(idpBin, idpBin)
+
+            for ipt in range(nPtBins):
+                # make all TH of FRF in bins of dphi
+                histo_fakes_dphiBins = narf.hist_to_root(hnarf) # this is a THnD with eta-pt-passIso-DphiMuonMet
+                histo_FRFvsDphi = {}
+                nBinsDphi = histo_fakes_dphiBins.GetAxis(3).GetNbins()
+                for idp in range(nBinsDphi):
+                    idpBin = idp +1
+                    histo_fakes_dphiBins.GetAxis(3).SetRange(idpBin, idpBin)
+                    histo_fakes_dphiBins.GetAxis(2).SetRange(1, 1)
+                    histo_fakes_dphiBins_failIso = histo_fakes_dphiBins.Projection(1, 0, "E")
+                    histo_fakes_dphiBins_failIso.SetName(f"histo_fakes_dphiBins_failIso_idp{idp}")
+                    histo_fakes_dphiBins.GetAxis(3).SetRange(idpBin, idpBin)
+                    histo_fakes_dphiBins.GetAxis(2).SetRange(2, 2)
+                    histo_fakes_dphiBins_passIso = histo_fakes_dphiBins.Projection(1, 0, "E")
+                    histo_fakes_dphiBins_passIso.SetName(f"histo_fakes_dphiBins_passIso_idp{idp}")
+                    histo_FRFvsDphi[idp] = copy.deepcopy(histo_fakes_dphiBins_passIso.Clone(f"histo_FRFvsDphi_idp{idp}"))
+                    histo_FRFvsDphi[idp].Divide(histo_fakes_dphiBins_failIso)
+                ##
+                histo_fakes_dphiBins.GetAxis(3).SetRange(1, nBinsDphi)
                 histo_fakes_dphiBins.GetAxis(2).SetRange(1, 1)
                 histo_fakes_dphiBins_failIso = histo_fakes_dphiBins.Projection(1, 0, "E")
-                histo_fakes_dphiBins_failIso.SetName(f"histo_fakes_dphiBins_failIso_idp{idp}")
-                histo_fakes_dphiBins.GetAxis(3).SetRange(idpBin, idpBin)
+                histo_fakes_dphiBins_failIso.SetName("histo_fakes_dphiBins_failIso_idpInclusive")
+                histo_fakes_dphiBins.GetAxis(3).SetRange(1, nBinsDphi)
                 histo_fakes_dphiBins.GetAxis(2).SetRange(2, 2)
                 histo_fakes_dphiBins_passIso = histo_fakes_dphiBins.Projection(1, 0, "E")
-                histo_fakes_dphiBins_passIso.SetName(f"histo_fakes_dphiBins_passIso_idp{idp}")
-                histo_FRFvsDphi[idp] = copy.deepcopy(histo_fakes_dphiBins_passIso.Clone(f"histo_FRFvsDphi_idp{idp}"))
-                histo_FRFvsDphi[idp].Divide(histo_fakes_dphiBins_failIso)
-            ##
-            histo_fakes_dphiBins.GetAxis(3).SetRange(1, nBinsDphi)
-            histo_fakes_dphiBins.GetAxis(2).SetRange(1, 1)
-            histo_fakes_dphiBins_failIso = histo_fakes_dphiBins.Projection(1, 0, "E")
-            histo_fakes_dphiBins_failIso.SetName("histo_fakes_dphiBins_failIso_idpInclusive")
-            histo_fakes_dphiBins.GetAxis(3).SetRange(1, nBinsDphi)
-            histo_fakes_dphiBins.GetAxis(2).SetRange(2, 2)
-            histo_fakes_dphiBins_passIso = histo_fakes_dphiBins.Projection(1, 0, "E")
-            histo_fakes_dphiBins_passIso.SetName("histo_fakes_dphiBins_passIso_idpInclusive")
-            histo_FRFvsDphi["inclusive"] = copy.deepcopy(histo_fakes_dphiBins_passIso.Clone("histo_FRFvsDphi_idpInclusive"))
-            histo_FRFvsDphi["inclusive"].Divide(histo_fakes_dphiBins_failIso)
-            ##
-            # select a few eta-pt bins with index numbers (after rebinning)
-            etapt_bins = [(1, 2), (2, 2), (3, 2)] if nPtBins > 1 else [(1, 1), (2, 1), (3, 1)]
-            hists = {b : ROOT.TH1D(f"FRFvsDphi_{d}_ieta{b[0]}_ipt{b[1]}", "", nBinsDphi, 0, np.pi) for b in etapt_bins}
-            for b in hists.keys():
-                for i in range(hists[b].GetNbinsX()):
-                    hists[b].SetBinContent(i+1, histo_FRFvsDphi[i].GetBinContent(b[0], b[1]))
-                    hists[b].SetBinError(i+1, histo_FRFvsDphi[i].GetBinError(b[0], b[1]))
+                histo_fakes_dphiBins_passIso.SetName("histo_fakes_dphiBins_passIso_idpInclusive")
+                histo_FRFvsDphi["inclusive"] = copy.deepcopy(histo_fakes_dphiBins_passIso.Clone("histo_FRFvsDphi_idpInclusive"))
+                histo_FRFvsDphi["inclusive"].Divide(histo_fakes_dphiBins_failIso)
+                ##
+                # select a few eta-pt bins with index numbers (after rebinning)
+                iptroot = ipt + 1
+                etapt_bins = [(1, iptroot), (2, iptroot), (3, iptroot)]
+                hists = {b : ROOT.TH1D(f"FRFvsDphi_{d}_ieta{b[0]}_ipt{b[1]}", "", nBinsDphi, 0, np.pi) for b in etapt_bins}
+                for b in hists.keys():
+                    for i in range(hists[b].GetNbinsX()):
+                        hists[b].SetBinContent(i+1, histo_FRFvsDphi[i].GetBinContent(b[0], b[1]))
+                        hists[b].SetBinError(i+1, histo_FRFvsDphi[i].GetBinError(b[0], b[1]))
 
-            htmp = histo_FRFvsDphi["inclusive"]
-            hs = []
-            legEntries = []
-            for b in etapt_bins:
-                hs.append(hists[b])
-                etaText = f"{htmp.GetXaxis().GetBinLowEdge(b[0]):.1f} < #eta < {htmp.GetXaxis().GetBinLowEdge(b[0]+1):.1f}"
-                ptText = f"{htmp.GetYaxis().GetBinLowEdge(b[1]):.0f} < p_{{T}} < {htmp.GetYaxis().GetBinLowEdge(b[1]+1):.0f}"
-                legEntries.append(f"{etaText} && {ptText} GeV")
+                htmp = histo_FRFvsDphi["inclusive"]
+                hs = []
+                legEntries = []
+                for b in etapt_bins:
+                    hs.append(hists[b])
+                    etaText = f"{htmp.GetXaxis().GetBinLowEdge(b[0]):.1f} < #eta < {htmp.GetXaxis().GetBinLowEdge(b[0]+1):.1f}"
+                    ptText = f"{htmp.GetYaxis().GetBinLowEdge(b[1]):.0f} < p_{{T}} < {htmp.GetYaxis().GetBinLowEdge(b[1]+1):.0f}"
+                    legEntries.append(f"{etaText} && {ptText} GeV")
 
-            drawNTH1(hs, legEntries, "#Delta#phi(#mu,MET)", "Fakerate factor",
-                     f"FRFvsDeltaPhi_{d}_someBins_{charge}", outfolder,
-                     leftMargin=0.14, rightMargin=0.04, topMargin=0.16, lowerPanelHeight=0.0,
-                     legendCoords="0.14,0.96,0.84,0.99;1", skipLumi=True, passCanvas=canvas,
-                     transparentLegend=False, drawErrorAll=True,
-                     onlyLineColor=True, noErrorRatioDen=False, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=2)
+                drawNTH1(hs, legEntries, "#Delta#phi(#mu,MET)", "Fakerate factor",
+                         f"FRFvsDeltaPhi_{d}_someBins_ipt{ipt}_{charge}", outfolder,
+                         leftMargin=0.14, rightMargin=0.04, topMargin=0.16, lowerPanelHeight=0.0,
+                         legendCoords="0.14,0.96,0.84,0.99;1", skipLumi=True, passCanvas=canvas,
+                         transparentLegend=False, drawErrorAll=True,
+                         onlyLineColor=True, noErrorRatioDen=False, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=2)
                 
     ##
 

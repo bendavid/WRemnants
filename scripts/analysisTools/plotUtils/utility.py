@@ -16,11 +16,14 @@ logger = logging.child_logger(__name__)
 # trying to use same colors as mathplotlib in wremnants
 colors_plots_ = {"Wmunu"      : ROOT.TColor.GetColor("#8B0000"), #ROOT.kRed+2,
                  "Zmumu"      : ROOT.TColor.GetColor("#87CEFA"), #lightskyblue, #ADD8E6 is lightblue #ROOT.kAzure+2,
+                 "ZmumuVeto"  : ROOT.TColor.GetColor("#ADD8E6"),
                  "DYlowMass"  : ROOT.TColor.GetColor("#00BFFF"), #deepskyblue,
+                 "DYlowMassVeto" : ROOT.TColor.GetColor("#00FFFF"), # cyan
                  "Wtau"       : ROOT.TColor.GetColor("#FFA500"), #ROOT.kCyan+1, #backward compatibility
                  "Wtaunu"     : ROOT.TColor.GetColor("#FFA500"), # orange, use #FF8C00 for darkOrange #ROOT.kCyan+1,
                  "WmunuOOA"   : ROOT.TColor.GetColor("#FF8C00"), # dark orange
-                 "Ztautau"    : ROOT.TColor.GetColor("#00008B"), #ROOT.kSpring+9,
+                 "Ztautau"    : ROOT.TColor.GetColor("#00008B"), #green
+                 "ZtautauVeto" : ROOT.TColor.GetColor("#90EE90"), #lightgreen
                  "Top"        : ROOT.TColor.GetColor("#008000"), #ROOT.kGreen+2,
                  "Diboson"    : ROOT.TColor.GetColor("#FFC0CB"), #ROOT.kViolet,
                  "PhotonInduced" : ROOT.TColor.GetColor("#FFFF99"),
@@ -31,11 +34,14 @@ colors_plots_ = {"Wmunu"      : ROOT.TColor.GetColor("#8B0000"), #ROOT.kRed+2,
 
 legEntries_plots_ = {"Wmunu"      : "W#rightarrow#mu#nu",
                      "Zmumu"      : "Z#rightarrow#mu#mu",
-                     "DYlowMass"  : "Z#rightarrow#mu#mu 10<m<50 GeV",
+                     "ZmumuVeto"  : "veto Z#rightarrow#mu#mu",
+                     "DYlowMass"  : "Z#rightarrow#mu#mu 10<m<50",
+                     "DYlowMassVeto" : "veto Z#rightarrow#mu#mu 10<m<50",
                      "Wtau"       : "W#rightarrow#tau#nu", #backward compatibility
                      "Wtaunu"     : "W#rightarrow#tau#nu",
                      "WmunuOOA"   : "W#rightarrow#mu#nu OOA",
                      "Ztautau"    : "Z#rightarrow#tau#tau",
+                     "ZtautauVeto": "veto Z#rightarrow#tau#tau",
                      "Top"        : "t quark",
                      "Diboson"    : "Diboson",
                      "PhotonInduced" : "Photon-induced",
