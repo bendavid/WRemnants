@@ -458,7 +458,17 @@ def add_luminosity_unc_hists(results, df, args, axes, cols, addhelicity=False):
         luminosity = df.HistoBoost("nominal_luminosity", axes, [*cols, "luminosityScaling"], tensor_axes = [common.down_up_axis], storage=hist.storage.Double())
         results.append(luminosity)
     return df
-    
+
+# TODO: generalize to non-constant scaling if needed
+def add_scaledByCondition_unc_hists(results, df, args, axes, cols, newWeightName, histName, condition, scale):
+    # scale represents the scaling factor of the nominal weight, 1.1 means +10%, 2.0 means + 100% and so on
+    df = df.Define(newWeightName, f"({condition}) ? ({scale}*nominal_weight) : nominal_weight")
+    # df = df.Filter(f"wrem::printVar({newWeightName})")
+    # df = df.Filter(f"wrem::printVar(nominal_weight)")
+    scaledHist = df.HistoBoost(f"nominal_{histName}", axes, [*cols, newWeightName], storage=hist.storage.Double())
+    results.append(scaledHist)
+    return df
+
 def add_muon_efficiency_unc_hists(results, df, helper_stat, helper_syst, axes, cols, base_name="nominal", what_analysis=ROOT.wrem.AnalysisType.Wmass, smooth3D=False, addhelicity=False):
     # TODO: update for dilepton
     if what_analysis == ROOT.wrem.AnalysisType.Wmass:
