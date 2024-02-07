@@ -30,6 +30,10 @@ def syst_transform_map(base_hist, hist_name):
     transforms["scetlib_dyturboMSHT20Down"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[1], "procs" : common.vprocs_all}
     transforms["scetlib_dyturboMSHT20an3loUp"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[0], "procs" : common.zprocs_all}
     transforms["scetlib_dyturboMSHT20an3loDown"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[1], "procs" : common.zprocs_all}
+    transforms["muonScaleUp"] = {"action" : lambda h: h if "unc" not in h.axes.name else hh.rssHists(h[{"downUpVar" : 1}], "unc")[1]}
+    transforms["muonScaleDown"] = {"action" : lambda h: h if "unc" not in h.axes.name else hh.rssHists(h[{"downUpVar" : 0}], "unc")[0]}
+    transforms["muonScale9Up"] = {"action" : lambda h: h if "unc" not in h.axes.name else hh.rssHists(h[{"downUpVar" : 1}], "unc", 9)[1]}
+    transforms["muonScale9Down"] = {"action" : lambda h: h if "unc" not in h.axes.name else hh.rssHists(h[{"downUpVar" : 0}], "unc", 9)[0]}
 
     s = hist.tag.Slicer()
     transforms.update({

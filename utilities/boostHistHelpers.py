@@ -678,7 +678,7 @@ def rescaleBandVariation(histo, factor):
         histo[...]= np.stack([new_lower,new_upper],axis=-1)
         return histo
 
-def rssHist(h, syst_axis, scale=1.):
+def rssHists(h, syst_axis, scale=1.):
     s = hist.tag.Slicer()
 
     hnom = h[{syst_axis : 0}]
