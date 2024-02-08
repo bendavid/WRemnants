@@ -34,6 +34,7 @@ parser.add_argument("--oneMCfileEveryN", type=int, default=None, help="Use 1 MC 
 parser.add_argument("--noAuxiliaryHistograms", action="store_true", help="Remove auxiliary histograms to save memory (removed by default with --unfolding or --theoryAgnostic)")
 parser.add_argument("--mtCut", type=int, default=40, help="Value for the transverse mass cut in the event selection")
 parser.add_argument("--vetoGenPartPt", type=float, default=0.0, help="Minimum pT for the postFSR gen muon when defining the variation of the veto efficiency")
+parser.add_argument("--noTrigger", action="store_true", help="Just for test: remove trigger HLT bit selection and trigger matching (should also remove scale factors with --noScaleFactors for it to make sense)")
 #
 # TEST
 parser.add_argument("--theoryAgnosticPolVar", action='store_true', help="Prepare variations from polynomials")
@@ -292,7 +293,7 @@ def build_graph(df, dataset):
                     cols = [*nominal_cols, *theoryAgnostic_cols]
                     theoryAgnostic_tools.add_xnorm_histograms(results, df, args, dataset.name, corr_helpers, qcdScaleByHelicity_helper, theoryAgnostic_axes, theoryAgnostic_cols)
 
-    if not args.makeMCefficiency:
+    if not args.makeMCefficiency and not args.noTrigger:
         # remove trigger, it will be part of the efficiency selection for passing trigger
         df = df.Filter(muon_selections.hlt_string(era))
 
@@ -313,9 +314,9 @@ def build_graph(df, dataset):
     df = muon_selections.apply_met_filters(df)
     if args.makeMCefficiency:
         df = df.Define("GoodTrigObjs", f"wrem::goodMuonTriggerCandidate<wrem::Era::Era_{era}>(TrigObj_id,TrigObj_filterBits)")
-        hltString=muon_selections.hlt_string(era)
+        hltString = muon_selections.hlt_string(era)
         df = df.Define("passTrigger", f"{hltString} && wrem::hasTriggerMatch(goodMuons_eta0,goodMuons_phi0,TrigObj_eta[GoodTrigObjs],TrigObj_phi[GoodTrigObjs])")
-    else:
+    elif not args.noTrigger:
         df = muon_selections.apply_triggermatching_muon(df, dataset, "goodMuons_eta0", "goodMuons_phi0", era=era)
 
     if isWorZ:
