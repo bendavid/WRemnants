@@ -678,10 +678,11 @@ def rescaleBandVariation(histo, factor):
         histo[...]= np.stack([new_lower,new_upper],axis=-1)
         return histo
 
-def rssHists(h, syst_axis, scale=1.):
+def rssHists(h, syst_axis, scale=1., hnom=None):
     s = hist.tag.Slicer()
 
-    hnom = h[{syst_axis : 0}]
+    hnom = hnom if nominal is not None else h[{syst_axis : 0}]
+
     hdiff = addHists(h, hnom, scale2=-1.)*scale
     hss = multiplyHists(hdiff, hdiff)
 
@@ -691,3 +692,15 @@ def rssHists(h, syst_axis, scale=1.):
 
     return hUp, hDown
 
+def rssHistsMid(h, syst_axis, scale=1.):
+    s = hist.tag.Slicer()
+
+    hnom = 0.5*(h[{"downUpVar" : -1j, syst_axis : 0 }]+h[{"downUpVar" : 1j, syst_axis : 0 }])
+    hdiff = addHists(h, hnom, scale2=-1.)*scale
+    hss = multiplyHists(hdiff, hdiff)
+
+    hrss = sqrtHist(hss[{syst_axis : s[0:hist.overflow:hist.sum]}])
+    hUp = addHists(hnom, hrss[{"downUpVar" : 1j}])
+    hDown = addHists(hnom, hrss[{"downUpVar" : -1j}], scale2=-1.)
+
+    return hUp, hDown

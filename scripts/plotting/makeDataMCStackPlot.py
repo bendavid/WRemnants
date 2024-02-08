@@ -140,6 +140,7 @@ if addVariation:
         name = name if name != "" else nominalName
         load_op = {}
         action=None
+        requiresNominal = False
 
         if entry and entry.isdigit():
             entry = int(entry)
@@ -147,15 +148,19 @@ if addVariation:
         if args.selectAxis or do_transform:
             transform_procs = groups.getProcNames(exclude_group=exclude)
             if do_transform:
-                action = transforms[entry]["action"]
+                tmap = transforms[entry]
+                action = tmap["action"]
                 if "procs" in transforms[entry]:
-                    transform_procs = transforms[entry]["procs"]
+                    transform_procs = tmap["procs"]
                 varname = entry
+                requiresNominal = tmap.get("requiresNominal", False)
             else:
                 ax = axes[i]
                 action = lambda x: x[{ax : entry}] if ax in x.axes.name else x
                 varname = name+str(entry)
-            load_op = {p : action for p in transform_procs}
+
+            if not requiresNominal:
+                load_op = {p : action for p in transform_procs}
         else:
             varname = name
 
@@ -165,7 +170,7 @@ if addVariation:
         if load_op and reload:
             action = None
         groups.addSummedProc(nominalName, relabel=args.baseName, name=name, label=label, exclude=exclude,
-            color=color, reload=reload, rename=varname, procsToRead=datasets,
+            color=color, reload=reload, rename=varname, procsToRead=datasets, actionRequiresRef=requiresNominal,
             preOpMap=load_op, action=action, forceNonzero=True, applySelection=applySelection)
 
         exclude.append(varname)
