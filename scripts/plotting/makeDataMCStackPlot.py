@@ -26,6 +26,7 @@ parser.add_argument("-r", "--rrange", type=float, nargs=2, default=[0.9, 1.1], h
 parser.add_argument("--rebin", type=int, nargs='*', default=[], help="Rebin axis by this value (default, 1, does nothing)")
 parser.add_argument("--absval", type=int, nargs='*', default=[], help="Take absolute value of axis if 1 (default, 0, does nothing)")
 parser.add_argument("--axlim", type=float, default=[], nargs='*', help="Restrict axis to this range (assumes pairs of values by axis, with trailing axes optional)")
+parser.add_argument("--rebinBeforeSelection", action='store_true', help="Rebin before the selection operation (e.g. before fake rate computation), default if after")
 parser.add_argument("--logy", action='store_true', help="Enable log scale for y axis")
 parser.add_argument("--ylim", type=float, nargs=2, help="Min and max values for y axis (if not specified, range set automatically)")
 parser.add_argument("--yscale", type=float, help="Scale the upper y axis by this factor (useful when auto scaling cuts off legend)")
@@ -102,7 +103,7 @@ if len(args.presel):
 
 if args.axlim or args.rebin or args.absval:
     logger.info("Rebin")
-    groups.set_rebin_action(args.hists[0].split("-"), args.axlim, args.rebin, args.absval)
+    groups.set_rebin_action(args.hists[0].split("-"), args.axlim, args.rebin, args.absval, args.rebinBeforeSelection)
 
 if args.selection:
     applySelection=False

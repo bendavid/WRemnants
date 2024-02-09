@@ -17,7 +17,7 @@ class Datagroup_member(object):
 
 class Datagroup(object):
 
-    def __init__(self, name, members={}, scale=None, selectOp=None, selectOpArgs={}, memberOp=None, rebinOp=None, label=None, color=None):
+    def __init__(self, name, members={}, scale=None, selectOp=None, selectOpArgs={}, memberOp=None, label=None, color=None):
         self.name = name
         self.scale = scale
         self.label = styles.process_labels.get(name, name) if label is None else label
@@ -29,7 +29,6 @@ class Datagroup(object):
 
         self.selectOp = selectOp            # operation that is applied on all members of the group
         self.selectOpArgs = selectOpArgs    # argments to the selectOp
-        self.rebinOp = rebinOp              # operation that is applied on all members of the group for changing histogram bins
 
         self.memberOp = memberOp            # list of operations that is applied on single members
 

@@ -6,7 +6,7 @@ import h5py
 import narf
 import ROOT
 import re
-import os
+import os, sys
 import itertools
 import functools
 import hist
@@ -62,6 +62,8 @@ class Datagroups(object):
 
         self.groups = {}
         self.nominalName = "nominal"
+        self.rebinOp = None
+        self.rebinBeforeSelection = False
         self.globalAction = None
         self.unconstrainedProcesses = []
         self.fakeName = "Fake"
@@ -185,6 +187,13 @@ class Datagroups(object):
             self.globalAction = action
         else:
             self.globalAction = lambda h, old_action=self.globalAction: action(old_action(h))
+
+    def setRebinOp(self, action):
+        # To be used for applying a selection, rebinning, etc.
+        if self.rebinOp is None:
+            self.rebinOp = action
+        else:
+            self.rebinOp = lambda h, old_action=self.rebinOp: action(old_action(h))
 
     def setNominalName(self, name):
         self.nominalName = name
@@ -365,10 +374,9 @@ class Datagroups(object):
                 if histForFake is not None:
                     group.hists[label] = hh.addHists(group.hists[label], histForFake, createNew=False) if group.hists[label] else histForFake
 
-            # Can use to apply common rebinning or selection on top of the usual one
-            if group.rebinOp:
+            if self.rebinOp and self.rebinBeforeSelection:
                 logger.debug(f"Apply rebin operation for process {procName}")
-                group.hists[label] = group.rebinOp(group.hists[label])
+                group.hists[label] = self.rebinOp(group.hists[label])
 
             if group.selectOp:
                 if not applySelection:
@@ -376,6 +384,10 @@ class Datagroups(object):
                 elif label in group.hists.keys() and group.hists[label] is not None:
                     logger.debug(f"Apply selection for process {procName}")
                     group.hists[label] = group.selectOp(group.hists[label], **group.selectOpArgs)
+
+            if self.rebinOp and not self.rebinBeforeSelection:
+                logger.debug(f"Apply rebin operation for process {procName}")
+                group.hists[label] = self.rebinOp(group.hists[label])
 
         # Avoid situation where the nominal is read for all processes for this syst
         if nominalIfMissing and not foundExact:
@@ -585,16 +597,16 @@ class Datagroups(object):
             
         return df
 
-    def set_rebin_action(self, axes, ax_lim=[], ax_rebin=[], ax_absval=[]):
+    def set_rebin_action(self, axes, ax_lim=[], ax_rebin=[], ax_absval=[], rebin_before_selection=False, epsilon=10e-10):
         if len(ax_lim) % 2 or len(ax_lim)/2 > len(axes) or len(ax_rebin) > len(axes):
             raise ValueError("Inconsistent rebin or axlim arguments. axlim must be at most two entries per axis, and rebin at most one")
-
+        self.rebinBeforeSelection = rebin_before_selection
         sel = {}
         for var,low,high,rebin in itertools.zip_longest(axes, ax_lim[::2], ax_lim[1::2], ax_rebin):
             s = hist.tag.Slicer()
             if low is not None and high is not None:
                 logger.info(f"Restricting the axis '{var}' to range [{low}, {high}]")
-                sel[var] = s[complex(0, low):complex(0, high):hist.rebin(rebin) if rebin else None]
+                sel[var] = s[complex(0, low):complex(0, high+epsilon):hist.rebin(rebin) if rebin else None]
             elif rebin:
                 sel[var] = s[hist.rebin(rebin)]
             if rebin:
@@ -602,12 +614,12 @@ class Datagroups(object):
 
         if len(sel) > 0:
             logger.info(f"Will apply the global selection {sel}")
-            self.setGlobalAction(lambda h: h[sel])
+            self.setRebinOp(lambda h: h[sel])
 
         for i, (var, absval) in enumerate(itertools.zip_longest(axes, ax_absval)):
             if absval:
                 logger.info(f"Taking the absolute value of axis '{var}'")
-                self.setGlobalAction(lambda h, ax=var: hh.makeAbsHist(h, ax))
+                self.setRebinOp(lambda h, ax=var: hh.makeAbsHist(h, ax))
                 axes[i] = f"abs{var}"
 
     def readHist(self, baseName, proc, group, syst):
