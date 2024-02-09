@@ -263,7 +263,7 @@ def make_jpsi_crctn_helper(filepath):
 
 def make_jpsi_crctn_unc_helper(
     filepath_correction, filepath_tflite, 
-    n_scale_params = 3, n_tot_params = 4, n_eta_bins = 48, scale = 7.2, isW = True,
+    n_scale_params = 3, n_tot_params = 4, n_eta_bins = 48, scale = 1.0, isW = True,
     scale_var_method = 'smearingWeightsSplines', dummy_mu_scale_var = False, dummy_var_mag = 1e-4
 ):
     f = uproot.open(filepath_correction)
