@@ -139,6 +139,14 @@ axis_dphi_fakes = hist.axis.Regular(8, 0., np.pi, name = "DphiMuonMet", underflo
 axis_hasjet_fakes = hist.axis.Boolean(name = "hasJets") # only need case with 0 jets or > 0 for now
 mTStudyForFakes_axes = [axis_eta, axis_pt, axis_charge, axis_mt_fakes, axis_passIso, axis_hasjet_fakes, axis_dphi_fakes]
 
+## for some tests, keep commented for easier usage
+# axis_eta_coarse = hist.axis.Regular(12, -2.4, 2.4, name = "eta", overflow=False, underflow=False)
+# axis_pt_coarse = hist.axis.Regular(8, 26, 58, name = "pt", overflow=False, underflow=False)
+# axis_mt_coarse_fakes = hist.axis.Regular(24, 0., 120., name = "mt", underflow=False, overflow=True)
+# axis_Njets_fakes = hist.axis.Regular(5, -0.5, 4.5, name = "Njets", underflow=False, overflow=True)
+# axis_leadjetPt_fakes = hist.axis.Regular(20, 0.0, 100.0, name = "leadjetPt", underflow=False, overflow=True)
+# otherStudyForFakes_axes = [axis_eta_coarse, axis_pt_coarse, axis_charge, axis_mt_coarse_fakes, axis_passIso, axis_Njets_fakes, axis_leadjetPt_fakes, axis_dphi_fakes]
+
 # for mt, met, ptW plots, to compute the fakes properly (but FR pretty stable vs pt and also vs eta)
 # may not exactly reproduce the same pt range as analysis, though
 axis_eta_utilityHist = hist.axis.Regular(24, -2.4, 2.4, name = "eta", overflow=False, underflow=False)
@@ -427,6 +435,11 @@ def build_graph(df, dataset):
     if auxiliary_histograms: 
         mTStudyForFakes = df.HistoBoost("mTStudyForFakes", mTStudyForFakes_axes, ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "transverseMass", "passIso", "hasCleanJet", "deltaPhiMuonMet", "nominal_weight"])
         results.append(mTStudyForFakes)
+        # if isQCDMC:
+        #     df = df.Define("nJets", "Sum(goodCleanJetsNoPt)")
+        #     df = df.Define("leadjetPt", "(nJets > 0) ? Jet_pt[goodCleanJetsNoPt][0] : 0.0")
+        #     otherStudyForFakes = df.HistoBoost("otherStudyForFakes", otherStudyForFakes_axes, ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "transverseMass", "passIso", "nJets", "leadjetPt", "deltaPhiMuonMet", "nominal_weight"])
+        #     results.append(otherStudyForFakes)
 
     # add filter of deltaPhi(muon,met) before other histograms (but after histogram mTStudyForFakes)
     if not args.makeMCefficiency:

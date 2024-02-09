@@ -594,7 +594,7 @@ class Datagroups(object):
             s = hist.tag.Slicer()
             if low is not None and high is not None:
                 logger.info(f"Restricting the axis '{var}' to range [{low}, {high}]")
-                sel[var] = s[complex(0, low):complex(0, high):hist.rebin(rebin) if rebin else None]
+                sel[var] = s[complex(0, low):complex(0, high+0.001):hist.rebin(rebin) if rebin else None]
             elif rebin:
                 sel[var] = s[hist.rebin(rebin)]
             if rebin:

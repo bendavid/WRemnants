@@ -728,24 +728,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
                     splitGroup=splitGroupDict,
                     decorrelateByBin = {}
                 )
-                # if "Syst" in name and decorrDictEff != {}:
-                #     # add fully correlated version again
-                #     cardTool.addSystematic(
-                #         name,
-                #         rename=f"{name}_EtaDecorr",
-                #         mirror=mirror,
-                #         mirrorDownVarEqualToNomi=mirrorDownVarEqualToNomi,
-                #         group=groupName,
-                #         systAxes=axes,
-                #         labelsByAxis=axlabels,
-                #         baseName=name+"_",
-                #         processes=['MCnoQCD'],
-                #         passToFakes=passSystToFakes,
-                #         systNameReplace=nameReplace,
-                #         scale=scale,
-                #         splitGroup=splitGroupDict,
-                #         decorrelateByBin = decorrDictEff
-                #     )
         else:
             if datagroups.flavor in ["mu", "mumu"]:
                 lepEffs = ["muSF_HLT_DATA_stat", "muSF_HLT_DATA_syst", "muSF_HLT_MC_stat", "muSF_HLT_MC_syst", "muSF_ISO_stat", "muSF_ISO_DATA_syst", "muSF_ISO_MC_syst", "muSF_IDIP_stat", "muSF_IDIP_DATA_syst", "muSF_IDIP_MC_syst"]
