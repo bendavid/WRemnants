@@ -74,7 +74,7 @@ genDataDict = {
                    'xsec' : xsec_powheg_ZToMuMu_NLOEW,
                    'group': "Zmumu",
     },
-    'Zmumu_MiNNLO-nloqedisr' : { 
+    'Zmumu_MiNNLO-noqedisr' : { 
                    'filepaths' :
                     ["{BASE_PATH}/DYJetsToMuMu_H2ErratumFix_NoQEDISR_TuneCP5_13TeV-powhegMiNNLO-pythia8-photos"],
                    'xsec' : xsec_ZmmPostVFP,

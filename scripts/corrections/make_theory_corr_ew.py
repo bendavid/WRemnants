@@ -32,7 +32,7 @@ charge_dict = {'Zmumu': 0, 'Wplusmunu': 1, 'Wminusmunu': 0}
 procs_dict = {
     "Zmumu": "ZmumuPostVFP",
     "Wminusmunu": "WminusmunuPostVFP",
-    "WplusToMuNu": "WplusmunuPostVFP",
+    "Wplusmunu": "WplusmunuPostVFP",
 }
 
 project = args.project
@@ -62,7 +62,7 @@ for proc in procs:
             histo = hh.normalize(histo)
             logger.info(f'Integral for {name} after normalizing {np.sum(histo.values(flow=True))}')
         else:
-            histo = hh.scaleHist(histo, res[proc_name]["dataset"]["xsec"]*10e6/res[proc_name]['weight_sum'], createNew=False)
+            histo = hh.scaleHist(histo, res[proc_name]["dataset"]["xsec"]/res[proc_name]['weight_sum'], createNew=False)
             logger.info(f'Integral for {name} after scaling {np.sum(histo.values(flow=True))}')
 
         if "ewMll" in histo.axes.name:
