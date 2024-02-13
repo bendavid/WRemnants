@@ -627,22 +627,34 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                 passToFakes=passSystToFakes)
         ## TODO: implement second lepton veto for low PU (both electrons and muons)
         if not lowPU:
-            decorrVetoDict = {
-                "x" : {
-                    "label" : "eta",
-                    "edges": [round(-2.4+i*0.1,1) for i in range(49)]
-                }
-            }
+            # eta decorrelated nuisances
             cardTool.addSystematic("ZmuonVeto",
                                    processes=['Zveto_samples'],
                                    group="ZmuonVeto",
                                    mirror=True,
-                                   systAxes=[],
-                                   outNames=["ZmuonVetoDown", "ZmuonVetoUp"],
                                    passToFakes=passSystToFakes,
                                    scale=args.scaleZmuonVeto,
-                                   decorrelateByBin=decorrVetoDict
+                                   baseName="ZmuonVeto_",
+                                   systAxes=["decorrEta"],
+                                   labelsByAxis=["decorrEta"],
+                                   actionRequiresNomi=True,
+                                   action=syst_tools.decorrelateByAxis,
+                                   actionArgs=dict(axisToDecorrName="eta",
+                                                   decorrEdges=[round(-2.4+i*0.1,1) for i in range(49)],
+                                                   newDecorrAxisName="decorrEta"
+                                                   )
                                    )
+            # add also the fully inclusive systematic uncertainty, which is not kept in the previous step
+            cardTool.addSystematic("ZmuonVeto",
+                                   processes=['Zveto_samples'],
+                                   group="ZmuonVeto",
+                                   rename=f"ZmuonVeto_inclusive",
+                                   baseName="ZmuonVeto_inclusive",
+                                   mirror=True,
+                                   passToFakes=passSystToFakes,
+                                   scale=args.scaleZmuonVeto,
+                                   )
+
     else:
         cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15, group="CMS_background")
         cardTool.addLnNSystematic("luminosity", processes=['MCnoQCD'], size=1.017 if lowPU else 1.012, group="luminosity")
@@ -669,13 +681,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
                     mirrorDownVarEqualToNomi=False
                     groupName = "muon_eff_syst"
                     splitGroupDict = {f"{groupName}_{x}" : f".*effSyst.*{x}" for x in list(effTypesNoIso + ["iso"])}
-                    # decorrDictEff = {                        
-                    #     "x" : {
-                    #         "label" : "eta",
-                    #         "edges": [round(-2.4+i*0.1,1) for i in range(49)]
-                    #     }
-                    # }
-
                 else:
                     nameReplace = [] if any(x in name for x in chargeDependentSteps) else [("q0", "qall")] # for iso change the tag id with another sensible label
                     mirror = True
@@ -705,26 +710,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                     systNameReplace=nameReplace,
                     scale=scale,
                     splitGroup=splitGroupDict,
-                    decorrelateByBin = {}
                 )
-                # if "Syst" in name and decorrDictEff != {}:
-                #     # add fully correlated version again
-                #     cardTool.addSystematic(
-                #         name,
-                #         rename=f"{name}_EtaDecorr",
-                #         mirror=mirror,
-                #         mirrorDownVarEqualToNomi=mirrorDownVarEqualToNomi,
-                #         group=groupName,
-                #         systAxes=axes,
-                #         labelsByAxis=axlabels,
-                #         baseName=name+"_",
-                #         processes=['MCnoQCD'],
-                #         passToFakes=passSystToFakes,
-                #         systNameReplace=nameReplace,
-                #         scale=scale,
-                #         splitGroup=splitGroupDict,
-                #         decorrelateByBin = decorrDictEff
-                #     )
         else:
             if datagroups.flavor in ["mu", "mumu"]:
                 lepEffs = ["muSF_HLT_DATA_stat", "muSF_HLT_DATA_syst", "muSF_HLT_MC_stat", "muSF_HLT_MC_syst", "muSF_ISO_stat", "muSF_ISO_DATA_syst", "muSF_ISO_MC_syst", "muSF_IDIP_stat", "muSF_IDIP_DATA_syst", "muSF_IDIP_MC_syst"]
