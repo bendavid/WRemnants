@@ -12,7 +12,7 @@ def select_veto_muons(df, nMuons=1, condition="=="):
 
     # n.b. charge = -99 is a placeholder for invalid track refit/corrections (mostly just from tracks below
     # the pt threshold of 8 GeV in the nano production)
-    df = df.Define("vetoMuonsPre", "Muon_looseId && abs(Muon_dxybs) < 0.05 && Muon_correctedCharge != -99")
+    df = df.Define("vetoMuonsPre", "Muon_looseId && abs(Muon_dxybs) < 0.01 && Muon_correctedCharge != -99")
     df = df.Define("vetoMuons", "vetoMuonsPre && Muon_correctedPt > 10. && abs(Muon_correctedEta) < 2.4")
     df = df.Filter(f"Sum(vetoMuons) {condition} {nMuons}")
 

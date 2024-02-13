@@ -160,7 +160,7 @@ def concatenateHists(h1, h2, allowBroadcast=True, by_ax_name=True):
             axes.append(ax1)
             continue
 
-        if type(ax1) != type(ax1):
+        if type(ax1) != type(ax2):
             raise ValueError("Cannot combine inconsistent axis types!")
 
         if type(ax1) == hist.axis.StrCategory:
@@ -185,8 +185,11 @@ def concatenateHists(h1, h2, allowBroadcast=True, by_ax_name=True):
     return newh
 
 def concatenate_syst_hists(hists, has_nominal=True):
+    if len(hists) < 2:
+        raise ValueError("At least two hists required to concatenate")
+    hcat = hists[0]
     for h in hists[1:]:
-        hcat = concatenateHists(hists[0], h[...,has_nominal:], allowBroadcast=False)
+        hcat = concatenateHists(hcat, h[...,has_nominal:], allowBroadcast=False)
 
     return hcat
 
@@ -681,7 +684,8 @@ def rescaleBandVariation(histo, factor):
 def rssHists(h, syst_axis, scale=1., hnom=None):
     s = hist.tag.Slicer()
 
-    hnom = hnom if nominal is not None else h[{syst_axis : 0}]
+    if hnom is None:
+        hnom = h[{syst_axis : 0}]
 
     hdiff = addHists(h, hnom, scale2=-1.)*scale
     hss = multiplyHists(hdiff, hdiff)

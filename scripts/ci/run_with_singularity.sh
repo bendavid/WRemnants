@@ -1,5 +1,5 @@
 #!/bin/bash
-export APPTAINER_BIND="/scratch,/cvmfs,$PWD" 
+export APPTAINER_BIND="/scratch,/cvmfs,${WREM_BASE}/.." 
 CONTAINER=/cvmfs/unpacked.cern.ch/gitlab-registry.cern.ch/bendavid/cmswmassdocker/wmassdevrolling\:v26
 
 # Ensure kerberos permissions for eos access (requires systemd kerberos setup)
