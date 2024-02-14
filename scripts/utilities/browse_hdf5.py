@@ -14,6 +14,7 @@ import h5py
 import narf
 from narf import ioutils
 import ROOT
+from utilities.io_tools import input_tools
 
 logger = logging.child_logger(__name__)
 
@@ -39,7 +40,7 @@ if __name__ == "__main__":
      args = parser.parse_args()
 
      h5file = h5py.File(args.inputfile[0], "r")
-     results = narf.ioutils.pickle_load_h5py(h5file["results"])
+     results = input_tools.load_results_h5py(h5file)
 
      if args.printMode == "all":
           print(results)
