@@ -597,7 +597,7 @@ class Datagroups(object):
             
         return df
 
-    def set_rebin_action(self, axes, ax_lim=[], ax_rebin=[], ax_absval=[], rebin_before_selection=False):
+    def set_rebin_action(self, axes, ax_lim=[], ax_rebin=[], ax_absval=[], rebin_before_selection=False, rename=True):
         if len(ax_lim) % 2 or len(ax_lim)/2 > len(axes) or len(ax_rebin) > len(axes):
             raise ValueError("Inconsistent rebin or axlim arguments. axlim must be at most two entries per axis, and rebin at most one")
         self.rebinBeforeSelection = rebin_before_selection
@@ -620,8 +620,8 @@ class Datagroups(object):
         for i, (var, absval) in enumerate(itertools.zip_longest(axes, ax_absval)):
             if absval:
                 logger.info(f"Taking the absolute value of axis '{var}'")
-                self.setRebinOp(lambda h, ax=var: hh.makeAbsHist(h, ax))
-                axes[i] = f"abs{var}"
+                self.setRebinOp(lambda h, ax=var: hh.makeAbsHist(h, ax, rename=rename))
+                axes[i] = f"abs{var}" if rename else var
 
     def readHist(self, baseName, proc, group, syst):
         output = self.results[proc.name]["output"]
