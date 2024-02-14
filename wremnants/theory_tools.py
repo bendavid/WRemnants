@@ -371,17 +371,19 @@ def pdf_info_map(dataset, pdfset):
     infoMap = pdfMap 
 
     # Just ignore PDF variations for non W/Z samples
-    if not (dataset[0] in ["W", "Z"] and dataset[1] not in ["W", "Z"]) \
+    if pdfset is None \
+        or not (dataset[0] in ["W", "Z"] and dataset[1] not in ["W", "Z"]) \
         or "horace" in dataset or (pdfset != "nnpdf31" and dataset in only_central_pdf_datasets) \
         or pdfset not in infoMap:
         raise ValueError(f"Skipping PDF {pdfset} for dataset {dataset}")
     return infoMap[pdfset]
 
 def define_pdf_columns(df, dataset_name, pdfs, noAltUnc):
-    if dataset_name not in common.vprocs_all or \
-            "horace" in dataset_name or \
-            "winhac" in dataset_name or \
-            "LHEPdfWeight" not in df.GetColumnNames():
+    if len(pdfs) == 0 \
+        or dataset_name not in common.vprocs_all \
+        or "horace" in dataset_name \
+        or "winhac" in dataset_name \
+        or "LHEPdfWeight" not in df.GetColumnNames():
         logger.warning(f"Did not find PDF weights for sample {dataset_name}! Using nominal PDF in sample")
         return df
 
@@ -437,7 +439,7 @@ def define_theory_weights_and_corrs(df, dataset_name, helpers, args):
     df = define_ew_vars(df)
 
     df = df.DefinePerSample("theory_weight_truncate", "10.")
-    df = define_central_pdf_weight(df, dataset_name, args.pdfs[0])
+    df = define_central_pdf_weight(df, dataset_name, args.pdfs[0] if len(args.pdfs) >= 1 else None)
     df = define_theory_corr(df, dataset_name, helpers, generators=args.theoryCorr, 
             modify_central_weight=not args.theoryCorrAltOnly)
 

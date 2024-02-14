@@ -20,6 +20,7 @@ parser.add_argument("--noSmoothing", action="store_true", default=False, help="D
 parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--baseName", default="ew_MllPTll", type=str, help="histogram name")
 parser.add_argument("--project", default=["ewMll", "ewPTll"], nargs="*", type=str, help="axes to project to")
+parser.add_argument("--outname", type=str, default=None, help="Output name for correction file")
 parser.add_argument("--outpath", type=str, default=f"{common.data_dir}/TheoryCorrections", help="Output path")
 
 args = parser.parse_args()
@@ -156,14 +157,15 @@ for proc in procs:
         corrh[name][proc]["den"] = hcharge_den
 
     for num, hnum in zip(nums, hnums):
+        outname = args.outname if args.outname else num
 
-        make_correction(hnum, hden, f"{num}ew")
+        make_correction(hnum, hden, f"{outname}ew")
 
         for ax in project:
             hnum1D = hnum.project(ax)
             hden1D = hden.project(ax)
 
-            make_correction(hnum1D, hden1D, f"{num}ew_{ax}")
+            make_correction(hnum1D, hden1D, f"{outname}ew_{ax}")
 
 for name, corr_dict in corrh.items():
     outname = name.replace('-', '')

@@ -141,7 +141,7 @@ def common_parser(for_reco_highPU=False):
             # Filter unique values, but keep first item in its position
             if "herapdf20" in values:
                 values.append("herapdf20ext")
-            unique_values = [values[0], *set([x for x in values[1:]])]
+            unique_values = [values[0], *set([x for x in values[1:]])] if len(values) >= 1 else []
             setattr(namespace, self.dest, unique_values)
 
     class NoneFilterAction(argparse.Action):
@@ -150,8 +150,8 @@ def common_parser(for_reco_highPU=False):
             filtered_values = [x for x in values if x not in ["none", None]]
             setattr(namespace, self.dest, filtered_values)
 
-    parser.add_argument("--pdfs", type=str, nargs="+", default=["msht20"], 
-        choices=theory_tools.pdfMap.keys(), help="PDF sets to produce error hists for", action=PDFFilterAction)
+    parser.add_argument("--pdfs", type=str, nargs="*", default=["msht20"], choices=theory_tools.pdfMap.keys(), action=PDFFilterAction, 
+        help="PDF sets to reweight and produce error hists for. If empty, use PDF set used in production (weight=1).")
     parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
     parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=None)
     parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by group name or (subset) of name", default=[])
