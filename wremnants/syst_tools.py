@@ -252,7 +252,7 @@ def decorrelateByAxis(hvar, hnom, axisToDecorrName, decorrEdges, newDecorrAxisNa
         indexLow = ax.index(decorrEdges[isyst] + 0.001) # add epsilon to ensure picking the bin on the right of the edge (note that the second bin index is excluded from the slice selection below)
         # for the upper edge add an additional protection for the very last edge in case the axis doesn't have the overflow bin, since the edge lookup might be undefined in that case
         # since the upper edge is no longer associated to the following bin, which would be the overflow bin, but to the inner bin (adding epsilon seems to work nonetheless, but it is probably by chance)
-        indexHigh = ax.index(decorrEdges[isyst+1] + 0.001) if decorrEdges[isyst+1] < ax.edges[-1] else ax.size
+        indexHigh = ax.index(decorrEdges[isyst+1] + 0.001) if decorrEdges[isyst+1] < ax.edges[-1] else hist.overflow
         slices = [slice(None) if n != axisToDecorrIndex else slice(indexLow,indexHigh) for n in range(len(hnomAsVar.axes.name))]
         hvarnew.values(flow=False)[*slices, isyst] = hvar.values(flow=False)[*slices] # use values instead of view, because hvar has storage=Double(), while hnom (and hence hvarnew) has storage=Weight
 
