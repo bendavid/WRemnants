@@ -237,7 +237,7 @@ if __name__ == "__main__":
     
     commonargs,_ = parser.parse_known_args()
     # TODO: get the process from the list of folders in the input file
-    defaultProcs = ["Zmumu", "Ztautau", "Other"] if commonargs.isWlike else ["Wmunu", "Wtaunu", "Zmumu", "DYlowMass", "Ztautau", "Fake", "Top", "Diboson"]
+    defaultProcs = ["Zmumu", "Ztautau", "Other"] if commonargs.isWlike else ["Wmunu", "Wtaunu", "Zmumu", "DYlowMass", "Ztautau", "Fake", "Top", "Diboson", "PhotonInduced", "ZmumuVeto", "DYlowMassVeto", "ZtautauVeto"]
 
     parser.add_argument("--pp", "--predicted-processes", dest="predictedProcesses", type=str, nargs="*", help="Use these names for predicted processes to make plots", default=defaultProcs)
     parser.add_argument("--xpp", "--exclude-predicted-processes", dest="excludePredictedProcesses", type=str, nargs="*", help="Use these names to exclude predicted processes to make plots", default=[])
@@ -273,6 +273,7 @@ if __name__ == "__main__":
         nomihists = {}
         infile = safeOpenFile(fname)
         for proc in processes:
+            print(f"{charge}   {proc}")
             nomihists[proc] = safeGetObject(infile, f"{proc}/nominal_{proc}_{charge}", detach=True) # process name as subfolder
         if args.pseudodata:
             nomihists["Data"] = safeGetObject(infile, f"Data/{args.pseudodata}_{charge}", detach=True)
