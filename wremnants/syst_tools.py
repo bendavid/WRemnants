@@ -222,12 +222,12 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axes=[], pt_ax="ptVgen", g
 def decorrelateByAxis(hvar, hnom, axisToDecorrName, decorrEdges, newDecorrAxisName=None):
 
     if axisToDecorrName not in hnom.axes.name:
-        raise ValueError("Requested to decorrelate uncertainty in histogram {hvar.name} by {axisToDecorrName} axis, but available axes for nominal histogram are {hnom.axes.name}")
+        raise ValueError(f"Requested to decorrelate uncertainty in histogram {hvar.name} by {axisToDecorrName} axis, but available axes for nominal histogram are {hnom.axes.name}")
 
     # for convenience, broadcast the nominal into the same shape as hvar
     # hvar may often have the same dimension as hnom, but sometimes it might have been mirrored and thus have at least the mirror axis
     hnomAsVar = hh.broadcastSystHist(hnom, hvar)
-    
+
     ax = hnomAsVar.axes[axisToDecorrName]
     axisToDecorrIndex = list(hnomAsVar.axes).index(ax)
     logger.debug(f"Decorrelating versus axis {axisToDecorrName} with index {axisToDecorrIndex}")
@@ -235,7 +235,7 @@ def decorrelateByAxis(hvar, hnom, axisToDecorrName, decorrEdges, newDecorrAxisNa
     axis_decorr_name = newDecorrAxisName if newDecorrAxisName != None else f"{axisToDecorrName}_decorr"
     axis_decorr = hist.axis.Variable(decorrEdges, underflow=False, overflow=False, name=axis_decorr_name)
     hvarnew = hh.addGenericAxis(hnomAsVar, axis_decorr)
-        
+
     for isyst in range(len(decorrEdges)-1):
         indexLow = ax.index(decorrEdges[isyst] + 0.001) # add epsilon to ensure picking the bin on the right of the edge
         indexHigh = ax.index(decorrEdges[isyst+1] + 0.001)

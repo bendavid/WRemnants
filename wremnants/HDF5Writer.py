@@ -197,7 +197,7 @@ class HDF5Writer(object):
 
                 # nominal histograms of prediction
                 norm_proc_hist = dg.groups[proc].hists[chanInfo.nominalName]
-                hist_nominal_perProc[proc] = norm_proc_hist.copy()
+                #hist_nominal_perProc[proc] = norm_proc_hist.copy()
 
                 if not masked:                
                     norm_proc, sumw2_proc = self.get_flat_values(norm_proc_hist, chanInfo, axes)
@@ -287,9 +287,7 @@ class HDF5Writer(object):
             # free memory
             if dg.dataName in dg.groups:
                 del dg.groups[dg.dataName].hists[chanInfo.nominalName]
-            for proc in procs_chan:
-                del dg.groups[proc].hists[chanInfo.nominalName]
-            
+
             # release original histograms in the proxy objects
             if chanInfo.pseudoData:
                 for pseudoData in chanInfo.pseudoData:
@@ -374,12 +372,9 @@ class HDF5Writer(object):
                     logger.debug(f"Now at proc {proc}!")
 
                     hvar = dg.groups[proc].hists["syst"]
-                    #hnom = dg.groups[proc].hists[chanInfo.nominalName] ## this doesn't work here for some reason, perhaps I should reload the datagroups
+                    hnom = dg.groups[proc].hists[chanInfo.nominalName]
 
-                    if syst["decorrByBin"]:
-                        raise NotImplementedError("By bin decorrelation is not supported for writing output in hdf5")
-
-                    var_map = chanInfo.systHists(hvar, systKey, hist_nominal_perProc[proc])
+                    var_map = chanInfo.systHists(hvar, systKey, hnom)
 
                     var_names = [x[:-2] if "Up" in x[-2:] else (x[:-4] if "Down" in x[-4:] else x) 
                         for x in filter(lambda x: x != "", var_map.keys())]
