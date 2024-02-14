@@ -601,20 +601,21 @@ class Datagroups(object):
         if len(ax_lim) % 2 or len(ax_lim)/2 > len(axes) or len(ax_rebin) > len(axes):
             raise ValueError("Inconsistent rebin or axlim arguments. axlim must be at most two entries per axis, and rebin at most one")
         self.rebinBeforeSelection = rebin_before_selection
-        sel = {}
-        for var,low,high,rebin in itertools.zip_longest(axes, ax_lim[::2], ax_lim[1::2], ax_rebin):
-            s = hist.tag.Slicer()
-            if low is not None and high is not None:
-                logger.info(f"Restricting the axis '{var}' to range [{low}, {high}]")
-                sel[var] = s[complex(0, low):complex(1, high):hist.rebin(rebin) if rebin else None]
-            elif rebin:
-                sel[var] = s[hist.rebin(rebin)]
-            if rebin:
-                logger.info(f"Rebinning the axis '{var}' by [{rebin}]")
 
-        if len(sel) > 0:
-            logger.info(f"Will apply the global selection {sel}")
-            self.setRebinOp(lambda h: h[sel])
+        def rebin(h, axes, lows=[], highs=[], rebins=[]):
+            sel = {}
+            for ax,low,high,rebin in itertools.zip_longest(axes, lows, highs, rebins):
+                upper = hist.overflow if high==h.axes[ax].edges[-1] else complex(0, high) # in case high edge is upper edge of last bin we need to manually set the upper limit
+                if low is not None and high is not None:
+                    logger.info(f"Restricting the axis '{ax}' to range [{low}, {high}]")
+                    sel[ax] = slice(complex(0, low), upper, hist.rebin(rebin) if rebin else None)
+                elif rebin:
+                    logger.info(f"Rebinning the axis '{ax}' by [{rebin}]")
+                    sel[ax] = slice(None,None,hist.rebin(rebin))
+            return h[sel] if len(sel)>0 else h
+
+        if len(ax_lim)>0 or len(ax_rebin)>0:
+            self.setRebinOp(lambda h,axes=axes,lows=ax_lim[::2],highs=ax_lim[1::2],rebins=ax_rebin: rebin(h, axes, lows, highs, rebins))
 
         for i, (var, absval) in enumerate(itertools.zip_longest(axes, ax_absval)):
             if absval:
