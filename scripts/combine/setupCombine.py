@@ -262,6 +262,13 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if args.noHist:
         cardTool.skipHistograms()
     cardTool.setSpacing(28)
+    label = 'W' if wmass else 'Z'
+    cardTool.setCustomSystGroupMapping({
+        "theoryTNP" : f".*resum.*|.*TNP.*|mass.*{label}.*",
+        "resumTheory" : f".*resum.*|.*TNP.*|mass.*{label}.*",
+        "allTheory" : f"pdf.*|.*QCD.*|.*resum.*|.*TNP.*|mass.*{label}.*",
+        "ptTheory" : f".*QCD.*|.*resum.*|.*TNP.*|mass.*{label}.*",
+    })
     cardTool.setCustomSystForCard(args.excludeNuisances, args.keepNuisances)
     if args.pseudoData:
         cardTool.setPseudodata(args.pseudoData, args.pseudoDataAxes, args.pseudoDataIdxs, args.pseudoDataProcsRegexp)
@@ -347,7 +354,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
                     scale2=0.1)
         )
 
-    label = 'W' if wmass else 'Z'
     if not (args.doStatOnly and constrainMass):
         if args.massVariation != 0:
             cardTool.addSystematic(f"massWeight{label}",

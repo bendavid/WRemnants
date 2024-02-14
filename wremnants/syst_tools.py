@@ -30,6 +30,14 @@ def syst_transform_map(base_hist, hist_name):
     transforms["scetlib_dyturboMSHT20Down"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[1], "procs" : common.vprocs_all}
     transforms["scetlib_dyturboMSHT20an3loUp"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[0], "procs" : common.zprocs_all}
     transforms["scetlib_dyturboMSHT20an3loDown"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[1], "procs" : common.zprocs_all}
+    transforms["ewUp"] = {"action" : lambda h,**args: h if "systIdx" not in h.axes.name else h[{"systIdx" : 0}]}
+    transforms["ewDown"] = {"requiresNominal" : True, "action" : lambda h,**args: h if "systIdx" not in h.axes.name else hh.mirrorHist(h[{"systIdx" : 0}], **args)}
+    transforms["muonScaleUp"] = {"action" : lambda h: h if "unc" not in h.axes.name else hh.rssHistsMid(h, "unc")[1]}
+    transforms["muonScaleDown"] = {"action" : lambda h: h if "unc" not in h.axes.name else hh.rssHistsMid(h, "unc")[0]}
+    transforms["muonScale3Up"] = {"action" : lambda h: h if "unc" not in h.axes.name else hh.rssHistsMid(h, "unc", 3.35)[1]}
+    transforms["muonScale3Down"] = {"action" : lambda h: h if "unc" not in h.axes.name else hh.rssHistsMid(h, "unc", 3.35)[0]}
+    transforms["muonResUp"] = {"requiresNominal" : True, "action" : lambda h,**args: h if "smearing_variation" not in h.axes.name else hh.rssHists(h, "smearing_variation", **args)[1]}
+    transforms["muonResDown"] = {"requiresNominal" : True, "action" : lambda h,**args: h if "smearing_variation" not in h.axes.name else hh.rssHists(h, "smearing_variation", **args)[0]}
 
     s = hist.tag.Slicer()
     transforms.update({
