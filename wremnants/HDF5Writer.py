@@ -190,14 +190,12 @@ class HDF5Writer(object):
             hist_nominal = dg.groups[procs_chan[0]].hists[chanInfo.nominalName] 
             hist_axes[chan] = [hist_nominal.axes[a] for a in axes]
 
-            hist_nominal_perProc = {}
             # nominal predictions
             for proc in procs_chan:
                 logger.debug(f"Now  in channel {chan} at process {proc}")
 
                 # nominal histograms of prediction
                 norm_proc_hist = dg.groups[proc].hists[chanInfo.nominalName]
-                #hist_nominal_perProc[proc] = norm_proc_hist.copy()
 
                 if not masked:                
                     norm_proc, sumw2_proc = self.get_flat_values(norm_proc_hist, chanInfo, axes)
