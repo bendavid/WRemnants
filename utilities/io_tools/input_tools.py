@@ -183,12 +183,25 @@ def read_dyturbo_vars_hist(base_name, var_axis=None, axes=("Y", "qT"), charge=No
 
 def read_dyturbo_hist(filenames, path="", axes=("y", "pt"), charge=None, coeff=None):
     filenames = [os.path.expanduser(os.path.join(path, f)) for f in filenames]
-    isfile = list(filter(lambda x: os.path.isfile(x), filenames))
 
-    if not isfile:
-        raise ValueError(f"Did not find any valid files in {filenames}")
+    hists = []
+    for fn in filenames:
+        expandedf = fn.split("+")
 
-    hists = [read_dyturbo_file(f, axes, charge, coeff) for f in isfile]
+        hs = []
+        for f in expandedf:
+            if not os.path.isfile(f):
+                raise ValueError(f"{f} is not a valid file!")
+
+        if len(expandedf) == 1:
+            hs.append(read_dyturbo_file(fn, axes, charge, coeff))
+        elif len(expandedf) == 2:
+            hs.append(hh.concatenateHists(*[read_dyturbo_file(f, axes, charge, coeff) for f in expandedf]))
+        else:
+            raise ValueError("Concatenate only supported for 2 files at present")
+
+        hists.extend(hs)
+
     if len(hists) > 1:
         hists = hh.rebinHistsToCommon(hists, 0)
 
