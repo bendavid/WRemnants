@@ -6,7 +6,7 @@ import h5py
 import narf
 import ROOT
 import re
-import os, sys
+import os
 import itertools
 import functools
 import hist
@@ -597,7 +597,7 @@ class Datagroups(object):
             
         return df
 
-    def set_rebin_action(self, axes, ax_lim=[], ax_rebin=[], ax_absval=[], rebin_before_selection=False, epsilon=10e-10):
+    def set_rebin_action(self, axes, ax_lim=[], ax_rebin=[], ax_absval=[], rebin_before_selection=False):
         if len(ax_lim) % 2 or len(ax_lim)/2 > len(axes) or len(ax_rebin) > len(axes):
             raise ValueError("Inconsistent rebin or axlim arguments. axlim must be at most two entries per axis, and rebin at most one")
         self.rebinBeforeSelection = rebin_before_selection
@@ -606,7 +606,7 @@ class Datagroups(object):
             s = hist.tag.Slicer()
             if low is not None and high is not None:
                 logger.info(f"Restricting the axis '{var}' to range [{low}, {high}]")
-                sel[var] = s[complex(0, low):complex(0, high+epsilon):hist.rebin(rebin) if rebin else None]
+                sel[var] = s[complex(0, low):complex(1, high):hist.rebin(rebin) if rebin else None]
             elif rebin:
                 sel[var] = s[hist.rebin(rebin)]
             if rebin:
