@@ -88,27 +88,7 @@ for proc in procs:
                 logger.info(f"Rebin axis ewMll by {rebinN}")
                 histo = hh.rebinHist(histo, "ewMll", rebin_edges)
         
-        base_dev = args.baseName.split("_")[0]
-        if base_dev not in ["nominal", "ew"]:                
-            for ax in histo.axes:
-                old_name = ax._ax.metadata["name"]
-                if base_dev == "lhe":
-                    # use pre FSR definition for lhe correction
-                    translate = {
-                        "ewMll":"massVgen",
-                        "ewAbsYll":"absYVgen",
-                        "ewPTll":"ptVgen",
-                    }
-                else:
-                    translate = {
-                        "ewMll":"dressed_MV",
-                        "ewAbsYll":"dressed_absYV",
-                        "ewPTll":"dressed_PTV",
-                    }
-                new_name = translate[old_name]
-                logger.info(f"Rename axis {old_name} for corrections to {new_name}")
-                ax._ax.metadata["name"] = new_name
-            
+        base_dev = args.baseName.split("_")[0]            
         return histo
     
     nums = []

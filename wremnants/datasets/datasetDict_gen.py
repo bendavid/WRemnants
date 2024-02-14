@@ -38,11 +38,17 @@ genDataDict = {
                    'xsec' : xsec_powheg_ZToMuMu_LO,
                    'group': "Zmumu",
     },
+    'Zmumu_horace-lo-photos-isroff' : { 
+                   'filepaths' :
+                   ["{BASE_PATH}/DYJetsToMuMu_LO_TuneCP5_ISROff_13TeV-horace-pythia8-photospp"],
+                   'xsec' : xsec_powheg_ZToMuMu_LO,
+                   'group': "Zmumu",
+    },
     'Zmumu_horace-lo-photos-mecoff' : { 
-                'filepaths' :
-                ["{BASE_PATH}/DYJetsToMuMu_LO_TuneCP5_PhotosMecOff_13TeV-horace-pythia8-photospp"],
-                'xsec' : xsec_powheg_ZToMuMu_LO,
-                'group': "Zmumu",
+                   'filepaths' :
+                   ["{BASE_PATH}/DYJetsToMuMu_LO_TuneCP5_PhotosMecOff_13TeV-horace-pythia8-photospp"],
+                   'xsec' : xsec_powheg_ZToMuMu_LO,
+                   'group': "Zmumu",
     },      
     'Zmumu_horace-qed' : { 
                    'filepaths' :
