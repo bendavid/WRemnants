@@ -607,8 +607,9 @@ class Datagroups(object):
         def rebin(h, axes, lows=[], highs=[], rebins=[]):
             sel = {}
             for ax,low,high,rebin in itertools.zip_longest(axes, lows, highs, rebins):
-                upper = hist.overflow if high==h.axes[ax].edges[-1] else complex(0, high) # in case high edge is upper edge of last bin we need to manually set the upper limit
                 if low is not None and high is not None:
+                    # in case high edge is upper edge of last bin we need to manually set the upper limit
+                    upper = hist.overflow if high==h.axes[ax].edges[-1] else complex(0, high) 
                     logger.info(f"Restricting the axis '{ax}' to range [{low}, {high}]")
                     sel[ax] = slice(complex(0, low), upper, hist.rebin(rebin) if rebin else None)
                 elif rebin:
