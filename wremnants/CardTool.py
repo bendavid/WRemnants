@@ -151,8 +151,16 @@ class CardTool(object):
         
     ## Functions to customize systs to be added in card, mainly for tests
     def setCustomSystForCard(self, exclude=None, keep=None):
-        if exclude: self.excludeSyst = re.compile(exclude)
-        if keep:    self.keepSyst    = re.compile(keep)
+        for regex,name in zip((keep, exclude), ("keepSyst", "excludeSyst")):
+            if hasattr(self, "customSystMapping"):
+                if regex in self.customSystMapping:
+                    regex = self.customSystMapping[regex]
+
+            if regex:
+                setattr(self, name, re.compile(regex))
+
+    def setCustomSystGroupMapping(self, mapping):
+        self.customSystMapping = mapping
         
     def isExcludedNuisance(self, name):
         # note, re.match search for a match from the beginning, so if x="test" x.match("mytestPDF1") will NOT match 

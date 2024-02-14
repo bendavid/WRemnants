@@ -39,6 +39,7 @@ parser.add_argument("--prefit", action='store_true', help="Use the prefit uncert
 parser.add_argument("--noRatioErr", action='store_false', dest="ratioError", help="Don't show stat unc in ratio")
 parser.add_argument("--selection", type=str, help="Specify custom selections as comma seperated list (e.g. '--selection passIso=0,passMT=1' )")
 parser.add_argument("--presel", type=str, nargs="*", default=[], help="Specify custom selections on input histograms to integrate some axes, giving axis name and min,max (e.g. '--presel pt=ptmin,ptmax' ) or just axis name for bool axes")
+parser.add_argument("--normToData", action='store_true', help="Normalize MC to data")
 parser.add_argument("--mergeGroups", type=str, nargs="*", default=[], help="List of new names followed by '+' and ',' separated groups to be merged e.g. 'Zmumu=Zmumu,DYlowMass'")
 
 subparsers = parser.add_subparsers(dest="variation")
@@ -158,6 +159,7 @@ if addVariation:
         name = name if name != "" else nominalName
         load_op = {}
         action=None
+        requiresNominal = False
 
         if entry and entry.isdigit():
             entry = int(entry)
@@ -165,15 +167,19 @@ if addVariation:
         if args.selectAxis or do_transform:
             transform_procs = groups.getProcNames(exclude_group=exclude)
             if do_transform:
-                action = transforms[entry]["action"]
+                tmap = transforms[entry]
+                action = tmap["action"]
                 if "procs" in transforms[entry]:
-                    transform_procs = transforms[entry]["procs"]
+                    transform_procs = tmap["procs"]
                 varname = entry
+                requiresNominal = tmap.get("requiresNominal", False)
             else:
                 ax = axes[i]
                 action = lambda x: x[{ax : entry}] if ax in x.axes.name else x
                 varname = name+str(entry)
-            load_op = {p : action for p in transform_procs}
+
+            if not requiresNominal:
+                load_op = {p : action for p in transform_procs}
         else:
             varname = name
 
@@ -183,7 +189,7 @@ if addVariation:
         if load_op and reload:
             action = None
         groups.addSummedProc(nominalName, relabel=args.baseName, name=name, label=label, exclude=exclude,
-            color=color, reload=reload, rename=varname, procsToRead=datasets,
+            color=color, reload=reload, rename=varname, procsToRead=datasets, actionRequiresRef=requiresNominal,
             preOpMap=load_op, action=action, forceNonzero=True, applySelection=applySelection)
 
         exclude.append(varname)
@@ -221,7 +227,7 @@ for h in args.hists:
             ratio_to_data=args.ratioToData, rlabel="Pred./Data" if args.ratioToData else "Data/Pred.",
             xlim=args.xlim, no_fill=args.noFill, cms_decor=args.cmsDecor,
             legtext_size=20*args.scaleleg, unstacked_linestyles=args.linestyle if hasattr(args, "linestyle") else [],
-            ratio_error=args.ratioError)
+            ratio_error=args.ratioError, normalize_to_data=args.normToData)
 
     fitresultstring=""
     if args.fitresult:

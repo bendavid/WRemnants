@@ -444,7 +444,7 @@ class Datagroups(object):
         return self.results
 
     def addSummedProc(self, refname, name, label=None, color=None, exclude=["Data"], relabel=None, 
-            procsToRead=None, reload=False, rename=None, action=None, actionArgs={}, **kwargs):
+            procsToRead=None, reload=False, rename=None, action=None, actionArgs={}, actionRequiresRef=False, **kwargs):
         if reload:
             self.loadHistsForDatagroups(refname, syst=name, excludeProcs=exclude,
                 procsToRead=procsToRead, **kwargs)
@@ -464,6 +464,8 @@ class Datagroups(object):
                 raise ValueError(f"Failed to find hist for proc {proc}, histname {name}")
             if action:
                 logger.debug(f"Applying action in addSummedProc! Before sum {h.sum()}")
+                if actionRequiresRef:
+                    actionArgs["hnom"] = self.groups[proc].hists[refname]
                 h = action(h, **actionArgs)
                 logger.debug(f"After action sum {h.sum()}")
             tosum.append(h)

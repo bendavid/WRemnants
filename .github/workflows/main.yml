@@ -36,7 +36,7 @@ jobs:
   #    permissions: write-all
   #    steps:
   #      - name: Checkout
-  #        uses: actions/checkout@v3
+  #        uses: actions/checkout@v4
   #
   #      - name: setup plot dir
   #        run: echo PLOT_DIR=$(date +%Y_%m_%d)/PR$(echo $GITHUB_REF | awk 'BEGIN { FS = "/" } ; { print $3 }') >> $GITHUB_ENV
@@ -67,7 +67,7 @@ jobs:
       LUMI_SCALE: ${{steps.export.outputs.LUMI_SCALE}}
 
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: 'recursive'
           lfs: 'true'
@@ -145,7 +145,7 @@ jobs:
           echo "MAX_FILES=${MAX_FILES}" >> $GITHUB_ENV
 
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: 'recursive'
           lfs: 'true'
@@ -174,7 +174,7 @@ jobs:
           echo "HIST_FILE=${WREMNANTS_OUTDIR}/${OUTFILE_WMASS}" >> $GITHUB_ENV
 
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: 'recursive'
           lfs: 'true'
@@ -219,7 +219,7 @@ jobs:
           echo "WEB_DIR=${WEB_DIR}" >> $GITHUB_ENV
           echo "PLOT_DIR=${PLOT_DIR}" >> $GITHUB_ENV
           echo "HIST_FILE=${WREMNANTS_OUTDIR}/${OUTFILE_WMASS}" >> $GITHUB_ENV
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: 'recursive'
           lfs: 'true'
@@ -263,7 +263,7 @@ jobs:
           echo "HIST_FILE_MU=${WREMNANTS_OUTDIR}/${OUTFILE_LOWPU_MU}" >> $GITHUB_ENV
           echo "HIST_FILE_E=${WREMNANTS_OUTDIR}/${OUTFILE_LOWPU_E}" >> $GITHUB_ENV
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: 'recursive'
           lfs: 'true'
@@ -348,7 +348,7 @@ jobs:
           echo "HIST_FILE_MUMU=${WREMNANTS_OUTDIR}/${OUTFILE_LOWPU_MUMU}" >> $GITHUB_ENV
           echo "HIST_FILE_EE=${WREMNANTS_OUTDIR}/${OUTFILE_LOWPU_EE}" >> $GITHUB_ENV
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: 'recursive'
           lfs: 'true'
@@ -402,7 +402,7 @@ jobs:
           echo "HIST_FILE_MUMU=${WREMNANTS_OUTDIR}/${OUTFILE_LOWPU_MUMU}" >> $GITHUB_ENV
           echo "HIST_FILE_EE=${WREMNANTS_OUTDIR}/${OUTFILE_LOWPU_EE}" >> $GITHUB_ENV
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: 'recursive'
           lfs: 'true'
@@ -443,7 +443,7 @@ jobs:
           echo "HIST_FILE=${WREMNANTS_OUTDIR}/${OUTFILE_WLIKE}" >> $GITHUB_ENV
 
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: 'recursive'
           lfs: 'true'
@@ -498,7 +498,7 @@ jobs:
           echo "PLOT_DIR=${PLOT_DIR}" >> $GITHUB_ENV
           echo "HIST_FILE=${WREMNANTS_OUTDIR}/${OUTFILE_WLIKE}" >> $GITHUB_ENV
 
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: 'recursive'
           lfs: 'true'
@@ -536,7 +536,7 @@ jobs:
           echo "HIST_FILE=${WREMNANTS_OUTDIR}/mz_dilepton_mll.hdf5" >> $GITHUB_ENV
 
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: 'recursive'
           lfs: 'true'
@@ -576,7 +576,7 @@ jobs:
           echo "HIST_FILE=${WREMNANTS_OUTDIR}/${OUTFILE_DILEPTON}" >> $GITHUB_ENV
 
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: 'recursive'
           lfs: 'true'
@@ -612,7 +612,7 @@ jobs:
           echo "HIST_FILE=${WREMNANTS_OUTDIR}/${OUTFILE_DILEPTON}" >> $GITHUB_ENV
 
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: 'recursive'
           lfs: 'true'
@@ -649,7 +649,7 @@ jobs:
           echo "MAX_FILES=${MAX_FILES}" >> $GITHUB_ENV
 
       # Checks-out your repository under $GITHUB_WORKSPACE, so your job can access it
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
         with:
           submodules: 'recursive'
           lfs: 'true'
