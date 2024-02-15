@@ -61,7 +61,6 @@ def make_parser(parser=None):
         choices=[x for x in theory_corrections.valid_theory_corrections() if "ew" in x and "ISR" in x])
     parser.add_argument("--fsrUnc", type=str, nargs="*", default=["horaceqedew_FSR", "horacelophotosmecoffew_FSR"], help="Include FSR uncertainty", 
         choices=[x for x in theory_corrections.valid_theory_corrections() if "ew" in x and "FSR" in x])
-    parser.add_argument("--widthUnc", action='store_true', help="Include uncertainty on W and Z width")
     parser.add_argument("--skipSignalSystOnFakes" , action="store_true", help="Do not propagate signal uncertainties on fakes, mainly for checks.")
     parser.add_argument("--noQCDscaleFakes", action="store_true",   help="Do not apply QCd scale uncertainties on fakes, mainly for debugging")
     parser.add_argument("--addQCDMC", action="store_true", help="Include QCD MC when making datacards (otherwise by default it will always be excluded)")
@@ -564,27 +563,19 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                 passToFakes=passSystToFakes,
         )
 
-    if args.widthUnc:
-        widthSkipZ = [("widthZ2p49333GeV",), ("widthZ2p49493GeV",), ("widthZ2p4952GeV",)] 
-        widthSkipW = [("widthW2p09053GeV",), ("widthW2p09173GeV",), ("widthW2p085GeV",)]
-        if wmass and not xnorm:
-            cardTool.addSystematic(f"widthWeightZ",
-                                    processes=["single_v_nonsig_samples"],
-                                    group=f"widthZ",
-                                    skipEntries=widthSkipZ[:],
-                                    mirror=False,
-                                    systAxes=["width"],
-                                    passToFakes=passSystToFakes,
-            )
-        cardTool.addSystematic(f"widthWeight{label}",
-                                processes=["signal_samples_inctau"],
-                                skipEntries=widthSkipZ[:] if label=="Z" else widthSkipW[:],
-                                group=f"width{label}",
-                                mirror=False,
-                                #TODO: Name this
-                                systAxes=["width"],
-                                passToFakes=passSystToFakes,
-        )
+    # Experimental range
+    #widthVars = ['widthW2p043GeV', 'widthW2p127GeV'] if wmass else ['widthZ2p4929GeV', 'widthZ2p4975GeV']
+    # Variation from EW fit (mostly driven by alphas unc.)
+    widthVars = ['widthW2p09053GeV', 'widthW2p09173GeV'] if wmass else ['widthZ2p49333GeV', 'widthZ2p49493GeV']
+    cardTool.addSystematic(f"widthWeight{label}",
+                            processes=["signal_samples_inctau"],
+                            action=lambda h: h[{"width" : widthVars}],
+                            group=f"width{label}",
+                            mirror=False,
+                            systAxes=["width"],
+                            outNames=[f"width{label}Down", f"width{label}Up"],
+                            passToFakes=passSystToFakes,
+    )
 
 
     combine_helpers.add_electroweak_uncertainty(cardTool, [*args.ewUnc, *args.fsrUnc, *args.isrUnc], 
