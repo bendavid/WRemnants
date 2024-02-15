@@ -38,10 +38,9 @@ pdfMap = {
         "combine" : "symHessian",
         "entries" : 101,
         "alphas" : ["LHEPdfWeight[0]", "LHEPdfWeight[101]", "LHEPdfWeight[102]"],
-        "alphasRange" : "001", # TODO: Check this
+        "alphasRange" : "002",
     },
     "ct18" : {
-        # This has CT18 + CT18Z in it :-/
         "name" : "pdfCT18",
         "branch" : "LHEPdfWeightAltSet11",
         "combine" : "asymHessian",
@@ -62,9 +61,9 @@ pdfMap = {
         "name" : "pdfNNPDF40",
         "branch" : "LHEPdfWeightAltSet3",
         "combine" : "symHessian",
-        "entries" : 53,
+        "entries" : 51,
         "alphas" : ["LHEPdfWeightAltSet3[0]", "LHEPdfWeightAltSet3[51]", "LHEPdfWeightAltSet3[52]"],
-        "alphasRange" : "002", # TODO: IS that true?
+        "alphasRange" : "001",
     },
     "pdf4lhc21" : {
         "name" : "pdfPDF4LHC21",
@@ -72,7 +71,7 @@ pdfMap = {
         "combine" : "symHessian",
         "entries" : 41,
         "alphas" : ["LHEPdfWeightAltSet10[0]", "LHEPdfWeightAltSet10[41]", "LHEPdfWeightAltSet10[42]"],
-        "alphasRange" : "002", # TODO: IS that true?
+        "alphasRange" : "001",
     },
     "msht20" : {
         "name" : "pdfMSHT20",
@@ -80,8 +79,7 @@ pdfMap = {
         "combine" : "asymHessian",
         "entries" : 65,
         "alphas" : ["LHEPdfWeightAltSet12[0]", "LHEPdfWeightAltSet12[67]", "LHEPdfWeightAltSet12[70]"],
-        # 66-71 - are LHAPDF ID 27500 = 27506, 27501 is 0.0116 and 27504 is 0.0120
-        "alphasRange" : "002", 
+        "alphasRange" : "002",
     },
     "msht20an3lo" : {
         "name" : "pdfMSHT20an3lo",
@@ -89,18 +87,15 @@ pdfMap = {
         "combine" : "asymHessian",
         "entries" : 105,
         "alphas" : ["LHEPdfWeightAltSet24[0]", "LHEPdfWeightAltSet24[108]", "LHEPdfWeightAltSet24[111]"],
-        # 105-111 - are the alphas small range vars: 
-        # mem = 0 => default fit alpha_S(M_Z) = 0.118; mem=1-6 => alpha_S(M_Z) = 0.114, 0.115, 0.116, 0.117, 0.119, 0.120
-        "alphasRange" : "002", 
+        "alphasRange" : "002",
     },
     "ct18z" : {
-        # This has CT18 + CT18Z in it :-/
         "name" : "pdfCT18Z",
-        "branch" : "LHEPdfWeightAltSet18",
+        "branch" : "LHEPdfWeightAltSet11",
         "combine" : "asymHessian",
         "entries" : 59,
         "first_entry" : 63,
-        "alphas" : ["LHEPdfWeightAltSet18[63]", "LHEPdfWeightAltSet18[122]", "LHEPdfWeightAltSet18[123]"],
+        "alphas" : ["LHEPdfWeightAltSet11[63]", "LHEPdfWeightAltSet11[122]", "LHEPdfWeightAltSet11[125]"],
         "alphasRange" : "002",
         "scale" : 1/1.645 # Convert from 90% CL to 68%
     },
@@ -108,9 +103,9 @@ pdfMap = {
         "name" : "pdfATLASWZJ20",
         "branch" : "LHEPdfWeightAltSet19",
         "combine" : "asymHessian",
-        "entries" : 33,
+        "entries" : 60,
         "alphas" : ["LHEPdfWeight[0]", "LHEPdfWeight[41]", "LHEPdfWeight[42]"],
-        "alphasRange" : "002", # TODO: IS that true?
+        "alphasRange" : "002",
     },
     "herapdf20" : {
         "name" : "pdfHERAPDF20",
@@ -427,7 +422,8 @@ def define_central_pdf_weight(df, dataset_name, pdf):
     if not pdfBranch in df.GetColumnNames():
         logger.warning(f"Did not find PDF branch {pdfBranch} for sample {dataset_name}! Set PDF weights to 1")
         return df.DefinePerSample("central_pdf_weight", "1.0")
-    return df.Define("central_pdf_weight", f"std::clamp<float>({pdfBranch}[0], -theory_weight_truncate, theory_weight_truncate)")
+    first_entry = pdfInfo.get("first_entry", 0)
+    return df.Define("central_pdf_weight", f"std::clamp<float>({pdfBranch}[{first_entry}], -theory_weight_truncate, theory_weight_truncate)")
 
 def define_theory_weights_and_corrs(df, dataset_name, helpers, args):
     if not 'powheg' in dataset_name:
