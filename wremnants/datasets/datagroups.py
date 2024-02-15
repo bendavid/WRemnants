@@ -1,5 +1,6 @@
 from utilities import boostHistHelpers as hh,common,logging
 from utilities.io_tools import input_tools
+from utilities.styles import styles
 import lz4.frame
 import pickle
 import h5py
@@ -132,6 +133,23 @@ class Datagroups(object):
 
         # remove duplicates selected by multiple filters
         return list(set(new_groupnames))
+
+    def mergeGroups(self, groups, new_name):
+        groups_to_merge=[]
+        for g in groups:
+            if g in self.groups:
+                groups_to_merge.append(g)
+            else:
+                logger.warning(f"Did not find group {g}. continue without merging it to new group {new_name}.")
+        if len(groups_to_merge) < 1:
+            logger.warning(f"No groups to be merged. continue without merging.")
+        if new_name != groups_to_merge[0]:
+            self.copyGroup(groups_to_merge[0], new_name)
+        self.groups[new_name].label = styles.process_labels.get(new_name, new_name)
+        self.groups[new_name].color = styles.process_colors.get(new_name, "grey")
+        for group in groups_to_merge[1:]:            
+            self.groups[new_name].addMembers(self.groups[group].members, member_operations=self.groups[group].memberOp)
+        self.deleteGroups([g for g in groups_to_merge if g != new_name])
 
     def filterGroups(self, filters):
         if filters is None:

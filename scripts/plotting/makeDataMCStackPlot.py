@@ -40,7 +40,7 @@ parser.add_argument("--noRatioErr", action='store_false', dest="ratioError", hel
 parser.add_argument("--selection", type=str, help="Specify custom selections as comma seperated list (e.g. '--selection passIso=0,passMT=1' )")
 parser.add_argument("--presel", type=str, nargs="*", default=[], help="Specify custom selections on input histograms to integrate some axes, giving axis name and min,max (e.g. '--presel pt=ptmin,ptmax' ) or just axis name for bool axes")
 parser.add_argument("--normToData", action='store_true', help="Normalize MC to data")
-parser.add_argument("--mergeGroups", type=str, nargs="*", default=[], help="List of new names followed by '+' and ',' separated groups to be merged e.g. 'Zmumu=Zmumu,DYlowMass'")
+parser.add_argument("--fineGroups", action='store_true', help="Plot each group as a separate process, otherwise combine groups based on predefined dictionary")
 
 subparsers = parser.add_subparsers(dest="variation")
 variation = subparsers.add_parser("variation", help="Arguments for adding variation hists")
@@ -81,16 +81,12 @@ outdir = output_tools.make_plot_dir(args.outpath, args.outfolder, eoscp=args.eos
 
 groups = Datagroups(args.infile, filterGroups=args.procFilters, excludeGroups=None if args.procFilters else ['QCD'])
 
-for mgroups in args.mergeGroups:
-    new_name, old_groupstring = mgroups.split("=")
-    old_groups = old_groupstring.split(",")
-    if new_name != old_groups[0]:
-        groups.copyGroup(old_groups[0], new_name)
-    groups.groups[new_name].label = styles.process_labels.get(new_name, new_name)
-    groups.groups[new_name].color = styles.process_colors.get(new_name, "grey")
-    for old_group in old_groups[1:]:
-        groups.groups[new_name].addMembers(groups.groups[old_group].members, member_operations=groups.groups[old_group].memberOp)
-    groups.deleteGroups([g for g in old_groups if g != new_name])
+if not args.fineGroups:
+    if groups.mode in styles.process_supergroups:
+        for new_name, old_groups in styles.process_supergroups[groups.mode].items():
+            groups.mergeGroups(old_groups, new_name)
+    else:
+        logger.warning(f"No supergroups found for input file with mode {groups.mode}, proceed without merging groups")
 
 # There is probably a better way to do this but I don't want to deal with it
 datasets = groups.getNames()

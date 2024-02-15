@@ -2,6 +2,8 @@
 process_colors = {
     "Data": "black",
     "Zmumu": "#5790FC",
+    "Z": "#5790FC",
+    "Zll": "#5790FC",
     "Zee": "#5790FC",
     "Ztautau": "#7A21DD",
     "Wmunu": "#E42536",
@@ -19,10 +21,28 @@ process_colors = {
     "Fake_mu": "#9C9CA1",
 }
 
+process_supergroups = {
+    "wmass":{
+        "Z": ["Ztautau", "Zmumu", "DYlowMass"],
+        "Rare": ["PhotonInduced", "Top", "Diboson"],
+    },
+    "dilepton":{
+        "Other": ["Other","PhotonInduced", "Ztautau"],
+    },
+    "lowpu_w":{
+        "Z": ["Ztautau", "Zmumu", "Zee", "DYlowMass"],
+        "Rare": ["PhotonInduced", "Top", "Diboson"],
+    },
+}
+process_supergroups["wlike"]=process_supergroups["dilepton"]
+process_supergroups["lowpu_z"]=process_supergroups["dilepton"]
+
 process_labels = {
     "Data": "Data",
     "Zmumu": r"Z$\to\mu\mu$",
     "Zee": r"Z$\to ee$",
+    "Zll": r"Z$\to\ell\ell$",
+    "Z": r"Z",
     "Ztautau": r"Z$\to\tau\tau$",
     "Wmunu":  r"W$^{\pm}\to\mu\nu$",
     "Wenu": r"W$^{\pm}\to e\nu$",

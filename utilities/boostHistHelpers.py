@@ -312,7 +312,7 @@ def makeAbsHist(h, axis_name, rename=True):
     axInfo = dict(underflow=False, overflow=ax.traits.overflow, name=f"abs{axis_name}" if rename else axis_name)
     if ax.size == 1 and -ax.edges[0] == ax.edges[-1]:
         abs_ax = hist.axis.Regular(1, 0, ax.edges[-1], **axInfo)
-        return hist.Hist(*h.axes[:axidx], abs_ax, *h.axes[axidx+1:], storage=h.storage_type(), data=h.view())
+        return hist.Hist(*h.axes[:axidx], abs_ax, *h.axes[axidx+1:], storage=h.storage_type(), data=h.view(flow=True))
 
     if 0 not in ax.edges:
         raise ValueError("Can't mirror around 0 if it isn't a bin boundary")
@@ -320,7 +320,7 @@ def makeAbsHist(h, axis_name, rename=True):
     hnew = hist.Hist(*h.axes[:axidx], abs_ax, *h.axes[axidx+1:], storage=h.storage_type())
     
     s = hist.tag.Slicer()
-    hnew[...] = h[{axis_name : s[ax.index(0):]}].view() + np.flip(h[{axis_name : s[:ax.index(0)]}].view(), axis=axidx)
+    hnew[...] = h[{axis_name : s[ax.index(0):]}].view(flow=True) + np.flip(h[{axis_name : s[:ax.index(0)]}].view(flow=True), axis=axidx)
     return hnew
 
 # Checks if edges1 could be rebinned to edges2. Order is important!
