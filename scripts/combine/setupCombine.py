@@ -35,6 +35,7 @@ def make_parser(parser=None):
     parser.add_argument("--rebin", type=int, nargs='*', default=[], help="Rebin axis by this value (default, 1, does nothing)")
     parser.add_argument("--absval", type=int, nargs='*', default=[], help="Take absolute value of axis if 1 (default, 0, does nothing)")
     parser.add_argument("--axlim", type=float, default=[], nargs='*', help="Restrict axis to this range (assumes pairs of values by axis, with trailing axes optional)")
+    parser.add_argument("--rebinBeforeSelection", action='store_true', help="Rebin before the selection operation (e.g. before fake rate computation), default if after")
     parser.add_argument("--lumiScale", type=float, default=1.0, help="Rescale equivalent luminosity by this value (e.g. 10 means ten times more data and MC)")
     parser.add_argument("--sumChannels", action='store_true', help="Only use one channel")
     parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
@@ -120,7 +121,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     datagroups = Datagroups(inputFile, excludeGroups=excludeGroup, filterGroups=filterGroup, applySelection= not xnorm and not args.ABCD, simultaneousABCD=args.ABCD)
 
     if not xnorm and (args.axlim or args.rebin or args.absval):
-        datagroups.set_rebin_action(fitvar, args.axlim, args.rebin, args.absval)
+        datagroups.set_rebin_action(fitvar, args.axlim, args.rebin, args.absval, args.rebinBeforeSelection)
 
     wmass = datagroups.mode in ["wmass", "lowpu_w"]
     wlike = datagroups.mode == "wlike"
