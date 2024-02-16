@@ -161,7 +161,6 @@ def common_parser(for_reco_highPU=False):
         default=["scetlib_dyturbo", "winhacnloew", "virtual_ew_wlike", "horaceqedew_FSR", "horacelophotosmecoffew_FSR"], choices=theory_corrections.valid_theory_corrections(), 
         help="Apply corrections from indicated generator. First will be nominal correction.")
     parser.add_argument("--theoryCorrAltOnly", action='store_true', help="Save hist for correction hists but don't modify central weight")
-    parser.add_argument("--widthVariations", action='store_true', help="Store variations of W and Z widths.")
     parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
     parser.add_argument("--eta", nargs=3, type=float, help="Eta binning as 'nbins min max' (only uniform for now)", default=[48,-2.4,2.4])
     parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[30,26.,56.])
