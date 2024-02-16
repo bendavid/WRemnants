@@ -188,6 +188,19 @@ bool hasMatchDR2(const float& eta, const float& phi, const Vec_f& vec_eta, const
 
 }
 
+RVec<Int_t> hasMatchDR2collWithSingle(const RVec<Float_t> &coll1_eta, const RVec<Float_t> &coll1_phi,
+                                      const Float_t &eta, const Float_t &phi,
+                                      const Float_t dr2 = 0.09)
+{
+    RVec<Int_t> resDR(coll1_eta.size(), 0);
+    float tmp_dr = 999.;
+    for(int ic1 = 0; ic1 < coll1_eta.size(); ic1++){
+        tmp_dr = deltaR2(coll1_eta.at(ic1), coll1_phi.at(ic1), eta, phi);
+        if (tmp_dr < dr2) resDR[ic1] = 1;
+    }
+    return resDR;
+}
+
 RVec<int> postFSRLeptonsIdx(RVec<bool> postFSRleptons) {
   RVec<int> v;
   for (unsigned int i=0; i<postFSRleptons.size(); i++) {

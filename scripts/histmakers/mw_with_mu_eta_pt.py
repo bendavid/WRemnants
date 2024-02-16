@@ -417,6 +417,10 @@ def build_graph(df, dataset):
         df = df.Define("ZvetoCondition", "Sum(postfsrMuons_inAcc) >= 2")
         #df = df.Define("N_postfsrMuons_inAcc", "Sum(postfsrMuons_inAcc)")
         #df = df.Filter("ZvetoCondition")
+        # for events with 2 gen muons in acceptance, save pt distribution of second lepton
+        df = df.Define("postfsrMuons_inAcc_vetoed", f"postfsrMuons_inAcc && not wrem::hasMatchDR2collWithSingle(GenPart_eta,GenPart_phi,goodMuons_eta0,goodMuons_phi0,0.09)")
+        df = df.Define("postfsrMuons_inAcc_vetoed_pt0", f"(Sum(postfsrMuons_inAcc_vetoed) > 0) ? GenPart_pt[postfsrMuons_inAcc_vetoed][0] : -99.0")
+        df = df.Define("postfsrMuons_inAcc_vetoed_eta0", f"(Sum(postfsrMuons_inAcc_vetoed) > 0) ? GenPart_eta[postfsrMuons_inAcc_vetoed][0] : -99.0")
 
     if not args.noRecoil:
         leps_uncorr = ["Muon_pt[goodMuons][0]", "Muon_eta[goodMuons][0]", "Muon_phi[goodMuons][0]", "Muon_charge[goodMuons][0]"]
@@ -493,6 +497,10 @@ def build_graph(df, dataset):
         nominal = df.HistoBoost("nominal", axes, [*cols, "nominal_weight"])
         results.append(nominal)
         results.append(df.HistoBoost("nominal_weight", [hist.axis.Regular(200, -4, 4)], ["nominal_weight"], storage=hist.storage.Double()))
+
+        if isZveto:
+            # to test the veto
+            results.append(df.HistoBoost("postfsrMuons_inAcc_vetoed_etapt", [hist.axis.Regular(48, -2.4, 2.4), hist.axis.Regular(80, 0, 80)], ["postfsrMuons_inAcc_vetoed_eta0", "postfsrMuons_inAcc_vetoed_pt0", "nominal_weight"], storage=hist.storage.Double()))
 
         if args.makeMCefficiency:
             cols_WeffMC = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_uT0", "goodMuons_charge0",
