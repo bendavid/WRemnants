@@ -237,7 +237,7 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 2 --yscale 1.5 --baseName MET --hists met -o $WEB_DIR -f $PLOT_DIR $HIST_FILE
 
       - name: wmass plot Wpt
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 1 --yscale 1.5 --baseName ptW --hists recoWpt -o $WEB_DIR -f $PLOT_DIR $HIST_FILE
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --rebin 1 --yscale 1.5 --baseName ptW  --normToData --fineGroups --hists recoWpt -o $WEB_DIR -f $PLOT_DIR $HIST_FILE
 
       - name: wmass plot massShift
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py -p massVariation --yscale 1.4 --hist pt --baseName nominal -r 0.98 1.02 -o $WEB_DIR -f $PLOT_DIR $HIST_FILE variation --varName massWeightW --selectEntries massShiftW100MeVUp massShiftW100MeVDown --varLabel massShift100MeVUp massShift100MeVDown --selectAxis massShift --color grey grey
@@ -510,7 +510,7 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --baseName transverseMass --rebin 2 --hists mt -o $WEB_DIR -f $PLOT_DIR -p wlike $HIST_FILE
 
       - name: wlike plot MET
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --baseName MET --hists MET -o $WEB_DIR -f $PLOT_DIR -p wlike $HIST_FILE
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --baseName MET --hists MET --fineGroups -o $WEB_DIR -f $PLOT_DIR -p wlike $HIST_FILE
 
   dilepton-mll:
     # The type of runner that the job will run on
@@ -630,7 +630,7 @@ jobs:
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal --nominalRef nominal --hists ptll -o $WEB_DIR -f $PLOT_DIR -p z $HIST_FILE variation --varName nominal_uncorr --varLabel MiNNLO --colors red
 
       - name: dilepton plotting yll
-        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal_yll --nominalRef nominal_yll --hists yll -o $WEB_DIR -f $PLOT_DIR -p z $HIST_FILE
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal_yll --nominalRef nominal_yll --hists yll --fineGroups -o $WEB_DIR -f $PLOT_DIR -p z $HIST_FILE
 
   gen:
     # The type of runner that the job will run on

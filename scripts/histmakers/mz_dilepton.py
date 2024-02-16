@@ -78,7 +78,7 @@ auxiliary_gen_axes = ["massVgen", # preFSR variables
 
 for a in args.axes:
     if a not in all_axes.keys():
-        logger.error(f" {a} is not a known axes! Supported axes choices are {list(axes.keys())}")
+        logger.error(f" {a} is not a known axes! Supported axes choices are {list(all_axes.keys())}")
 
 nominal_cols = args.axes
 
