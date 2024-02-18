@@ -261,8 +261,8 @@ def extendHistByMirror(hvar, hnom, downAsUp=False, downAsNomi=False):
 def addGenChargeAxis(h, idx):
     return addGenericAxis(h, hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "qGen"), idx, add_trailing=False, flow=True)
     
-def addSystAxis(h, size=1, offset=0):
-    return addGenericAxis(h, hist.axis.Regular(size,offset,size+offset, name="systIdx"))
+def addSystAxis(h, size=1, offset=0, axname="systIdx"):
+    return addGenericAxis(h, hist.axis.Regular(size,offset,size+offset, name=axName))
 
 def addGenericAxis(h, axis, idx=None, add_trailing=True, flow=True):
     axes = [*h.axes, axis] if add_trailing else [axis, *h.axes]
