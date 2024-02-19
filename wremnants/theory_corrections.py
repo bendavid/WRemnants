@@ -41,7 +41,7 @@ def load_corr_helpers(procs, generators, make_tensor=True, base_dir=f"{common.da
                 corr_helpers[proc][generator] = makeCorrectionsTensor(corrh, weighted_corr=generator in theory_tools.theory_corr_weight_map)
     for generator in generators:
         if not any([generator in corr_helpers[proc] for proc in procs]):
-            raise ValueError(f"Did not find correction for generator {generator} for any processes!")
+            logger.warning(f"Did not find correction for generator {generator} for any processes!")
     return corr_helpers
 
 def make_corr_helper_fromnp(filename=f"{common.data_dir}/N3LLCorrections/inclusive_{{process}}_pT.npz", isW=True):

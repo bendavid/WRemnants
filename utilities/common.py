@@ -119,7 +119,7 @@ def set_parser_default(parser, argument, newDefault):
 def common_parser(for_reco_highPU=False):
 
     parser = argparse.ArgumentParser()
-    parser.add_argument("-j", "--nThreads", type=int, help="number of threads")
+    parser.add_argument("-j", "--nThreads", type=int, default=0, help="number of threads (0 or negative values use all available threads)")
     parser.add_argument("-v", "--verbose", type=int, default=3, choices=[0,1,2,3,4],
                         help="Set verbosity level with logging, the larger the more verbose")
     parser.add_argument("--noColorLogger", action="store_true", help="Do not use logging with colors")
@@ -130,10 +130,7 @@ def common_parser(for_reco_highPU=False):
     common_logger = logging.setup_logger(__file__, initargs.verbose, initargs.noColorLogger, initName="common_logger_wremnants")
     
     import ROOT
-    if not initargs.nThreads:
-        ROOT.ROOT.EnableImplicitMT()
-    elif initargs.nThreads != 1:
-        ROOT.ROOT.EnableImplicitMT(initargs.nThreads)
+    ROOT.ROOT.EnableImplicitMT(max(0,initargs.nThreads))
     import narf
     import wremnants
     from wremnants import theory_corrections,theory_tools

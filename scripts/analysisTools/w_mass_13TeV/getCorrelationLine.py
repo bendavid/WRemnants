@@ -43,7 +43,7 @@ if __name__ == "__main__":
     parser.add_argument('-p','--param',  default='', type=str, help='parameter for which you want to show the correlation matrix. Must be a single object')
     parser.add_argument('-t','--type',   default='hessian', type=str, choices=['toys', 'hessian'], help='which type of input file: toys or hessian (default)')
     parser.add_argument('-m','--matrix', default='', type=str, help='matrix to be used (name is correlation_matrix_channel<matrix>)')
-    parser.add_argument(     '--suffix', default='', type=str, help='suffix for the plotted correlation matrix')
+    parser.add_argument(     '--postfix', default='', type=str, help='suffix for the plotted correlation matrix')
     parser.add_argument(     '--vertical-labels-X', dest='verticalLabelsX', action='store_true', help='Set labels on X axis vertically (sometimes they overlap if rotated)')
     parser.add_argument(     '--title',  default='', type=str, help='Title for matrix. Use 0 to remove title. By default, string passed to option -p is used')
     parser.add_argument('-n','--show-N' , dest='showN',    default=10, type=int, help='Show the N nuisances more correlated (in absolute value) with the parameter given with --param.')
@@ -103,17 +103,17 @@ if __name__ == "__main__":
         corr[label] = abs(bincontent)
         sign[label] = -1 if bincontent < 0 else 1
 
-    #sorted_keys = sorted(corr.items(), key=itemgetter(1), reverse=True)
     sorted_keys = sorted(corr.items(), key=itemgetter(1), reverse=True)
     inum = 1
-    hist = ROOT.TH1D("hist", "", args.showN, 0, args.showN)
+    nToShow = args.showN if args.showN > 0 else len(corr.keys())
+    hist = ROOT.TH1D("hist", "", nToShow, 0, nToShow)
     for key, val in sorted_keys:
         print("%s   %s" % (key, val*sign[key]))
         #hist.GetXaxis().SetBinLabel(inum,niceName(key))
         hist.GetXaxis().SetBinLabel(inum, key)
         hist.SetBinContent(inum, val*sign[key])
         inum += 1        
-        if inum > args.showN: break
+        if inum > nToShow: break
 
     c = ROOT.TCanvas("c","",1200,800)
     c.SetTickx(1)
@@ -151,8 +151,7 @@ if __name__ == "__main__":
 
     if args.outdir:
         for i in ['pdf', 'png']:
-            suff = '' if not args.suffix else '_'+args.suffix
+            suff = '' if not args.postfix else '_'+args.postfix
             c.SaveAs(args.outdir+'/corrLine{suff}_{pn}_{ch}.{i}'.format(suff=suff,i=i,pn=param, ch=args.matrix.replace("channel","")))
-        os.system('cp {pf} {od}'.format(pf='templates/index.php',od=args.outdir))
 
 
