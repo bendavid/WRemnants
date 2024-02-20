@@ -500,7 +500,15 @@ def build_graph(df, dataset):
 
         if isZveto:
             # to test the veto
-            results.append(df.HistoBoost("postfsrMuons_inAcc_vetoed_etapt", [hist.axis.Regular(48, -2.4, 2.4), hist.axis.Regular(80, 0, 80)], ["postfsrMuons_inAcc_vetoed_eta0", "postfsrMuons_inAcc_vetoed_pt0", "nominal_weight"], storage=hist.storage.Double()))
+            results.append(df.HistoBoost("postfsrMuons_inAcc_vetoed_etapt", [hist.axis.Regular(48, -2.4, 2.4, name="genEta"), hist.axis.Regular(80, 0, 80, name="genPt")], ["postfsrMuons_inAcc_vetoed_eta0", "postfsrMuons_inAcc_vetoed_pt0", "nominal_weight"]))
+            df = df.Define("recoFailVetoMuons_corr", "Muon_correctedCharge != -99 && abs(Muon_correctedEta) < 2.4 && (Muon_isGlobal || Muon_isTracker) && not (Muon_looseId && abs(Muon_dxybs) < 0.05)")
+            df = df.Define("recoFailVetoMuons_corr_pt0", "Muon_correctedPt[recoFailVetoMuons_corr][0]")
+            df = df.Define("recoFailVetoMuons_corr_eta0", "Muon_correctedEta[recoFailVetoMuons_corr][0]")
+            results.append(df.HistoBoost("recoFailVetoMuons_corr_etapt", [hist.axis.Regular(48, -2.4, 2.4, name="vetoedMuonEta"), hist.axis.Regular(80, 0, 80, name="vetoedMuonPt")], ["recoFailVetoMuons_corr_eta0", "recoFailVetoMuons_corr_pt0", "nominal_weight"]))
+            df = df.Define("recoFailVetoMuons", "abs(Muon_eta) < 2.4 && (Muon_isGlobal || Muon_isTracker) && not (Muon_looseId && abs(Muon_dxybs) < 0.05)")
+            df = df.Define("recoFailVetoMuons_pt0", "Muon_pt[recoFailVetoMuons][0]")
+            df = df.Define("recoFailVetoMuons_eta0", "Muon_eta[recoFailVetoMuons][0]")
+            results.append(df.HistoBoost("recoFailVetoMuons_etapt", [hist.axis.Regular(48, -2.4, 2.4, name="vetoedMuonEta"), hist.axis.Regular(80, 0, 80, name="vetoedMuonPt")], ["recoFailVetoMuons_eta0", "recoFailVetoMuons_pt0", "nominal_weight"]))
 
         if args.makeMCefficiency:
             cols_WeffMC = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_uT0", "goodMuons_charge0",
