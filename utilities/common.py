@@ -29,7 +29,6 @@ zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS",
     'Zmumu_horace-alpha-fsr-off-isr-off', 'Zmumu_horace-alpha-old-fsr-off-isr-off', 'Zmumu_horace-alpha-old-fsr-off-isr-pythia',
     'Zmumu_renesance-lo', 'Zmumu_renesance-nlo',
           'Zmumu_powheg-lo', 'Zmumu_powheg-nloew-qedveto', 'Zmumu_powheg-nloew',
-          "ZmumuVetoPostVFP", "ZtautauVetoPostVFP"
     ]
 
 vprocs = wprocs+zprocs
@@ -42,7 +41,7 @@ vprocs_lowpu = wprocs_lowpu+zprocs_lowpu
 zprocs_recoil_lowpu = ["Zmumu", "Zee"]
 wprocs_recoil_lowpu = ["Wminusmunu", "Wminusenu", "Wplusmunu", "Wplusenu"]
 
-background_MCprocs = ["Top", "Diboson", "QCD", "DYlowMass", "DYlowMassVeto"]
+background_MCprocs = ["Top", "Diboson", "QCD", "DYlowMass"]
 zprocs_all = zprocs_lowpu+zprocs
 wprocs_all = wprocs_lowpu+wprocs
 vprocs_all = vprocs_lowpu+vprocs
@@ -161,7 +160,6 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--theoryCorr", nargs="*", type=str, action=NoneFilterAction,
         default=["scetlib_dyturbo", "winhacnloew", "virtual_ew_wlike", "horaceqedew_FSR", "horacelophotosmecoffew_FSR"], choices=theory_corrections.valid_theory_corrections(), 
         help="Apply corrections from indicated generator. First will be nominal correction.")
-    parser.add_argument("--allowMissingTheoryCorr", action='store_true', help="To allow the histmaker to run on subset of processes, for which some generators passed to --theoryCorr may not exist (to avoid having to specify --theoryCorr to change the default)")
     parser.add_argument("--theoryCorrAltOnly", action='store_true', help="Save hist for correction hists but don't modify central weight")
     parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
     parser.add_argument("--eta", nargs=3, type=float, help="Eta binning as 'nbins min max' (only uniform for now)", default=[48,-2.4,2.4])
@@ -171,7 +169,6 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--recoilUnc", action='store_true', help="Run the recoil calibration with uncertainties (slower)")
     parser.add_argument("--highptscales", action='store_true', help="Apply highptscales option in MiNNLO for better description of data at high pT")
     parser.add_argument("--dataPath", type=str, default=None, help="Access samples from this path (default reads from local machine), for eos use 'root://eoscms.cern.ch//store/cmst3/group/wmass/w-mass-13TeV/NanoAOD/'")
-    parser.add_argument("--bkgSampleSubPath", type=str, default="BKGV9", choices=["", "BKGV9"], help="Specify subfolder where backgrounds are stored (none for new samples, old ones are in BKGV9)")
     parser.add_argument("--noVertexWeight", action='store_true', help="Do not apply reweighting of vertex z distribution in MC to match data")
     parser.add_argument("--validationHists", action='store_true', help="make histograms used only for validations")
     parser.add_argument("--onlyMainHistograms", action='store_true', help="Only produce some histograms, skipping (most) systematics to run faster when those are not needed")

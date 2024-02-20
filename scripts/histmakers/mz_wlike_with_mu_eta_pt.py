@@ -237,7 +237,7 @@ def build_graph(df, dataset):
 
     if not args.onlyMainHistograms:
         # plot reco vertex distribution before and after PU reweigthing
-        # also remove vertex weights since they depend in PU
+        # also remove vertex weights since they depend on PU
         if dataset.is_data:
             df = df.DefinePerSample("nominal_weight_noPUandVtx", "1.0")
         else:

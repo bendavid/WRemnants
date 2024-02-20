@@ -193,7 +193,7 @@ bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibrat
 
 procsWithTheoryCorr = [d.name for d in datasets if d.name in common.vprocs]
 if len(procsWithTheoryCorr):
-    corr_helpers = theory_corrections.load_corr_helpers(procsWithTheoryCorr, args.theoryCorr, allowMissingTheoryCorr=args.allowMissingTheoryCorr)
+    corr_helpers = theory_corrections.load_corr_helpers(procsWithTheoryCorr, args.theoryCorr)
 else:
     corr_helpers = {}
     
@@ -538,7 +538,6 @@ def build_graph(df, dataset):
                 df = syst_tools.add_scaledByCondition_unc_hists(results, df, args, axes, cols, "weight_ZmuonVeto", "ZmuonVeto", "ZvetoCondition", 2.0)
 
             if isZveto:
-                # df = df.Filter("wrem::printVar(N_postfsrMuons_inAcc)")
                 df = syst_tools.add_scaledByCondition_unc_hists(results, df, args, axes, cols, "weight_ZmuonVeto", "ZmuonVeto", "ZvetoCondition", 2.0)
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples (but can still use it for dummy muon scale)
