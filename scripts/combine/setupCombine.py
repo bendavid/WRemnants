@@ -72,7 +72,7 @@ def make_parser(parser=None):
     parser.add_argument("--effStatLumiScale", type=float, default=None, help="Rescale equivalent luminosity for efficiency stat uncertainty by this value (e.g. 10 means ten times more data from tag and probe)")
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
     parser.add_argument("--isoEfficiencySmoothing", action='store_true', help="If isolation SF was derived from smooth efficiencies instead of direct smoothing")
-    parser.add_argument("--scaleZmuonVeto", default=1, type=float, help="Scale the second muon veto uncertainties by this factor")
+    parser.add_argument("--scaleZmuonVeto", default=1, type=float, help="Scale the second muon veto uncertainties by this factor for Wmass")
     # pseudodata
     parser.add_argument("--pseudoData", type=str, nargs="+", help="Histograms to use as pseudodata")
     parser.add_argument("--pseudoDataAxes", type=str, nargs="+", default=[None], help="Variation axes to use as pseudodata for each of the histograms")
@@ -128,10 +128,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
     dilepton = "dilepton" in datagroups.mode or any(x in ["ptll", "mll"] for x in fitvar)
 
     simultaneousABCD = wmass and args.ABCD and not xnorm
-    constrainMass = (dilepton and not "mll" in fitvar) or args.fitXsec 
-
-    if not wmass and args.scaleZmuonVeto:
-        raise ValueError("Option --scaleZmuonVeto was specified, but it only applies to wmass analysis. Please check")
+    constrainMass = (dilepton and not "mll" in fitvar) or args.fitXsec
 
     if wmass:
         base_group = "Wenu" if datagroups.flavor == "e" else "Wmunu"
@@ -644,23 +641,37 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                 systAxes=["downUpVar"],
                                 labelsByAxis=["downUpVar"],
                                 passToFakes=passSystToFakes)
-        # might also decorrelate vs eta bins
-        decorrVetoDict = {
-            "x" : {
-                "label" : "eta",
-                "edges": [round(-2.4+i*0.1,1) for i in range(49)]
-            }
-        }
-        cardTool.addSystematic("ZmuonVeto",
-                               processes=['Zveto_samples'],
-                               group="ZmuonVeto",
-                               mirror=True,
-                               systAxes=[],
-                               outNames=["ZmuonVetoDown", "ZmuonVetoUp"],
-                               passToFakes=passSystToFakes,
-                               scale=args.scaleZmuonVeto,
-                               decorrelateByBin=decorrVetoDict
-                               )
+        ## TODO: implement second lepton veto for low PU (both electrons and muons)
+        if not lowPU:
+            # eta decorrelated nuisances
+            cardTool.addSystematic("ZmuonVeto",
+                                   processes=['Zveto_samples'],
+                                   group="ZmuonVeto",
+                                   mirror=True,
+                                   passToFakes=passSystToFakes,
+                                   scale=args.scaleZmuonVeto,
+                                   baseName="ZmuonVeto_",
+                                   systAxes=["decorrEta"],
+                                   labelsByAxis=["decorrEta"],
+                                   actionRequiresNomi=True,
+                                   action=syst_tools.decorrelateByAxis,
+                                   actionArgs=dict(axisToDecorrName="eta",
+                                                   # empty array automatically uses all edges of the axis named "axisToDecorrName"
+                                                   # decorrEdges=[round(-2.4+i*0.1,1) for i in range(49)],
+                                                   decorrEdges=[], 
+                                                   newDecorrAxisName="decorrEta"
+                                                   )
+                                   )
+            # add also the fully inclusive systematic uncertainty, which is not kept in the previous step
+            cardTool.addSystematic("ZmuonVeto",
+                                   processes=['Zveto_samples'],
+                                   group="ZmuonVeto",
+                                   rename=f"ZmuonVeto_inclusive",
+                                   baseName="ZmuonVeto_inclusive",
+                                   mirror=True,
+                                   passToFakes=passSystToFakes,
+                                   scale=args.scaleZmuonVeto,
+                                   )
 
     else:
         cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15, group="CMS_background")
@@ -688,13 +699,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
                     mirrorDownVarEqualToNomi=False
                     groupName = "muon_eff_syst"
                     splitGroupDict = {f"{groupName}_{x}" : f".*effSyst.*{x}" for x in list(effTypesNoIso + ["iso"])}
-                    # decorrDictEff = {                        
-                    #     "x" : {
-                    #         "label" : "eta",
-                    #         "edges": [round(-2.4+i*0.1,1) for i in range(49)]
-                    #     }
-                    # }
-
                 else:
                     nameReplace = [] if any(x in name for x in chargeDependentSteps) else [("q0", "qall")] # for iso change the tag id with another sensible label
                     mirror = True
@@ -724,7 +728,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
                     systNameReplace=nameReplace,
                     scale=scale,
                     splitGroup=splitGroupDict,
-                    decorrelateByBin = {}
                 )
         else:
             if datagroups.flavor in ["mu", "mumu"]:

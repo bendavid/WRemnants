@@ -40,6 +40,7 @@ parser.add_argument("--noTrigger", action="store_true", help="Just for test: rem
 parser.add_argument("--theoryAgnosticPolVar", action='store_true', help="Prepare variations from polynomials")
 parser.add_argument("--theoryAgnosticFileTag", type=str, default="x0p40_y3p50_V4", choices=["x0p30_y3p00_V4", "x0p40_y3p50_V4", "x0p30_y3p00_V5", "x0p40_y3p50_V6"], help="Tag for input files")
 parser.add_argument("--theoryAgnosticSplitOOA", action='store_true', help="Define out-of-acceptance signal template as an independent process")
+
 args = parser.parse_args()
 
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
@@ -415,12 +416,6 @@ def build_graph(df, dataset):
     if isZveto:
         df = df.Define("postfsrMuons_inAcc", f"postfsrMuons && abs(GenPart_eta) < 2.4 && GenPart_pt > {args.vetoGenPartPt}")
         df = df.Define("ZvetoCondition", "Sum(postfsrMuons_inAcc) >= 2")
-        #df = df.Define("N_postfsrMuons_inAcc", "Sum(postfsrMuons_inAcc)")
-        #df = df.Filter("ZvetoCondition")
-        # for events with 2 gen muons in acceptance, save pt distribution of second lepton
-        df = df.Define("postfsrMuons_inAcc_vetoed", f"postfsrMuons_inAcc && not wrem::hasMatchDR2collWithSingle(GenPart_eta,GenPart_phi,goodMuons_eta0,goodMuons_phi0,0.09)")
-        df = df.Define("postfsrMuons_inAcc_vetoed_pt0", f"(Sum(postfsrMuons_inAcc_vetoed) > 0) ? GenPart_pt[postfsrMuons_inAcc_vetoed][0] : -99.0")
-        df = df.Define("postfsrMuons_inAcc_vetoed_eta0", f"(Sum(postfsrMuons_inAcc_vetoed) > 0) ? GenPart_eta[postfsrMuons_inAcc_vetoed][0] : -99.0")
 
     if not args.noRecoil:
         leps_uncorr = ["Muon_pt[goodMuons][0]", "Muon_eta[goodMuons][0]", "Muon_phi[goodMuons][0]", "Muon_charge[goodMuons][0]"]
@@ -498,8 +493,12 @@ def build_graph(df, dataset):
         results.append(nominal)
         results.append(df.HistoBoost("nominal_weight", [hist.axis.Regular(200, -4, 4)], ["nominal_weight"], storage=hist.storage.Double()))
 
-        if isZveto:
+        if isZveto and auxiliary_histograms:
             # to test the veto
+            # for events with 2 gen muons in acceptance, save pt distribution of second lepton
+            df = df.Define("postfsrMuons_inAcc_vetoed", f"postfsrMuons_inAcc && not wrem::hasMatchDR2collWithSingle(GenPart_eta,GenPart_phi,goodMuons_eta0,goodMuons_phi0,0.09)")
+            df = df.Define("postfsrMuons_inAcc_vetoed_pt0", f"(Sum(postfsrMuons_inAcc_vetoed) > 0) ? GenPart_pt[postfsrMuons_inAcc_vetoed][0] : -99.0")
+            df = df.Define("postfsrMuons_inAcc_vetoed_eta0", f"(Sum(postfsrMuons_inAcc_vetoed) > 0) ? GenPart_eta[postfsrMuons_inAcc_vetoed][0] : -99.0")
             results.append(df.HistoBoost("postfsrMuons_inAcc_vetoed_etapt", [hist.axis.Regular(48, -2.4, 2.4, name="genEta"), hist.axis.Regular(80, 0, 80, name="genPt")], ["postfsrMuons_inAcc_vetoed_eta0", "postfsrMuons_inAcc_vetoed_pt0", "nominal_weight"]))
             df = df.Define("recoFailVetoMuons_corr", "Muon_correctedCharge != -99 && abs(Muon_correctedEta) < 2.4 && (Muon_isGlobal || Muon_isTracker) && not (Muon_looseId && abs(Muon_dxybs) < 0.05)")
             df = df.Define("recoFailVetoMuons_corr_pt0", "Muon_correctedPt[recoFailVetoMuons_corr][0]")
@@ -535,6 +534,8 @@ def build_graph(df, dataset):
             df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, axes, cols)
             # luminosity, as shape variation despite being a flat scaling to facilitate propagation to fakes
             df = syst_tools.add_luminosity_unc_hists(results, df, args, axes, cols)
+            if isZveto:
+                df = syst_tools.add_scaledByCondition_unc_hists(results, df, args, axes, cols, "weight_ZmuonVeto", "ZmuonVeto", "ZvetoCondition", 2.0)
 
             if isZveto:
                 # df = df.Filter("wrem::printVar(N_postfsrMuons_inAcc)")
