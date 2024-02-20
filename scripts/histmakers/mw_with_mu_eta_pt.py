@@ -38,6 +38,7 @@ parser.add_argument("--noTrigger", action="store_true", help="Just for test: rem
 #
 # TEST
 parser.add_argument("--theoryAgnosticPolVar", action='store_true', help="Prepare variations from polynomials")
+parser.add_argument("--theoryAgnosticFilePath", type=str, default=".", help="Path where input files are stored")
 parser.add_argument("--theoryAgnosticFileTag", type=str, default="x0p40_y3p50_V4", choices=["x0p30_y3p00_V4", "x0p40_y3p50_V4", "x0p30_y3p00_V5", "x0p40_y3p50_V6"], help="Tag for input files")
 parser.add_argument("--theoryAgnosticSplitOOA", action='store_true', help="Define out-of-acceptance signal template as an independent process")
 
@@ -199,8 +200,8 @@ else:
     
 # For polynominal variations
 if args.theoryAgnosticPolVar:
-    theoryAgnostic_helpers_minus = wremnants.makehelicityWeightHelper_polvar(genVcharge=-1, fileTag=args.theoryAgnosticFileTag)
-    theoryAgnostic_helpers_plus  = wremnants.makehelicityWeightHelper_polvar(genVcharge=1,  fileTag=args.theoryAgnosticFileTag)
+    theoryAgnostic_helpers_minus = wremnants.makehelicityWeightHelper_polvar(genVcharge=-1, fileTag=args.theoryAgnosticFileTag, filePath=args.theoryAgnosticFilePath)
+    theoryAgnostic_helpers_plus  = wremnants.makehelicityWeightHelper_polvar(genVcharge=1,  fileTag=args.theoryAgnosticFileTag, filePath=args.theoryAgnosticFilePath)
 
 # recoil initialization
 if not args.noRecoil:
