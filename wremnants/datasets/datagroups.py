@@ -22,7 +22,7 @@ logger = logging.child_logger(__name__)
 
 class Datagroups(object):
 
-    def __init__(self, infile, mode=None, **kwargs):
+    def __init__(self, infile, mode=None, forceLumi=None, **kwargs):
         self.h5file = None
         self.rtfile = None
         if infile.endswith(".pkl.lz4"):
@@ -80,12 +80,16 @@ class Datagroups(object):
 
         make_datagroups(self, **kwargs)
 
-        self.lumi = sum([value.get("lumi", 0) for key, value in self.results.items()])
-        if self.lumi > 0:
-            logger.info(f"Integrated luminosity from data: {self.lumi}/fb")
+        if forceLumi is not None:
+            self.lumi = forceLumi
+            logger.warning(f"Integrated luminosity forced to be: {self.lumi}/fb (regardless what is in real data)")
         else:
-            self.lumi = 1
-            logger.warning(f"No data process was selected, normalizing MC to {self.lumi }/fb")
+            self.lumi = sum([value.get("lumi", 0) for key, value in self.results.items()])
+            if self.lumi > 0:
+                logger.info(f"Integrated luminosity from data: {self.lumi}/fb")
+            else:
+                self.lumi = 1
+                logger.warning(f"No data process was selected, normalizing MC to {self.lumi }/fb")
 
     def get_members_from_results(self, startswith=[], not_startswith=[], is_data=False):
         dsets = {k: v for k, v in self.results.items() if type(v) == dict and "dataset" in v}
