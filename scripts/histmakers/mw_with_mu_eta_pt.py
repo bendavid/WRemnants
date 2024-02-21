@@ -537,9 +537,6 @@ def build_graph(df, dataset):
             df = syst_tools.add_luminosity_unc_hists(results, df, args, axes, cols)
             if isZveto:
                 df = syst_tools.add_scaledByCondition_unc_hists(results, df, args, axes, cols, "weight_ZmuonVeto", "ZmuonVeto", "ZvetoCondition", 2.0)
-
-            if isZveto:
-                df = syst_tools.add_scaledByCondition_unc_hists(results, df, args, axes, cols, "weight_ZmuonVeto", "ZmuonVeto", "ZvetoCondition", 2.0)
         # n.b. this is the W analysis so mass weights shouldn't be propagated
         # on the Z samples (but can still use it for dummy muon scale)
 
