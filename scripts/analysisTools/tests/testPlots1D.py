@@ -123,7 +123,10 @@ if __name__ == "__main__":
     canvas1D = ROOT.TCanvas("canvas1D", "", 800, 900)
     canvas2D = ROOT.TCanvas("canvas2D", "", 900, 800)
 
-    groups = Datagroups(fname, forceLumi=args.lumi)
+    groups = Datagroups(fname)
+    if args.lumi:
+        groups.lumi = args.lumi
+        logger.warning(f"Renormalizing MC to {args.lumi}/fb")
     datasets = groups.getNames()
     if args.processes is not None and len(args.processes):
         datasets = list(filter(lambda x: x in args.processes, datasets))
