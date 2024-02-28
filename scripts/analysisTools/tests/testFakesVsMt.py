@@ -933,10 +933,15 @@ def runStudy(fname, charges, mainOutputFolder, args):
             lowEdge, highEdge = map(int, args.mtNominalRange.split(','))
             binStart = histoPassIso.GetZaxis().FindFixBin(lowEdge)
             binEnd = histoPassIso.GetZaxis().FindFixBin(highEdge+0.001) - 1 # bin up edges belong to "next" bin
+            # apply maxPt selection before unrolling
+            if args.maxPt > 0:
+                histoPassIso.GetYaxis().SetRange(1, h2PassIso.GetYaxis().FindFixBin(args.maxPt+0.001) - 1)
+                histoFailIso.GetYaxis().SetRange(1, h2PassIso.GetYaxis().FindFixBin(args.maxPt+0.001) - 1)
             h2PassIso = getTH2fromTH3(histoPassIso, f"pt_eta_nominalmt{lowEdge}to{highEdge}_passIso", binStart, binEnd)
             h2FailIso = getTH2fromTH3(histoFailIso, f"pt_eta_nominalmt{lowEdge}to{highEdge}_failIso", binStart, binEnd)
             cropNegativeContent(h2PassIso)
             cropNegativeContent(h2FailIso)
+            
             nominalFakerateFactor = h2PassIso.Clone(f"nominalFakerateFactor_mt{lowEdge}to{highEdge}")
             nominalFakerateFactor.SetTitle("%s m_{T} #in [%d, %d]" % (args.met, lowEdge, highEdge))        
             nominalFakerateFactor.Divide(h2FailIso)
@@ -984,14 +989,12 @@ def runStudy(fname, charges, mainOutputFolder, args):
         ptLow = round(0.01 + h2PassIso.GetYaxis().GetBinLowEdge(1), 1)
         ptHigh = round(0.01 + h2PassIso.GetYaxis().GetBinLowEdge(1+h2PassIso.GetNbinsY()), 1)
 
-        if args.maxPt > 0:
-            nPtBins = min(h2PassIso.GetNbinsY(), max(1, h2PassIso.GetYaxis().FindFixBin(args.maxPt-0.001)))
-        else:
-            nPtBins = h2PassIso.GetNbinsY()
-        rangeMaxPt = round(h2PassIso.GetYaxis().GetBinLowEdge(nPtBins+1)+0.01,1)
+        nPtBins = h2PassIso.GetNbinsY()
+        logger.warning(f"hFRFcorr defined with {nPtBins} pt bins from {round(ptLow,1)} to pt = {round(ptLow,1)}")
+
         hFRFcorr = ROOT.TH2D(f"fakerateFactorCorrection_{charge}", "%s m_{T} > %d GeV" % (args.met, int(args.mtNominalRange.split(',')[1])),
                                      h2PassIso.GetNbinsX(), round(etaLow,1), round(etaHigh,1),
-                                     nPtBins, round(ptLow,1), rangeMaxPt)
+                                     nPtBins, round(ptLow,1), round(ptLow,1))
         #hFRFcorrTestCap = copy.deepcopy(hFRFcorr.Clone(f"fakerateFactorCorrTestCap_{charge}"))
         if args.fitPolDegree == 1:
             histoChi2diffTest = ROOT.TH1D(f"histoChi2diffTest_{charge}", "Probability(#chi^{2}_{0} - #chi^{2}_{1})", 10, 0, 1)
@@ -1200,12 +1203,16 @@ def runStudy(fname, charges, mainOutputFolder, args):
 
         # now add plot to test FRF with correction compared to FRF measured before in high mt region
         #
+        logger.warning(f"nomi_unrolled defined with {nomi_unrolled.GetNbinsX()} eta-pt bins")
+        
         nomiFRFwithCorr_unrolled = copy.deepcopy(nomi_unrolled.Clone(f"nomiFRFwithCorr_unrolled_{charge}"))
         nomiFRFwithCorr_unrolled.Reset("ICESM")
         for i in range(1, 1+ nomiFRFwithCorr_unrolled.GetNbinsX()):
             nomiFRFwithCorr_unrolled.SetBinContent(i, nomi_unrolled.GetBinContent(i))
             nomiFRFwithCorr_unrolled.SetBinError(i, hUnityAndUnc.GetBinError(i))
         nomiFRFwithCorr_unrolled.Multiply(nomiFRF_unrolled)
+        logger.warning(f"nomiFRFwithCorr_unrolled defined with {nomiFRFwithCorr_unrolled.GetNbinsX()} eta-pt bins")
+        logger.warning(f"nomiFRF_unrolled defined with {nomiFRF_unrolled.GetNbinsX()} eta-pt bins")
 
         drawNTH1([highMtFRF_unrolled, nomiFRF_unrolled, nomiFRFwithCorr_unrolled],
                  [highMtFakerateFactor.GetTitle(), nominalFakerateFactor.GetTitle(), f"{nominalFakerateFactor.GetTitle()} with FRF corr"], 
