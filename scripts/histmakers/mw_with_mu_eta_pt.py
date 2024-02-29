@@ -316,7 +316,7 @@ def build_graph(df, dataset):
     df = muon_calibration.define_corrected_muons(df, cvh_helper, jpsi_helper, args, dataset, smearing_helper, bias_helper)
 
     df = muon_selections.select_veto_muons(df, nMuons=1)
-    df = muon_selections.select_good_muons(df, 24, 100, dataset.group, nMuons=1, use_trackerMuons=args.trackerMuons, use_isolation=False)
+    df = muon_selections.select_good_muons(df, 0, 100, dataset.group, nMuons=1, use_trackerMuons=args.trackerMuons, use_isolation=False)
 
     # the corrected RECO muon kinematics, which is intended to be used as the nominal
     df = muon_calibration.define_corrected_reco_muon_kinematics(df)
@@ -374,6 +374,21 @@ def build_graph(df, dataset):
     # Jet collection actually has a pt threshold of 15 GeV in MiniAOD 
     df = df.Define("goodCleanJetsNoPt", "Jet_jetId >= 6 && (Jet_pt > 50 || Jet_puId >= 4) && abs(Jet_eta) < 2.4 && wrem::cleanJetsFromLeptons(Jet_eta,Jet_phi,Muon_correctedEta[vetoMuons],Muon_correctedPhi[vetoMuons],Electron_eta[vetoElectrons],Electron_phi[vetoElectrons])")
     df = df.Define("passIso", "goodMuons_pfRelIso04_all0 < 0.15")
+    
+    # testing alternate definition of the muon pt for fakes:
+    # if passIso:
+    #     use muon pT
+    # elif a jet is closer than DR=0.4 to muon:
+    #     use jet pt
+    # else:
+    #     use muon pT multiplied by 1+iso
+    # the presence of a jet close to the muon (probably by DR=0.4) should be guaranteed by the index Muon_jetIdx being >= 0
+    
+    # for simplicity redefine the variable goodMuons_pt0, since it is used in many places and moving to a new name is a nightmare
+    df = df.Define("goodMuons_hasJet0", "Muon_jetIdx[goodMuons][0] != -1 ")
+    df = df.Define("goodMuons_jetpt0", "goodMuons_hasJet0 ? Jet_pt[Muon_jetIdx[goodMuons][0]] : goodMuons_pt0")
+    #df = df.Redefine("goodMuons_pt0", "(passIso) ? goodMuons_pt0 : (goodMuons_hasJet0 ? goodMuons_jetpt0 : goodMuons_pt0 * (1.0 + goodMuons_pfRelIso04_all0))")
+    #df = df.Redefine("goodMuons_pt0", "goodMuons_hasJet0 ? goodMuons_jetpt0 : goodMuons_pt0")
 
     ########################################################################
     # define event weights here since they are needed below for some helpers
@@ -436,13 +451,48 @@ def build_graph(df, dataset):
     df = df.Define("deltaPhiMuonMet", "std::abs(wrem::deltaPhi(goodMuons_phi0,MET_corr_rec_phi))")
 
     if auxiliary_histograms: 
-        mTStudyForFakes = df.HistoBoost("mTStudyForFakes", mTStudyForFakes_axes, ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "transverseMass", "passIso", "hasCleanJet", "deltaPhiMuonMet", "nominal_weight"])
-        results.append(mTStudyForFakes)
         if isQCDMC:
             df = df.Define("nJets", "Sum(goodCleanJetsNoPt)")
             df = df.Define("leadjetPt", "(nJets > 0) ? Jet_pt[goodCleanJetsNoPt][0] : 0.0")
             otherStudyForFakes = df.HistoBoost("otherStudyForFakes", otherStudyForFakes_axes, ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "transverseMass", "passIso", "nJets", "leadjetPt", "deltaPhiMuonMet", "nominal_weight"])
             results.append(otherStudyForFakes)
+            # gen match studies
+            df = df.Define("postfsrMuonsStatus1", "GenPart_status == 1 && abs(GenPart_pdgId) == 13")
+            df = df.Define("postfsrMuonsStatus1prompt", "postfsrMuonsStatus1 && (GenPart_statusFlags & 1 || GenPart_statusFlags & (1 << 5))")
+            df = df.Define("postfsrMuonsStatus1notPrompt", "postfsrMuonsStatus1 && !(GenPart_statusFlags & 1 || GenPart_statusFlags & (1 << 5))")
+            #
+            df = df.Define("muonGenMatchStatus1", "wrem::hasMatchDR2(goodMuons_eta0,goodMuons_phi0,GenPart_eta[postfsrMuonsStatus1],GenPart_phi[postfsrMuonsStatus1])")
+            df = df.Define("muonGenMatchStatus1prompt", "wrem::hasMatchDR2(goodMuons_eta0,goodMuons_phi0,GenPart_eta[postfsrMuonsStatus1prompt],GenPart_phi[postfsrMuonsStatus1prompt])")
+            df = df.Define("muonGenMatchStatus1notPrompt", "wrem::hasMatchDR2(goodMuons_eta0,goodMuons_phi0,GenPart_eta[postfsrMuonsStatus1notPrompt],GenPart_phi[postfsrMuonsStatus1notPrompt])")
+            #
+            axis_match = hist.axis.Boolean(name = "hasMatch")
+            etaPtGenMatchStatus1 = df.HistoBoost("etaPtGenMatchStatus1", [axis_eta, axis_pt, axis_match], ["goodMuons_eta0", "goodMuons_pt0", "muonGenMatchStatus1", "nominal_weight"])
+            results.append(etaPtGenMatchStatus1)
+            etaPtGenMatchStatus1prompt = df.HistoBoost("etaPtGenMatchStatus1prompt", [axis_eta, axis_pt, axis_match], ["goodMuons_eta0", "goodMuons_pt0", "muonGenMatchStatus1prompt", "nominal_weight"])
+            results.append(etaPtGenMatchStatus1prompt)
+            etaPtGenMatchStatus1notPrompt = df.HistoBoost("etaPtGenMatchStatus1notPrompt", [axis_eta, axis_pt, axis_match], ["goodMuons_eta0", "goodMuons_pt0", "muonGenMatchStatus1notPrompt", "nominal_weight"])
+            results.append(etaPtGenMatchStatus1notPrompt)
+            ### gen mT and reco mT
+            df = df.Define("transverseMass_genMetRecoMuon", "wrem::mt_2(goodMuons_pt0, goodMuons_phi0, GenMET_pt, GenMET_phi)")
+            axis_genmt = hist.axis.Regular(120, 0., 120., name = "genMt", underflow=False, overflow=True)
+            axis_recomet = hist.axis.Regular(120, 0., 120., name = "recoMet", underflow=False, overflow=True)
+            axis_genmet = hist.axis.Regular(120, 0., 120., name = "genMet", underflow=False, overflow=True)
+            etaPtMtGenMt = df.HistoBoost("etaPtMtGenMt", [axis_eta, axis_pt, axis_mt_fakes, axis_genmt, axis_passIso], ["goodMuons_eta0", "goodMuons_pt0", "transverseMass", "transverseMass_genMetRecoMuon", "passIso", "nominal_weight"])
+            results.append(etaPtMtGenMt)
+            etaPtMetGenMet = df.HistoBoost("etaPtMetGenMet", [axis_eta, axis_pt, axis_recomet, axis_genmet, axis_passIso], ["goodMuons_eta0", "goodMuons_pt0", "MET_corr_rec_pt", "GenMET_pt", "passIso", "nominal_weight"])
+            results.append(etaPtMetGenMet)
+            #
+            muonHasJet = df.HistoBoost("muonHasJet", [hist.axis.Regular(2,-0.5,1.5,name="hasJet"), hist.axis.Regular(2,-0.5,1.5,name="passIsolation")], ["goodMuons_hasJet0", "passIso", "nominal_weight"])
+            results.append(muonHasJet)
+            # add a cut to a new branch of the dataframe
+            dfalt = df.Filter("goodMuons_hasJet0")
+            axis_jetpt = hist.axis.Regular(template_npt, template_minpt, template_maxpt, name = "jetpt", overflow=False, underflow=False)
+            muonPtVsJetPt = dfalt.HistoBoost("muonPtVsJetPt", [axis_pt, axis_jetpt, axis_passIso], ["goodMuons_pt0", "goodMuons_jetpt0", "passIso", "nominal_weight"])
+            results.append(muonPtVsJetPt)
+        ###
+        #df = df.Filter("muonGenMatchStatus1prompt == 0")
+        mTStudyForFakes = df.HistoBoost("mTStudyForFakes", mTStudyForFakes_axes, ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "transverseMass", "passIso", "hasCleanJet", "deltaPhiMuonMet", "nominal_weight"])
+        results.append(mTStudyForFakes)
 
     # add filter of deltaPhi(muon,met) before other histograms (but after histogram mTStudyForFakes)
     if not args.makeMCefficiency:
