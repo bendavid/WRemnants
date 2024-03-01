@@ -51,7 +51,7 @@ def make_parser(parser=None):
     parser.add_argument("--npUnc", default="Delta_Lambda", type=str, choices=combine_theory_helper.TheoryHelper.valid_np_models, help="Nonperturbative uncertainty model")
     parser.add_argument("--tnpMagnitude", default=1, type=float, help="Variation size for the TNP")
     parser.add_argument("--scaleTNP", default=12, type=float, help="Scale the TNP uncertainties by this factor")
-    parser.add_argument("--scalePdf", default=1, type=float, help="Scale the PDF hessian uncertainties by this factor")
+    parser.add_argument("--scalePdf", default=1, type=float, help="Scale the PDF hessian uncertainties by this factor (overrides the inflation factor)")
     parser.add_argument("--pdfUncFromCorr", action='store_true', help="Take PDF uncertainty from correction hist (Requires having run that correction)")
     parser.add_argument("--massVariation", type=float, default=100, help="Variation of boson mass")
     parser.add_argument("--ewUnc", type=str, nargs="*", default=["default"], choices=["default","horacenloew", "winhacnloew", "virtual_ew", "virtual_ew_wlike"], help="Include EW uncertainty")
@@ -405,7 +405,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                     rename=f"{nuisanceBaseName}{sign}",
                                     **noi_args,
                                     mirror=False,
-                                    symmetrize = "conservative",
+                                    symmetrize = "quadratic",
                                     systAxes=poi_axes+["downUpVar"],
                                     processes=["signal_samples"],
                                     baseName=f"{nuisanceBaseName}{sign}_",
@@ -642,7 +642,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                 passToFakes=passSystToFakes)
     else:
         cardTool.addLnNSystematic("CMS_background", processes=["Other"], size=1.15, group="CMS_background")
-        cardTool.addLnNSystematic("luminosity", processes=['MCnoQCD'], size=1.017 if lowPU else 1.012, group="luminosity")
+        cardTool.addLnNSystematic("lumi", processes=['MCnoQCD'], size=1.017 if lowPU else 1.012, group="luminosity")
 
     if not args.noEfficiencyUnc:
 
