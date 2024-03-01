@@ -15,8 +15,8 @@ justPrint = 1
 foldEtaIntoAbsEta = True
 
 ## histmaker
-# input files here: /afs/cern.ch/user/b/bianchi/public/
-# /usr/bin/time -v python scripts/histmakers/mw_with_mu_eta_pt.py -o /scratch/mciprian/CombineStudies/theoryAgnostic_pol/x0p40_y3p50_V4/ -v 4  --dataPath root://eoscms.cern.ch//store/cmst3/group/wmass/w-mass-13TeV/NanoAOD/ --theoryAgnostic --poiAsNoi --theoryAgnosticPolVar --theoryAgnosticFileTag x0p40_y3p50_V4 --filterProcs Data Wmunu --maxFiles -1 --theoryAgnosticSplitOOA  [ -p splitOOA|splitOOA_oneMCfileEvery2 ] [ --oneMCfileEveryN 2 ]
+# /usr/bin/time -v python scripts/histmakers/mw_with_mu_eta_pt.py -o /scratch/mciprian/CombineStudies/theoryAgnostic_pol/x0p40_y3p50_V4/ -v 4  --dataPath root://eoscms.cern.ch//store/cmst3/group/wmass/w-mass-13TeV/NanoAOD/ --theoryAgnostic --poiAsNoi --theoryAgnosticPolVar --theoryAgnosticFilePath /path/to/files/  --theoryAgnosticFileTag x0p40_y3p50_V4 --filterProcs Data Wmunu --maxFiles -1 --theoryAgnosticSplitOOA  [ -p splitOOA|splitOOA_oneMCfileEvery2 ] [ --oneMCfileEveryN 2 ]
+# --theoryAgnosticSplitOOA should be used by default
 
 splitOOA = True # use out-of-acceptance as a different process (it assumes the histograms were created accordingly)
 onlySignal = False #  out-of-acceptance is excluded when splitOOA = True
@@ -130,14 +130,16 @@ for c in coeffs:
         customOpt = ""
 
     if foldEtaIntoAbsEta:
-        customOpt += " --foldEtaIntoAbsEta"
-        subFolder += "_absEta"
+        #customOpt += " --foldEtaIntoAbsEta"
+        #subFolder += "_absEta"
+        customOpt += " --absval 1"
         
     mainOutputFolder = f"{outdir}/{subFolder}"
 
     cmdCard = f"/usr/bin/time -v python scripts/combine/setupCombine.py -i {inputFileHDF5} -o {mainOutputFolder}/ --absolutePathInCard {setuCombineOptions} {customOpt}"
 
-    analysisFolderBase = "WMass_eta_pt_charge"
+    etaVar = "abseta" if foldEtaIntoAbsEta else "eta"
+    analysisFolderBase = f"WMass_{etaVar}_pt_charge" 
     fitFolder = analysisFolderBase
     if doStatOnly:
         fitFolder += "_statOnly"

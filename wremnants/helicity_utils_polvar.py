@@ -19,7 +19,7 @@ from utilities.io_tools import input_tools
 
 logger = logging.child_logger(__name__)
 
-# narf.clingutils.Declare('#include "syst_helicity_utils_polvar.h"')
+narf.clingutils.Declare('#include "syst_helicity_utils_polvar.h"')
 
 data_dir = common.data_dir
 

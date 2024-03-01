@@ -12,6 +12,7 @@ import wremnants
 from wremnants import theory_tools,syst_tools,theory_corrections, muon_calibration, muon_selections, muon_validation, unfolding_tools, theoryAgnostic_tools, helicity_utils
 from wremnants.histmaker_tools import scale_to_data, aggregate_groups
 from wremnants.datasets.dataset_tools import getDatasets
+from wremnants.helicity_utils_polvar import makehelicityWeightHelper_polvar 
 import hist
 import lz4.frame
 import math
@@ -24,7 +25,7 @@ import numpy as np
 data_dir = common.data_dir
 parser.add_argument("--lumiUncertainty", type=float, help="Uncertainty for luminosity in excess to 1 (e.g. 1.012 means 1.2\%)", default=1.012)
 parser.add_argument("--noGenMatchMC", action='store_true', help="Don't use gen match filter for prompt muons with MC samples (note: QCD MC never has it anyway)")
-parser.add_argument("--theoryAgnostic", action='store_true', help="Add V qT,Y axes and helicity axes for W samples")
+parser.add_argument("--theoryAgnostic", action='store_true', help="Run the theory agnostic analysis")
 parser.add_argument("--genPtVbinEdges", type=float, nargs="*", default=[], help="Bin edges of gen ptV axis for theory agnostic")
 parser.add_argument("--genAbsYVbinEdges", type=float, nargs="*", default=[], help="Bin edges of gen |yV| axis for theory agnostic")
 parser.add_argument("--halfStat", action='store_true', help="Test half data and MC stat, selecting odd events, just for tests")
@@ -203,8 +204,8 @@ else:
     
 # For polynominal variations
 if args.theoryAgnosticPolVar:
-    theoryAgnostic_helpers_minus = wremnants.makehelicityWeightHelper_polvar(genVcharge=-1, fileTag=args.theoryAgnosticFileTag, filePath=args.theoryAgnosticFilePath)
-    theoryAgnostic_helpers_plus  = wremnants.makehelicityWeightHelper_polvar(genVcharge=1,  fileTag=args.theoryAgnosticFileTag, filePath=args.theoryAgnosticFilePath)
+    theoryAgnostic_helpers_minus = makehelicityWeightHelper_polvar(genVcharge=-1, fileTag=args.theoryAgnosticFileTag, filePath=args.theoryAgnosticFilePath)
+    theoryAgnostic_helpers_plus  = makehelicityWeightHelper_polvar(genVcharge=1,  fileTag=args.theoryAgnosticFileTag, filePath=args.theoryAgnosticFilePath)
 
 # recoil initialization
 if not args.noRecoil:
@@ -374,21 +375,6 @@ def build_graph(df, dataset):
     # Jet collection actually has a pt threshold of 15 GeV in MiniAOD 
     df = df.Define("goodCleanJetsNoPt", "Jet_jetId >= 6 && (Jet_pt > 50 || Jet_puId >= 4) && abs(Jet_eta) < 2.4 && wrem::cleanJetsFromLeptons(Jet_eta,Jet_phi,Muon_correctedEta[vetoMuons],Muon_correctedPhi[vetoMuons],Electron_eta[vetoElectrons],Electron_phi[vetoElectrons])")
     df = df.Define("passIso", "goodMuons_pfRelIso04_all0 < 0.15")
-    
-    # testing alternate definition of the muon pt for fakes:
-    # if passIso:
-    #     use muon pT
-    # elif a jet is closer than DR=0.4 to muon:
-    #     use jet pt
-    # else:
-    #     use muon pT multiplied by 1+iso
-    # the presence of a jet close to the muon (probably by DR=0.4) should be guaranteed by the index Muon_jetIdx being >= 0
-    
-    # for simplicity redefine the variable goodMuons_pt0, since it is used in many places and moving to a new name is a nightmare
-    df = df.Define("goodMuons_hasJet0", "Muon_jetIdx[goodMuons][0] != -1 ")
-    df = df.Define("goodMuons_jetpt0", "goodMuons_hasJet0 ? Jet_pt[Muon_jetIdx[goodMuons][0]] : goodMuons_pt0")
-    #df = df.Redefine("goodMuons_pt0", "(passIso) ? goodMuons_pt0 : (goodMuons_hasJet0 ? goodMuons_jetpt0 : goodMuons_pt0 * (1.0 + goodMuons_pfRelIso04_all0))")
-    #df = df.Redefine("goodMuons_pt0", "goodMuons_hasJet0 ? goodMuons_jetpt0 : goodMuons_pt0")
 
     ########################################################################
     # define event weights here since they are needed below for some helpers
@@ -451,46 +437,6 @@ def build_graph(df, dataset):
     df = df.Define("deltaPhiMuonMet", "std::abs(wrem::deltaPhi(goodMuons_phi0,MET_corr_rec_phi))")
 
     if auxiliary_histograms: 
-        if isQCDMC:
-            df = df.Define("nJets", "Sum(goodCleanJetsNoPt)")
-            df = df.Define("leadjetPt", "(nJets > 0) ? Jet_pt[goodCleanJetsNoPt][0] : 0.0")
-            otherStudyForFakes = df.HistoBoost("otherStudyForFakes", otherStudyForFakes_axes, ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "transverseMass", "passIso", "nJets", "leadjetPt", "deltaPhiMuonMet", "nominal_weight"])
-            results.append(otherStudyForFakes)
-            # gen match studies
-            df = df.Define("postfsrMuonsStatus1", "GenPart_status == 1 && abs(GenPart_pdgId) == 13")
-            df = df.Define("postfsrMuonsStatus1prompt", "postfsrMuonsStatus1 && (GenPart_statusFlags & 1 || GenPart_statusFlags & (1 << 5))")
-            df = df.Define("postfsrMuonsStatus1notPrompt", "postfsrMuonsStatus1 && !(GenPart_statusFlags & 1 || GenPart_statusFlags & (1 << 5))")
-            #
-            df = df.Define("muonGenMatchStatus1", "wrem::hasMatchDR2(goodMuons_eta0,goodMuons_phi0,GenPart_eta[postfsrMuonsStatus1],GenPart_phi[postfsrMuonsStatus1])")
-            df = df.Define("muonGenMatchStatus1prompt", "wrem::hasMatchDR2(goodMuons_eta0,goodMuons_phi0,GenPart_eta[postfsrMuonsStatus1prompt],GenPart_phi[postfsrMuonsStatus1prompt])")
-            df = df.Define("muonGenMatchStatus1notPrompt", "wrem::hasMatchDR2(goodMuons_eta0,goodMuons_phi0,GenPart_eta[postfsrMuonsStatus1notPrompt],GenPart_phi[postfsrMuonsStatus1notPrompt])")
-            #
-            axis_match = hist.axis.Boolean(name = "hasMatch")
-            etaPtGenMatchStatus1 = df.HistoBoost("etaPtGenMatchStatus1", [axis_eta, axis_pt, axis_match], ["goodMuons_eta0", "goodMuons_pt0", "muonGenMatchStatus1", "nominal_weight"])
-            results.append(etaPtGenMatchStatus1)
-            etaPtGenMatchStatus1prompt = df.HistoBoost("etaPtGenMatchStatus1prompt", [axis_eta, axis_pt, axis_match], ["goodMuons_eta0", "goodMuons_pt0", "muonGenMatchStatus1prompt", "nominal_weight"])
-            results.append(etaPtGenMatchStatus1prompt)
-            etaPtGenMatchStatus1notPrompt = df.HistoBoost("etaPtGenMatchStatus1notPrompt", [axis_eta, axis_pt, axis_match], ["goodMuons_eta0", "goodMuons_pt0", "muonGenMatchStatus1notPrompt", "nominal_weight"])
-            results.append(etaPtGenMatchStatus1notPrompt)
-            ### gen mT and reco mT
-            df = df.Define("transverseMass_genMetRecoMuon", "wrem::mt_2(goodMuons_pt0, goodMuons_phi0, GenMET_pt, GenMET_phi)")
-            axis_genmt = hist.axis.Regular(120, 0., 120., name = "genMt", underflow=False, overflow=True)
-            axis_recomet = hist.axis.Regular(120, 0., 120., name = "recoMet", underflow=False, overflow=True)
-            axis_genmet = hist.axis.Regular(120, 0., 120., name = "genMet", underflow=False, overflow=True)
-            etaPtMtGenMt = df.HistoBoost("etaPtMtGenMt", [axis_eta, axis_pt, axis_mt_fakes, axis_genmt, axis_passIso], ["goodMuons_eta0", "goodMuons_pt0", "transverseMass", "transverseMass_genMetRecoMuon", "passIso", "nominal_weight"])
-            results.append(etaPtMtGenMt)
-            etaPtMetGenMet = df.HistoBoost("etaPtMetGenMet", [axis_eta, axis_pt, axis_recomet, axis_genmet, axis_passIso], ["goodMuons_eta0", "goodMuons_pt0", "MET_corr_rec_pt", "GenMET_pt", "passIso", "nominal_weight"])
-            results.append(etaPtMetGenMet)
-            #
-            muonHasJet = df.HistoBoost("muonHasJet", [hist.axis.Regular(2,-0.5,1.5,name="hasJet"), hist.axis.Regular(2,-0.5,1.5,name="passIsolation")], ["goodMuons_hasJet0", "passIso", "nominal_weight"])
-            results.append(muonHasJet)
-            # add a cut to a new branch of the dataframe
-            dfalt = df.Filter("goodMuons_hasJet0")
-            axis_jetpt = hist.axis.Regular(template_npt, template_minpt, template_maxpt, name = "jetpt", overflow=False, underflow=False)
-            muonPtVsJetPt = dfalt.HistoBoost("muonPtVsJetPt", [axis_pt, axis_jetpt, axis_passIso], ["goodMuons_pt0", "goodMuons_jetpt0", "passIso", "nominal_weight"])
-            results.append(muonPtVsJetPt)
-        ###
-        #df = df.Filter("muonGenMatchStatus1prompt == 0")
         mTStudyForFakes = df.HistoBoost("mTStudyForFakes", mTStudyForFakes_axes, ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_charge0", "transverseMass", "passIso", "hasCleanJet", "deltaPhiMuonMet", "nominal_weight"])
         results.append(mTStudyForFakes)
 
@@ -546,22 +492,6 @@ def build_graph(df, dataset):
         nominal = df.HistoBoost("nominal", axes, [*cols, "nominal_weight"])
         results.append(nominal)
         results.append(df.HistoBoost("nominal_weight", [hist.axis.Regular(200, -4, 4)], ["nominal_weight"], storage=hist.storage.Double()))
-
-        if isZveto and auxiliary_histograms:
-            # to test the veto
-            # for events with 2 gen muons in acceptance, save pt distribution of second lepton
-            df = df.Define("postfsrMuons_inAcc_vetoed", f"postfsrMuons_inAcc && not wrem::hasMatchDR2collWithSingle(GenPart_eta,GenPart_phi,goodMuons_eta0,goodMuons_phi0,0.09)")
-            df = df.Define("postfsrMuons_inAcc_vetoed_pt0", f"(Sum(postfsrMuons_inAcc_vetoed) > 0) ? GenPart_pt[postfsrMuons_inAcc_vetoed][0] : -99.0")
-            df = df.Define("postfsrMuons_inAcc_vetoed_eta0", f"(Sum(postfsrMuons_inAcc_vetoed) > 0) ? GenPart_eta[postfsrMuons_inAcc_vetoed][0] : -99.0")
-            results.append(df.HistoBoost("postfsrMuons_inAcc_vetoed_etapt", [hist.axis.Regular(48, -2.4, 2.4, name="genEta"), hist.axis.Regular(80, 0, 80, name="genPt")], ["postfsrMuons_inAcc_vetoed_eta0", "postfsrMuons_inAcc_vetoed_pt0", "nominal_weight"]))
-            df = df.Define("recoFailVetoMuons_corr", "Muon_correctedCharge != -99 && abs(Muon_correctedEta) < 2.4 && (Muon_isGlobal || Muon_isTracker) && not (Muon_looseId && abs(Muon_dxybs) < 0.05)")
-            df = df.Define("recoFailVetoMuons_corr_pt0", "Muon_correctedPt[recoFailVetoMuons_corr][0]")
-            df = df.Define("recoFailVetoMuons_corr_eta0", "Muon_correctedEta[recoFailVetoMuons_corr][0]")
-            results.append(df.HistoBoost("recoFailVetoMuons_corr_etapt", [hist.axis.Regular(48, -2.4, 2.4, name="vetoedMuonEta"), hist.axis.Regular(80, 0, 80, name="vetoedMuonPt")], ["recoFailVetoMuons_corr_eta0", "recoFailVetoMuons_corr_pt0", "nominal_weight"]))
-            df = df.Define("recoFailVetoMuons", "abs(Muon_eta) < 2.4 && (Muon_isGlobal || Muon_isTracker) && not (Muon_looseId && abs(Muon_dxybs) < 0.05)")
-            df = df.Define("recoFailVetoMuons_pt0", "Muon_pt[recoFailVetoMuons][0]")
-            df = df.Define("recoFailVetoMuons_eta0", "Muon_eta[recoFailVetoMuons][0]")
-            results.append(df.HistoBoost("recoFailVetoMuons_etapt", [hist.axis.Regular(48, -2.4, 2.4, name="vetoedMuonEta"), hist.axis.Regular(80, 0, 80, name="vetoedMuonPt")], ["recoFailVetoMuons_eta0", "recoFailVetoMuons_pt0", "nominal_weight"]))
 
         if args.makeMCefficiency:
             cols_WeffMC = ["goodMuons_eta0", "goodMuons_pt0", "goodMuons_uT0", "goodMuons_charge0",

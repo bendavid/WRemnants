@@ -97,9 +97,6 @@ def make_parser(parser=None):
     parser.add_argument("--theoryAgnosticPolVar", action='store_true', help="Prepare variations from polynomials")
     parser.add_argument("--noPolVarOnFake", action="store_true", help="Do not propagate POI variations to fakes in the theory agnostic fit with polynomial variations")
     parser.add_argument("--symmetrizePolVar", action='store_true', help="Symmetrize up/Down variations in CardTool (using average), this option is implemented only for --theoryAgnosticPolVar")
-    # the following can be achieved with --absval pasing 1 for the eta axis, and it seems to be doing the exact same thing
-    # keep commented until this is confirmed
-    # parser.add_argument("--foldEtaIntoAbsEta", action='store_true', help="Fold eta into |eta|, if the eta axis exists. Only when not using --hdf5")
     return parser
 
 def setup(args, inputFile, fitvar, xnorm=False):
@@ -213,8 +210,6 @@ def setup(args, inputFile, fitvar, xnorm=False):
     logger.debug(f"Making datacards with these processes: {cardTool.getProcesses()}")
     if args.absolutePathInCard:
         cardTool.setAbsolutePathShapeInCard()
-    #if args.foldEtaIntoAbsEta:
-    #    cardTool.setFoldEtaIntoAbsEta()
 
     if simultaneousABCD:
         # In case of ABCD we need to have different fake processes for e and mu to have uncorrelated uncertainties
