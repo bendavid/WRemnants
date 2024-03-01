@@ -204,8 +204,8 @@ else:
     
 # For polynominal variations
 if args.theoryAgnosticPolVar:
-    theoryAgnostic_helpers_minus = makehelicityWeightHelper_polvar(genVcharge=-1, fileTag=args.theoryAgnosticFileTag, filePath=args.theoryAgnosticFilePath)
-    theoryAgnostic_helpers_plus  = makehelicityWeightHelper_polvar(genVcharge=1,  fileTag=args.theoryAgnosticFileTag, filePath=args.theoryAgnosticFilePath)
+    theoryAgnostic_helpers_minus = wremnants.helicity_utils_polvar.makehelicityWeightHelper_polvar(genVcharge=-1, fileTag=args.theoryAgnosticFileTag, filePath=args.theoryAgnosticFilePath)
+    theoryAgnostic_helpers_plus  = wremnants.helicity_utils_polvar.makehelicityWeightHelper_polvar(genVcharge=1,  fileTag=args.theoryAgnosticFileTag, filePath=args.theoryAgnosticFilePath)
 
 # recoil initialization
 if not args.noRecoil:

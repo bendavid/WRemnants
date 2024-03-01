@@ -19,8 +19,6 @@ from utilities.io_tools import input_tools
 
 logger = logging.child_logger(__name__)
 
-narf.clingutils.Declare('#include "syst_helicity_utils_polvar.h"')
-
 data_dir = common.data_dir
 
 def makehelicityWeightHelper_polvar(genVcharge=-1, fileTag="x0p40_y3p50_V6", filePath="."):

@@ -2,7 +2,7 @@ import os
 
 # for setup and fit
 skipSetup = 0
-skipFit = 1
+skipFit = 0
 # for plots
 skipImpacts = 1
 skipCorrelation = 1
