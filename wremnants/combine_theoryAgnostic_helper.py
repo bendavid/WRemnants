@@ -5,6 +5,7 @@ import numpy as np
 import re
 import hist
 import h5py
+import narf.ioutils
 
 logger = logging.child_logger(__name__)
 
@@ -19,15 +20,24 @@ class TheoryAgnosticHelper(object):
         self.label = "Label"
         self.passSystToFakes = True
         self.separateOutOfAccSignal = False
-
-    def configure(self,
-                  label,
-                  passSystToFakes,
-                  hasSeparateOutOfAcceptanceSignal):
+        self.poi_axes = []
+        
+    def configure_polVar(self,
+                         label,
+                         passSystToFakes,
+                         hasSeparateOutOfAcceptanceSignal):
         self.label = label
         self.passSystToFakes = passSystToFakes
         self.separateOutOfAccSignal = hasSeparateOutOfAcceptanceSignal
 
+    def configure_normVar(self,
+                          label,
+                          passSystToFakes,
+                          poi_axes):
+        self.label = label
+        self.passSystToFakes = passSystToFakes
+        self.poi_axes = poi_axes
+        
     def add_theoryAgnostic_polVar_uncertainty(self):
         coeffs = ["UL"] + [f"A{i}" for i in range(5)]
         groupName = f"polVar{self.label}"
@@ -45,7 +55,6 @@ class TheoryAgnosticHelper(object):
                                        labelsByAxis=["v", "downUpVar"],
                                        #splitGroup={f"{groupName}_{coeffKey}" : f"{groupName}_{coeffKey}"}
                                        )
-
 
     def add_theoryAgnostic_normVar_uncertainty(self):
 
@@ -69,7 +78,7 @@ class TheoryAgnosticHelper(object):
                                 **common_noi_args,
                                 mirror=False,
                                 symmetrize = "quadratic",
-                                systAxes=poi_axes+["downUpVar"],
+                                systAxes=self.poi_axes+["downUpVar"],
                                 processes=["signal_samples"],
                                 baseName=f"{nuisanceBaseName}{sign}_",
                                 noConstraint=True if self.args.priorNormXsec < 0 else False,
@@ -80,7 +89,7 @@ class TheoryAgnosticHelper(object):
                                 systAxesFlow=[], # only bins in acceptance in this call
                                 skipEntries=[{"helicitySig" : [6,7,8]}], # removing last three indices out of 9 (0,1,...,7,8) corresponding to A5,6,7
                                 preOpMap={
-                                    m.name: (lambda h, scale_hist=scale_hists[m.name]: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}], hh.multiplyHists(hh.addGenericAxis(h,common.down_up_axis, flow=False), hh.rescaleBandVariation(scale_hist,self.args.theoryAgnosticBandSize),flow=False))) if sign in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}]) for g in self.card_tool.procGroups["signal_samples"] for m in self.card_tool.datagroups.groups[g].members},
+                                    m.name: (lambda h, scale_hist=scale_hists[m.name]: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in self.poi_axes}], hh.multiplyHists(hh.addGenericAxis(h,common.down_up_axis, flow=False), hh.rescaleBandVariation(scale_hist,self.args.theoryAgnosticBandSize),flow=False))) if sign in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in self.poi_axes}]) for g in self.card_tool.procGroups["signal_samples"] for m in self.card_tool.datagroups.groups[g].members},
                                 )
             # now OOA
             nuisanceBaseNameOOA = f"{nuisanceBaseName}OOA_"
@@ -101,11 +110,11 @@ class TheoryAgnosticHelper(object):
                                 systAxesFlow=["ptVgenSig"], # this can activate nuisances on overflow bins, mainly just ptV and yV since the helicity axis has no overflow bins
                                 skipEntries=[{"helicitySig" : [6,7,8]}], # removing last three indices out of 9 (0,1,...,7,8) corresponding to A5,6,7
                                 preOpMap={
-                                    m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}],
+                                    m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in self.poi_axes}],
                                                                     h[{"ptVgenSig": hist.tag.Slicer()[hist.overflow:],
                                                                         "absYVgenSig": hist.tag.Slicer()[0:h.axes["absYVgenSig"].size:hist.sum]}],
                                                                     scale2=self.args.scaleNormXsecHistYields)
-                                                ) if sign in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}]) for g in self.card_tool.procGroups["signal_samples"] for m in self.card_tool.datagroups.groups[g].members
+                                                ) if sign in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in self.poi_axes}]) for g in self.card_tool.procGroups["signal_samples"] for m in self.card_tool.datagroups.groups[g].members
                                 },
                                 )
             # ptV in acceptance, yV OOA, integrate helicities
@@ -123,11 +132,11 @@ class TheoryAgnosticHelper(object):
                                 systAxesFlow=["absYVgenSig"], # this can activate nuisances on overflow bins, mainly just ptV and yV since the helicity axis has no overflow bins
                                 skipEntries=[{"helicitySig" : [6,7,8]}], # removing last three indices out of 9 (0,1,...,7,8) corresponding to A5,6,7
                                 preOpMap={
-                                    m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}],
+                                    m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in self.poi_axes}],
                                                                     h[{"ptVgenSig": hist.tag.Slicer()[0:h.axes["ptVgenSig"].size:hist.sum],
                                                                         "absYVgenSig": hist.tag.Slicer()[hist.overflow:]}],
                                                                     scale2=self.args.scaleNormXsecHistYields)
-                                                ) if sign in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}]) for g in self.card_tool.procGroups["signal_samples"] for m in self.card_tool.datagroups.groups[g].members
+                                                ) if sign in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in self.poi_axes}]) for g in self.card_tool.procGroups["signal_samples"] for m in self.card_tool.datagroups.groups[g].members
                                 },
                                 )
             # ptV OOA and yV OOA, integrate helicities
@@ -145,11 +154,11 @@ class TheoryAgnosticHelper(object):
                                 systAxesFlow=["ptVgenSig", "absYVgenSig"], # this can activate nuisances on overflow bins, mainly just ptV and yV since the helicity axis has no overflow bins
                                 skipEntries=[{"helicitySig" : [6,7,8]}], # removing last three indices out of 9 (0,1,...,7,8) corresponding to A5,6,7
                                 preOpMap={
-                                    m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}],
+                                    m.name: (lambda h: hh.addHists(h[{ax: hist.tag.Slicer()[::hist.sum] for ax in self.poi_axes}],
                                                                     h[{"ptVgenSig": hist.tag.Slicer()[hist.overflow:],
                                                                         "absYVgenSig": hist.tag.Slicer()[hist.overflow:]}],
                                                                     scale2=self.args.scaleNormXsecHistYields)
-                                                ) if sign in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in poi_axes}]) for g in self.card_tool.procGroups["signal_samples"] for m in self.card_tool.datagroups.groups[g].members
+                                                ) if sign in m.name else (lambda h: h[{ax: hist.tag.Slicer()[::hist.sum] for ax in self.poi_axes}]) for g in self.card_tool.procGroups["signal_samples"] for m in self.card_tool.datagroups.groups[g].members
                                 },
                                 )
 

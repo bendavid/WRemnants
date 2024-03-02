@@ -404,10 +404,16 @@ def setup(args, inputFile, fitvar, xnorm=False):
     if args.poiAsNoi:
         if args.theoryAgnostic:
             theoryAgnostic_helper = combine_theoryAgnostic_helper.TheoryAgnosticHelper(cardTool, externalArgs=args)
-            theoryAgnostic_helper.configure(label,
-                                            passSystToFakes,
-                                            hasSeparateOutOfAcceptanceSignal,
-                                            )
+            if args.theoryAgnosticPolVar:
+                theoryAgnostic_helper.configure_polVar(label,
+                                                       passSystToFakes,
+                                                       hasSeparateOutOfAcceptanceSignal,
+                                                       )
+            else:
+                theoryAgnostic_helper.configure_normVar(label,
+                                                        passSystToFakes,
+                                                        poi_axes,
+                                                        )
             theoryAgnostic_helper.add_theoryAgnostic_uncertainty()
 
         elif args.unfolding:
