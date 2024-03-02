@@ -65,9 +65,8 @@ def make_jpsi_crctn_helpers(args, calib_filepaths, make_uncertainty_helper=False
         ) if mc_corrfile else None
         data_unc_helper = make_jpsi_crctn_unc_helper(
             filepath_correction = data_corrfile,
-            filepath_tflite = tflite_file,
             scale_var_method = args.muonScaleVariation,
-            dummy_mu_scale_var = args.dummyMuScaleVar, dummy_var_mag = args.muonCorrMag
+            scale_A = args.scale_A, scale_e = args.scale_e, scale_M = args.scale_M,
         ) if data_corrfile else None
 
         return mc_helper, data_helper, mc_unc_helper, data_unc_helper
@@ -358,32 +357,62 @@ def make_jpsi_crctn_helper(filepath):
     return jpsi_crctn_helper
 
 def make_jpsi_crctn_unc_helper(
-    filepath_correction, filepath_tflite, 
-    n_scale_params = 3, n_tot_params = 4, n_eta_bins = 48, scale = 7.2, isW = True,
-    scale_var_method = 'smearingWeightsSplines', dummy_mu_scale_var = False, dummy_var_mag = 1e-4
-):
-    f = uproot.open(filepath_correction)
-    cov = f['covariance_matrix'].to_hist()
-    cov_scale_params = get_jpsi_scale_param_cov_mat(cov, n_scale_params, n_tot_params, n_eta_bins, scale)
-    w,v = np.linalg.eigh(cov_scale_params)    
-    var_mat = np.sqrt(w) * v
-    axis_eta = hist.axis.Regular(n_eta_bins, -2.4, 2.4, name = 'eta')
-    axis_scale_params = hist.axis.Regular(n_scale_params, 0, 1, name = 'scale_params')
-    axis_scale_params_unc = hist.axis.Regular(
-        n_eta_bins * n_scale_params, 0, 1,
-        underflow = False, overflow = False,  name = 'unc'
-    )
+    filepath_correction, scale_A = 1.0, scale_e = 1.0, scale_M = 1.0, isW = True,
+    scale_var_method = 'smearingWeightsSplines'):
+
+    f = ROOT.TFile.Open(filepath_correction)
+    A = f.Get("A")
+    e = f.Get("e")
+    M = f.Get("M")
+    cov = f.Get("covariance_matrix")
+
+    A = narf.root_to_hist(A, axis_names = ["scale_eta"])
+    e = narf.root_to_hist(e, axis_names = ["scale_eta"])
+    M = narf.root_to_hist(M, axis_names = ["scale_eta"])
+    cov = narf.root_to_hist(cov)
+
+    f.Close()
+
+    axis_eta = A.axes["scale_eta"]
+    neta = axis_eta.size
+
+    cov = cov.values()
+    nparmscov = cov.shape[0]//neta
+    n_scale_params = 3
+    nvars = neta*n_scale_params
+
+    # check only the first two parameters now because the variances stored in the histograms are not fully consistent (but the covariance matrix is fine)
+    is_consistent = False
+    if is_consistent:
+        variances_ref = np.stack([A.variances(), e.variances(), M.variances()], axis=-1)
+        variances = np.reshape(np.diag(cov), (neta, nparmscov))[:, :n_scale_params]
+    else:
+        variances_ref = np.stack([A.variances(), e.variances()], axis=-1)
+        variances = np.reshape(np.diag(cov), (neta, nparmscov))[:, :2]
+
+    # if not np.all(np.isclose(variances, variances_ref, atol=0.)):
+        # raise ValueError("Covariance matrix is not consistent with parameter uncertainties or parameters are not in the expected order.")
+
+    cov = np.reshape(cov, (neta, nparmscov, neta, nparmscov))
+    cov = cov[:, :n_scale_params, :, :n_scale_params]
+
+    scales = [scale_A, scale_e, scale_M]
+    for iparm, scale in enumerate(scales):
+        cov[:, iparm, :, :] *= scale
+        cov[:, :, :, iparm] *= scale
+
+    cov = np.reshape(cov, (nvars, nvars))
+
+    e, v = np.linalg.eigh(cov)
+    var_mat = np.sqrt(e[None, :]) * v
+    var_mat = np.reshape(var_mat, (neta, n_scale_params, nvars))
+
+    axis_scale_params = hist.axis.Integer(0, n_scale_params, underflow=False, overflow = False, name = 'scale_params')
+    axis_scale_params_unc = hist.axis.Integer(0, nvars, underflow=False, overflow = False, name = 'unc')
+
     hist_scale_params_unc = hist.Hist(axis_eta, axis_scale_params, axis_scale_params_unc)
-    for i in range(n_eta_bins):
-        if dummy_mu_scale_var:
-            nvar = n_scale_params * n_eta_bins
-            AUnc = np.full(nvar, dummy_var_mag)
-            eUnc = np.zeros(nvar)
-            MUnc = np.zeros(nvar)
-            hist_scale_params_unc.view()[i,...] = np.stack([AUnc, eUnc, MUnc])
-        else: 
-            lb, ub = i * n_scale_params, (i + 1) * n_scale_params
-            hist_scale_params_unc.view()[i,...] = var_mat[lb:ub][:]
+    hist_scale_params_unc[...] = var_mat
+
     hist_scale_params_unc_cpp = narf.hist_to_pyroot_boost(hist_scale_params_unc, tensor_rank = 2)
 
     if scale_var_method == 'smearingWeightsGaus':
@@ -392,7 +421,6 @@ def make_jpsi_crctn_unc_helper(
         )
     elif scale_var_method == 'smearingWeightsSplines':
         helper = ROOT.wrem.JpsiCorrectionsUncHelperSplines[type(hist_scale_params_unc_cpp).__cpp_name__](
-            filepath_tflite,
             ROOT.std.move(hist_scale_params_unc_cpp)
         )
     elif scale_var_method == 'massWeights':

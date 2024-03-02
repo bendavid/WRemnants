@@ -1222,7 +1222,7 @@ public:
     static constexpr auto nUnc = sizes[sizes.size() - 1];
     using out_tensor_t = Eigen::TensorFixedSize<double, Eigen::Sizes<nUnc, 2>>;
 
-    JpsiCorrectionsUncHelperSplines(const std::string &filename, T&& corrections) : 
+    JpsiCorrectionsUncHelperSplines(T&& corrections) :
         correctionHist_(std::make_shared<const T>(std::move(corrections))) {
     }
 
