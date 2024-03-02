@@ -4,6 +4,7 @@ from wremnants import syst_tools,theory_tools
 import numpy as np
 import re
 import hist
+import h5py
 
 logger = logging.child_logger(__name__)
 
