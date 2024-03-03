@@ -1,11 +1,11 @@
 from utilities import logging,common, boostHistHelpers as hh
 from utilities.io_tools import input_tools
 from wremnants import syst_tools,theory_tools
+import narf.ioutils
 import numpy as np
 import re
 import hist
 import h5py
-import narf.ioutils
 
 logger = logging.child_logger(__name__)
 
