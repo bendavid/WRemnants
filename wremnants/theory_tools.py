@@ -39,6 +39,7 @@ pdfMap = {
         "entries" : 101,
         "alphas" : ["LHEPdfWeight[0]", "LHEPdfWeight[101]", "LHEPdfWeight[102]"],
         "alphasRange" : "002",
+        "inflationFactor": 2.5,
     },
     "ct18" : {
         "name" : "pdfCT18",
@@ -47,7 +48,8 @@ pdfMap = {
         "entries" : 59,
         "alphas" : ["LHEPdfWeightAltSet11[0]", "LHEPdfWeightAltSet11[59]", "LHEPdfWeightAltSet11[62]"],
         "alphasRange" : "002",
-        "scale" : 1/1.645 # Convert from 90% CL to 68%
+        "scale" : 1/1.645, # Convert from 90% CL to 68%
+        "inflationFactor": 1.0,
     },
     "nnpdf30" : {
         "name" : "pdfNNPDF30",
@@ -56,6 +58,7 @@ pdfMap = {
         "entries" : 101,
         "alphas" : ["LHEPdfWeightAltSet13[0]", "LHEPdfWeightAltSet15[0]", "LHEPdfWeightAltSet16[0]"],
         "alphasRange" : "001",
+        "inflationFactor": 1.0, # not determined
     },
     "nnpdf40" : {
         "name" : "pdfNNPDF40",
@@ -64,6 +67,7 @@ pdfMap = {
         "entries" : 51,
         "alphas" : ["LHEPdfWeightAltSet3[0]", "LHEPdfWeightAltSet3[51]", "LHEPdfWeightAltSet3[52]"],
         "alphasRange" : "001",
+        "inflationFactor": 4.0,
     },
     "pdf4lhc21" : {
         "name" : "pdfPDF4LHC21",
@@ -72,6 +76,7 @@ pdfMap = {
         "entries" : 41,
         "alphas" : ["LHEPdfWeightAltSet10[0]", "LHEPdfWeightAltSet10[41]", "LHEPdfWeightAltSet10[42]"],
         "alphasRange" : "001",
+        "inflationFactor": 1.0,
     },
     "msht20" : {
         "name" : "pdfMSHT20",
@@ -80,6 +85,7 @@ pdfMap = {
         "entries" : 65,
         "alphas" : ["LHEPdfWeightAltSet12[0]", "LHEPdfWeightAltSet12[67]", "LHEPdfWeightAltSet12[70]"],
         "alphasRange" : "002",
+        "inflationFactor": 1.5,
     },
     "msht20an3lo" : {
         "name" : "pdfMSHT20an3lo",
@@ -88,6 +94,7 @@ pdfMap = {
         "entries" : 105,
         "alphas" : ["LHEPdfWeightAltSet24[0]", "LHEPdfWeightAltSet24[108]", "LHEPdfWeightAltSet24[111]"],
         "alphasRange" : "002",
+        "inflationFactor": 1.5,
     },
     "ct18z" : {
         "name" : "pdfCT18Z",
@@ -97,7 +104,8 @@ pdfMap = {
         "first_entry" : 63,
         "alphas" : ["LHEPdfWeightAltSet11[63]", "LHEPdfWeightAltSet11[122]", "LHEPdfWeightAltSet11[125]"],
         "alphasRange" : "002",
-        "scale" : 1/1.645 # Convert from 90% CL to 68%
+        "scale" : 1/1.645, # Convert from 90% CL to 68%
+        "inflationFactor": 1.0,
     },
     "atlasWZj20" : {
         "name" : "pdfATLASWZJ20",
@@ -106,6 +114,7 @@ pdfMap = {
         "entries" : 60,
         "alphas" : ["LHEPdfWeight[0]", "LHEPdfWeight[41]", "LHEPdfWeight[42]"],
         "alphasRange" : "002",
+        "inflationFactor": 1.0,  # not determined
     },
     "herapdf20" : {
         "name" : "pdfHERAPDF20",
@@ -114,6 +123,7 @@ pdfMap = {
         "entries" : 29,
         "alphas" : ["LHEPdfWeightAltSet20[0]", "LHEPdfWeightAltSet22[0]", "LHEPdfWeightAltSet23[0]"], # alphas 116-120
         "alphasRange" : "002",
+        "inflationFactor": 4.0,
     },
     "herapdf20ext" : {
         "name" : "pdfHERAPDF20ext",
@@ -122,6 +132,7 @@ pdfMap = {
         "entries" : 14,
         "alphas" : ["LHEPdfWeightAltSet20[0]", "LHEPdfWeightAltSet22[0]", "LHEPdfWeightAltSet23[0]"], # dummy AS
         "alphasRange" : "002",
+        "inflationFactor": 4.0,
     },
 }
 
