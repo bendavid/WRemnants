@@ -149,7 +149,7 @@ def common_parser(for_reco_highPU=False):
             filtered_values = [x for x in values if x not in ["none", None]]
             setattr(namespace, self.dest, filtered_values)
 
-    parser.add_argument("--pdfs", type=str, nargs="+", default=["ct18z"], 
+    parser.add_argument("--pdfs", type=str, nargs="+", default=["renorm", "msht20mcrange_renorm", "msht20mbrange_renorm"], 
         choices=theory_tools.pdfMap.keys(), help="PDF sets to produce error hists for", action=PDFFilterAction)
     parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
     parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=None)
@@ -158,8 +158,10 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("-p", "--postfix", type=str, help="Postfix for output file name", default=None)
     parser.add_argument("--forceDefaultName", action='store_true', help="Don't modify the name of the output file with some default strings")
     parser.add_argument("--theoryCorr", nargs="*", type=str, action=NoneFilterAction,
-        default=["scetlib_dyturbo", "winhacnloew", "virtual_ew_wlike", "horaceqedew_FSR", "horacelophotosmecoffew_FSR"], choices=theory_corrections.valid_theory_corrections(), 
+        default=["scetlib_dyturbo", ], choices=theory_corrections.valid_theory_corrections(), 
         help="Apply corrections from indicated generator. First will be nominal correction.")
+    parser.add_argument("--addTheoryCorrs", nargs="*", default=["winhacnloew", "virtual_ew_wlike", "horaceqedew_FSR", "horacelophotosmecoffew_FSR", "scetlib_dyturboMSHT20mbrange", "scetlib_dyturboMSHT20mcrange"],
+        type=str, help="add theory corrections without modifying the default list. Will be appended to args.theoryCorrs")
     parser.add_argument("--theoryCorrAltOnly", action='store_true', help="Save hist for correction hists but don't modify central weight")
     parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
     parser.add_argument("--eta", nargs=3, type=float, help="Eta binning as 'nbins min max' (only uniform for now)", default=[48,-2.4,2.4])
@@ -310,3 +312,9 @@ def list_to_string(list_str):
             "list_to_string(): cannot convert an input that is"
             " neither a single string or a list of strings"
         )
+
+def parse_histmaker_args(parser):
+    args = parser.parse_args()
+    if args.addTheoryCorrs:
+        args.theoryCorr.extend([x for x in args.addTheoryCorrs if x not in args.theoryCorr])
+    return args

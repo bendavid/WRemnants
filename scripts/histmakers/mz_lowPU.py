@@ -9,7 +9,7 @@ parser = common.set_parser_default(parser, "genVars", ["ptVGen"])
 parser = common.set_parser_default(parser, "pt", [34, 26, 60])
 parser = common.set_parser_default(parser, "aggregateGroups", ["Diboson", "Top", "Wtaunu", "Wmunu", "Wenu"])
 
-args = parser.parse_args()
+args = common.parse_histmaker_args(parser)
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 import narf

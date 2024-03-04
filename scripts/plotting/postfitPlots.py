@@ -7,6 +7,7 @@ import hist
 import numpy as np
 import argparse
 import pandas as pd
+import itertools
 
 from utilities import common, logging, differential, boostHistHelpers as hh
 from utilities.styles import styles
@@ -27,6 +28,7 @@ parser.add_argument("--noRatio", action='store_true', help="Don't make the ratio
 parser.add_argument("--noData", action='store_true', help="Don't plot the data")
 parser.add_argument("--prefit", action='store_true', help="Make prefit plot, else postfit")
 parser.add_argument("--selectionAxes", type=str, default=["charge", "passIso", "passMT"], help="List of axes where for each bin a seperate plot is created")
+parser.add_argument("--axlim", type=float, nargs='*', help="min and max for axes (2 values per axis)")
 
 args = parser.parse_args()
 
@@ -57,7 +59,7 @@ translate_selection = {
     }
 }
 
-def make_plot(h_data, h_inclusive, h_stack, axes, colors=None, labels=None, suffix="", chi2=None, meta=None, saturated_chi2=False):
+def make_plot(h_data, h_inclusive, h_stack, axes, colors=None, labels=None, suffix="", chi2=None, meta=None, saturated_chi2=False, rebin=None):
     axes_names = [a.name for a in axes]
     axis_name = "_".join([a for a in axes_names])
     if len(h_data.axes) > 1:
@@ -248,7 +250,7 @@ else:
         all_axes = {
             "mll": hist.axis.Regular(60, 60., 120., name = "mll", overflow=False, underflow=False),
             "yll": hist.axis.Regular(20, -2.5, 2.5, name = "yll", overflow=False, underflow=False),
-            "ptll": hist.axis.Variable([0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 20, 23, 27, 32, 40, 54, 100], name = "ptll", underflow=False, overflow=False),
+            "ptll": hist.axis.Variable([0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 20, 23, 27, 32, 40, ], name = "ptll", underflow=False, overflow=False),
         }
     elif analysis=="ZMassWLike":
         all_axes = {
@@ -273,6 +275,13 @@ else:
             "qGen": common.axis_charge,
         }
     axes = [all_axes[part] for part in filename_parts[-2].split("_") if part in all_axes.keys()]
+    if args.axlim:
+        nv = len(args.axlim)
+        if nv % 2:
+            raise ValueError("if --axlim is specified it must have two values per axis!")
+        axlim = np.array(args.axlim).reshape((int(nv/2), 2))
+        axes = [ax if lim is not None else hist.axis.Variable(ax.edges[(ax.edges >= lim[0]) & (ax.edges <= lim[1])]) 
+                    for ax,lim in itertools.zip_longest(axes, axlim)]
     shape = [len(a) for a in axes]
 
     hist_data = fitresult["obs;1"].to_hist()
