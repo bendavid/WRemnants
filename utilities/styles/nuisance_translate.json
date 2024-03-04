@@ -41,7 +41,7 @@
     "muonPrefire": "L1 muon prefire",
     "ecalPrefire": "L1 ecal prefire",
     "stat": "Data stat.",
-    "luminosity": "Luminosity",
+    "lumi": "Luminosity",
     "theory_ew": "EW"
 }
 
