@@ -316,5 +316,7 @@ def list_to_string(list_str):
 def parse_histmaker_args(parser):
     args = parser.parse_args()
     if args.addTheoryCorrs:
+        if not args.theoryCorr:
+            raise ValueError("--addTheoryCorrs should only be used together with --theoryCorr")
         args.theoryCorr.extend([x for x in args.addTheoryCorrs if x not in args.theoryCorr])
     return args
