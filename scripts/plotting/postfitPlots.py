@@ -59,7 +59,7 @@ translate_selection = {
     }
 }
 
-def make_plot(h_data, h_inclusive, h_stack, axes, colors=None, labels=None, suffix="", chi2=None, meta=None, saturated_chi2=False, rebin=None):
+def make_plot(h_data, h_inclusive, h_stack, axes, colors=None, labels=None, suffix="", chi2=None, meta=None, saturated_chi2=False):
     axes_names = [a.name for a in axes]
     axis_name = "_".join([a for a in axes_names])
     if len(h_data.axes) > 1:
@@ -250,7 +250,7 @@ else:
         all_axes = {
             "mll": hist.axis.Regular(60, 60., 120., name = "mll", overflow=False, underflow=False),
             "yll": hist.axis.Regular(20, -2.5, 2.5, name = "yll", overflow=False, underflow=False),
-            "ptll": hist.axis.Variable([0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 20, 23, 27, 32, 40, ], name = "ptll", underflow=False, overflow=False),
+            "ptll": hist.axis.Variable([0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 20, 23, 27, 32, 40, 54, 100], name = "ptll", underflow=False, overflow=False),
         }
     elif analysis=="ZMassWLike":
         all_axes = {
