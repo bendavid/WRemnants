@@ -22,9 +22,9 @@ parser = common.set_parser_default(parser, "genVars", ["qGen", "ptGen", "absEtaG
 parser = common.set_parser_default(parser, "genBins", [18, 0])
 parser = common.set_parser_default(parser, "pt", [34, 26, 60])
 parser = common.set_parser_default(parser, "aggregateGroups", ["Diboson", "Top", "Wtaunu", "Wmunu"])
-parser = common.set_parser_default(parser, "theoryCorr", ["scetlib_dyturbo", "virtual_ew_wlike", "horaceqedew_FSR", "horacelophotosmecoffew_FSR"])
+parser = common.set_parser_default(parser, "addTheoryCorr", ["virtual_ew_wlike", "horaceqedew_FSR", "horacelophotosmecoffew_FSR",])
 
-args = parser.parse_args()
+args = common.parse_histmaker_args(parser)
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 if args.unfolding:

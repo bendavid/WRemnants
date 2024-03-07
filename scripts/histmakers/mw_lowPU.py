@@ -8,7 +8,7 @@ parser.add_argument("--noGenMatchMC", action='store_true', help="Don't use gen m
 parser.add_argument("--flavor", type=str, choices=["e", "mu"], help="Flavor (e or mu)", default="mu")
 
 parser = common.set_parser_default(parser, "genVars", ["ptVGen"])
-args = parser.parse_args()
+args = common.parse_histmaker_args(parser)
 
 
 import narf

@@ -7,7 +7,7 @@ def parseArgs():
     parser.add_argument("-u", "--ungroup", action='store_true', help="Use ungrouped nuisances")
     parser.add_argument("-n", "--nuisance", type=str, help="Only print value for specific nuiance")
     parser.add_argument("-s", "--sort", action='store_true', help="Sort nuisances by impact")
-    parser.add_argument("-f", "--inputFile", 
+    parser.add_argument("inputFile", 
         default="/Users/kenneth/cernbox/CombineStudies/WGen/etal_ptl_smear_unrolled_scetlib/fitresults_123456789.root", 
         help="fitresults output ROOT file from combinetf")
     return parser.parse_args()

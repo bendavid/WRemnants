@@ -35,7 +35,7 @@ parser.add_argument("--noAuxiliaryHistograms", action="store_true", help="Remove
 parser.add_argument("--mtCut", type=int, default=40, help="Value for the transverse mass cut in the event selection")
 parser.add_argument("--vetoGenPartPt", type=float, default=0.0, help="Minimum pT for the postFSR gen muon when defining the variation of the veto efficiency")
 
-args = parser.parse_args()
+args = common.parse_histmaker_args(parser)
 
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
@@ -65,7 +65,7 @@ if args.makeMCefficiency:
     nbinsPtEff = axis_pt_eff_list[-1] - axis_pt_eff_list[0]
     parser = common.set_parser_default(parser, "pt", [nbinsPtEff, axis_pt_eff_list[0], axis_pt_eff_list[-1]])
 
-args = parser.parse_args()
+args = common.parse_histmaker_args(parser)
     
 thisAnalysis = ROOT.wrem.AnalysisType.Wmass
 

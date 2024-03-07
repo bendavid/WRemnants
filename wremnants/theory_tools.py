@@ -87,6 +87,36 @@ pdfMap = {
         "alphasRange" : "002",
         "inflationFactor": 1.5,
     },
+    "msht20mcrange" : {
+        "name" : "pdfMSHT20mcrange",
+        "branch" : "LHEPdfWeightAltSet12",
+        "combine" : "asymHessian",
+        "entries" : 9,
+        "first_entry" : 72,
+    },
+    "msht20mbrange" : {
+        "name" : "pdfMSHT20mbrange",
+        "branch" : "LHEPdfWeightAltSet12",
+        "combine" : "asymHessian",
+        "entries" : 7,
+        "first_entry" : 81,
+    },
+    "msht20mcrange_renorm" : {
+        "name" : "pdfMSHT20mcrange",
+        "branch" : "LHEPdfWeightAltSet12",
+        "combine" : "asymHessian",
+        "entries" : 9,
+        "first_entry" : 72,
+        "renorm" : True,
+    },
+    "msht20mbrange_renorm" : {
+        "name" : "pdfMSHT20mbrange",
+        "branch" : "LHEPdfWeightAltSet12",
+        "combine" : "asymHessian",
+        "entries" : 7,
+        "first_entry" : 81,
+        "renorm" : True,
+    },
     "msht20an3lo" : {
         "name" : "pdfMSHT20an3lo",
         "branch" : "LHEPdfWeightAltSet24",
@@ -146,11 +176,14 @@ only_central_pdf_datasets = [
 
 extended_pdf_datasets = [x for x in common.vprocs_all if not any(y in x for y in ["NNLOPS", "MiNLO"])]
 
-def expand_pdf_entries(pdf):
+def expand_pdf_entries(pdf, renorm=False):
     info = pdfMap[pdf]
     first_entry = info.get("first_entry", 0)
     last_entry = first_entry+info["entries"]
-    return [info["branch"]+f"[{i}]" for i in range(first_entry, last_entry)]
+    vals = [info["branch"]+f"[{i}]" for i in range(first_entry, last_entry)]
+    if renorm:
+        vals = [f"std::clamp({x}/{vals[0]}*central_pdf_weight, -theory_weight_truncate, theory_weight_truncate)" for x in vals]
+    return vals
 
 def define_scale_tensor(df):
     if "scaleWeights_tensor" in df.GetColumnNames():
@@ -167,6 +200,9 @@ theory_corr_weight_map = {
         "scetlib_dyturboMSHT20Vars" : expand_pdf_entries("msht20"),
         "scetlib_dyturboMSHT20an3lo_pdfas" : pdfMap["msht20an3lo"]["alphas"],
         "scetlib_dyturboMSHT20an3loVars" : expand_pdf_entries("msht20an3lo"),
+        # Tested this, better not to treat this way unless using MSHT20nnlo as central set
+        #"scetlib_dyturboMSHT20mbrange" : expand_pdf_entries("msht20mbrange", renorm=True),
+        #"scetlib_dyturboMSHT20mcrange" : expand_pdf_entries("msht20mcrange", renorm=True),
 }
 
 def define_dressed_vars(df, mode, flavor="mu"):
@@ -407,7 +443,11 @@ def define_pdf_columns(df, dataset_name, pdfs, noAltUnc):
         if pdfBranch not in df.GetColumnNames():
             return df
 
-        df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}, {start}), theory_weight_truncate); res = nominal_weight/central_pdf_weight*res; return res;")
+        if "renorm" in pdfInfo and pdfInfo["renorm"]:
+            df = df.Define(tensorName, f"auto res = wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}, {start}); res = res/res(0); "
+                           "res = wrem::clip_tensor(res, theory_weight_truncate); res = res*nominal_weight; return res;")
+        else:
+            df = df.Define(tensorName, f"auto res = wrem::clip_tensor(wrem::vec_to_tensor_t<double, {entries}>({pdfBranch}, {start}), theory_weight_truncate); res = nominal_weight/central_pdf_weight*res; return res;")
 
         if i == 0:
             tensorNameNominal = tensorName
@@ -415,9 +455,10 @@ def define_pdf_columns(df, dataset_name, pdfs, noAltUnc):
         if pdfName == "pdfMSHT20":
             df = pdfBugfixMSHT20(df, tensorName)
 
-        df = df.Define(tensorASName, f"Eigen::TensorFixedSize<double, Eigen::Sizes<{len(pdfInfo['alphas'])}>> res; " + \
-                " ".join([f"res({i}) = nominal_weight/central_pdf_weight*{p};" for i,p in enumerate(pdfInfo['alphas'])]) + \
-                "return wrem::clip_tensor(res, theory_weight_truncate)")
+        if "alphas" in pdfInfo:
+            df = df.Define(tensorASName, f"Eigen::TensorFixedSize<double, Eigen::Sizes<{len(pdfInfo['alphas'])}>> res; " + \
+                    " ".join([f"res({i}) = nominal_weight/central_pdf_weight*{p};" for i,p in enumerate(pdfInfo['alphas'])]) + \
+                    "return wrem::clip_tensor(res, theory_weight_truncate)")
 
     return df
 
@@ -494,7 +535,7 @@ def define_theory_corr(df, dataset_name, helpers, generators, modify_central_wei
     for i, generator in enumerate(generators):
         if generator not in dataset_helpers:
             continue
-        
+
         logger.debug(f"Now at generator {i}: {generator}")
 
         helper = dataset_helpers[generator]
