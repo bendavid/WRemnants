@@ -128,7 +128,7 @@ def makeStackPlotWithRatio(
     plot_title = None, title_padding = 0, yscale=None, logy=False, logx=False, 
     fill_between=False, ratio_to_data=False, baseline=True, legtext_size=20, cms_decor="Preliminary", lumi=16.8,
     no_fill=False, bin_density=300, unstacked_linestyles=[],
-    ratio_error=True,
+    ratio_error=True, normalize_to_data=False,
 ):
     colors = [histInfo[k].color for k in stackedProcs if histInfo[k].hists[histName]]
     labels = [histInfo[k].label for k in stackedProcs if histInfo[k].hists[histName]]
@@ -203,6 +203,19 @@ def makeStackPlotWithRatio(
                 np.append((nom-std)/nom, ((nom-std)/nom)[-1]),
             step='post',facecolor="none", zorder=2, hatch=hatchstyle, edgecolor="k", linewidth=0.0)
 
+    if type(unstacked) == str: 
+        unstacked = unstacked.split(",")
+
+    scale = 1.
+    if normalize_to_data:
+        if "Data" not in histInfo:
+            raise ValueError("Can't normalize to data without a data histogram!")
+
+        vals = [x.value if hasattr(x, "value") else x for x in (data_hist.sum(), hh.sumHists(stack).sum())]
+        scale = vals[0]/vals[1]
+        logger.info(f"Rescaling all processes by {scale:0.3f} to match data norm")
+        stack = [s*scale for s in stack]
+
     hep.histplot(
         stack,
         histtype="fill" if not no_fill else "step",
@@ -228,8 +241,6 @@ def makeStackPlotWithRatio(
         )
 
     if unstacked:
-        if type(unstacked) == str: 
-            unstacked = unstacked.split(",")
 
         linestyles = ['solid']*len(unstacked)
         data_idx = -1
@@ -256,6 +267,8 @@ def makeStackPlotWithRatio(
             unstack = histInfo[proc].hists[histName]
             if not fitresult or proc not in to_read:
                 unstack = action(unstack)[select]
+            if proc != "Data":
+                unstack = unstack*scale
 
             hep.histplot(
                 unstack,
@@ -289,8 +302,8 @@ def makeStackPlotWithRatio(
                 fill_between = len(fill_procs)+1
             logger.debug(f"Filling first {fill_between}")
             for up,down in zip(fill_procs[:fill_between:2], fill_procs[1:fill_between:2]):
-                unstack_up = action(histInfo[up].hists[histName])
-                unstack_down = action(histInfo[down].hists[histName])
+                unstack_up = action(histInfo[up].hists[histName])*scale
+                unstack_down = action(histInfo[down].hists[histName])*scale
                 unstack_upr = hh.divideHists(unstack_up, ratio_ref, 1e-6, flow=False, by_ax_name=False).values()
                 unstack_downr = hh.divideHists(unstack_down, ratio_ref, 1e-6, flow=False, by_ax_name=False).values()
                 ax2.fill_between(unstack_up.axes[0].edges, 

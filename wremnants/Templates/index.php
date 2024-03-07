@@ -107,7 +107,7 @@ if ($_GET['noplots']) {
 <div style="display: block; clear:both;">
 <h2><a name="files">Other files</a></h2>
 <ul>
-<?
+<?php
 foreach (glob("*") as $filename) {
     if ($_GET['noplots'] || !in_array($filename, $displayed)) {
         if (isset($_GET['match'])) {

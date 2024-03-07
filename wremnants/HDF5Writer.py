@@ -193,7 +193,7 @@ class HDF5Writer(object):
             # nominal predictions
             for proc in procs_chan:
                 logger.debug(f"Now  in channel {chan} at process {proc}")
-                
+
                 # nominal histograms of prediction
                 norm_proc_hist = dg.groups[proc].hists[chanInfo.nominalName]
 
@@ -285,9 +285,7 @@ class HDF5Writer(object):
             # free memory
             if dg.dataName in dg.groups:
                 del dg.groups[dg.dataName].hists[chanInfo.nominalName]
-            for proc in procs_chan:
-                del dg.groups[proc].hists[chanInfo.nominalName]
-            
+
             # release original histograms in the proxy objects
             if chanInfo.pseudoData:
                 for pseudoData in chanInfo.pseudoData:
@@ -372,11 +370,9 @@ class HDF5Writer(object):
                     logger.debug(f"Now at proc {proc}!")
 
                     hvar = dg.groups[proc].hists["syst"]
+                    hnom = dg.groups[proc].hists[chanInfo.nominalName]
 
-                    if syst["decorrByBin"]:
-                        raise NotImplementedError("By bin decorrelation is not supported for writing output in hdf5")
-
-                    var_map = chanInfo.systHists(hvar, systKey)
+                    var_map = chanInfo.systHists(hvar, systKey, hnom)
 
                     var_names = [x[:-2] if "Up" in x[-2:] else (x[:-4] if "Down" in x[-4:] else x) 
                         for x in filter(lambda x: x != "", var_map.keys())]

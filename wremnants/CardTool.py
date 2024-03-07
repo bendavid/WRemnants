@@ -151,8 +151,16 @@ class CardTool(object):
         
     ## Functions to customize systs to be added in card, mainly for tests
     def setCustomSystForCard(self, exclude=None, keep=None):
-        if exclude: self.excludeSyst = re.compile(exclude)
-        if keep:    self.keepSyst    = re.compile(keep)
+        for regex,name in zip((keep, exclude), ("keepSyst", "excludeSyst")):
+            if hasattr(self, "customSystMapping"):
+                if regex in self.customSystMapping:
+                    regex = self.customSystMapping[regex]
+
+            if regex:
+                setattr(self, name, re.compile(regex))
+
+    def setCustomSystGroupMapping(self, mapping):
+        self.customSystMapping = mapping
         
     def isExcludedNuisance(self, name):
         # note, re.match search for a match from the beginning, so if x="test" x.match("mytestPDF1") will NOT match 
@@ -292,13 +300,12 @@ class CardTool(object):
     # preOp is a function to apply per process, preOpMap can be used with a dict for a speratate function for each process, 
     #   it is executed before summing the processes. Arguments can be specified with preOpArgs 
     # action will be applied to the sum of all the individual samples contributing, arguments can be specified with actionArgs
-    # decorrelateByBin is to customize eta-pt decorrelation: pass dictionary with {axisName: [bin edges]}
     def addSystematic(self, name, systAxes=[], systAxesFlow=[], outNames=None, skipEntries=None, labelsByAxis=None, 
                       baseName="", mirror=False, mirrorDownVarEqualToUp=False, mirrorDownVarEqualToNomi=False, symmetrize = "average",
                       scale=1, processes=None, group=None, noi=False, noConstraint=False, noProfile=False,
-                      preOp=None, preOpMap=None, preOpArgs={}, action=None, actionArgs={}, 
+                      preOp=None, preOpMap=None, preOpArgs={}, action=None, actionArgs={}, actionRequiresNomi=False,
                       systNameReplace=[], systNamePrepend=None, groupFilter=None, passToFakes=False,
-                      rename=None, splitGroup={}, decorrelateByBin={}, formatWithValue=None,
+                      rename=None, splitGroup={}, formatWithValue=None,
                       customizeNuisanceAttributes={},
                       ):
         # note: setting Up=Down seems to be pathological for the moment, it might be due to the interpolation in the fit
@@ -362,12 +369,12 @@ class CardTool(object):
                 "preOpArgs" : preOpArgs,
                 "action" : action,
                 "actionArgs" : actionArgs,
+                "actionRequiresNomi" : actionRequiresNomi,
                 "systNameReplace" : systNameReplace,
                 "noConstraint" : noConstraint,
                 "noProfile" : noProfile,
                 "skipEntries" : [] if not skipEntries else skipEntries,
                 "name" : name,
-                "decorrByBin": decorrelateByBin,
                 "systNamePrepend" : systNamePrepend,
                 "formatWithValue" : formatWithValue,
             }
@@ -503,7 +510,7 @@ class CardTool(object):
 
         return updated_skip
 
-    def systHists(self, hvar, syst):
+    def systHists(self, hvar, syst, hnom):
         if syst == self.nominalName:
             return {self.nominalName : hvar}
 
@@ -513,7 +520,10 @@ class CardTool(object):
 
         # Jan: moved above the mirror action, as this action can cause mirroring
         if systInfo["action"]:
-            hvar = systInfo["action"](hvar, **systInfo["actionArgs"])
+            if systInfo["actionRequiresNomi"]:
+               hvar = systInfo["action"](hvar, hnom, **systInfo["actionArgs"])
+            else:
+                hvar = systInfo["action"](hvar, **systInfo["actionArgs"])
         if self.outfile:
             self.outfile.cd() # needed to restore the current directory in case the action opens a new root file
 
@@ -706,87 +716,9 @@ class CardTool(object):
             if up_nBinsSystSameAsNomi >= varEqNomiThreshold or down_nBinsSystSameAsNomi >= varEqNomiThreshold:
                 if not skipOneAsNomi or (up_nBinsSystSameAsNomi >= varEqNomiThreshold and down_nBinsSystSameAsNomi >= varEqNomiThreshold):
                     logger.warning(f"syst {name} has Up/Down variation with {up_nBinsSystSameAsNomi:.1%}/{down_nBinsSystSameAsNomi:.1%} of bins equal to nominal")
-                    
-    def makeDecorrelatedSystNuisances(self, systNames, dcbb={}):
-        # NOTE: the dictionary is supposed to have only a single key
-        for k in dcbb.keys():
-            systNamesTmp = []
-            decorrSystLabel = dcbb[k]["label"]
-            if k == "xy":
-                for ix in range(len(dcbb[k]["edges"][0])-1):
-                    for iy in range(len(dcbb[k]["edges"][1])-1):
-                        systNamesTmp.extend([f"{x}_{decorrSystLabel[0]}{ix}{decorrSystLabel[1]}{iy}" for x in systNames])
-            else:
-                for ik in range(len(dcbb[k]["edges"])-1):
-                    systNamesTmp.extend([f"{x}_{decorrSystLabel}{ik}" for x in systNames])
-            return systNamesTmp
-            #logger.error(f"systNames = {systNames}")
 
-    def makeDecorrelatedSystHistograms(self, h, hnomi, name, decorrByBinDict):
-        # s = hist.tag.Slicer()
-        # TODO: using an alternative version using boost directly may be faster, but for now this is just for testing
-        # decorrByBinDict is a dictionary as
-        # decorrByBinDict = {"x": {"label" : "eta",
-        #                          "edges" : [round(-2.4+i*0.4,1) for i in range(13)],}
-        #                   }
-        # for a 2D decorrelation the values of each key are arrays of size 2
-        # decorrByBinDict = {"xy": {"label" : ["eta", "pt"],
-        #                          "edges" : [ [etaEdges], [ptEdges] ]}
-        #                   }
-        # TODO: could also do charge decorrelation by using the z axis if present
-        ret = {}
-        hnomiroot = narf.hist_to_root(hnomi)
-        hsystroot = narf.hist_to_root(h)
-        for ax in decorrByBinDict.keys():
-            decorrDict = decorrByBinDict[ax]
-            decorrSystLabel = decorrDict["label"]
-            logger.info(f"Decorrelating syst {name} by {ax} bins using {decorrSystLabel}")
-            if ax != "xy":
-                for ibin in range(len(decorrDict["edges"]) -1):
-                    upDown = "Up" if name.endswith("Up") else "Down" if name.endswith("Down") else ""
-                    newname = name[:-len(upDown)] if len(upDown) else name[:]
-                    newname = f"{newname}_{decorrSystLabel}{ibin}{upDown}"
-                    logger.debug(f"Decorrelating syst {name} by {ax} bins: preparing new histogram {newname}")
-                    # FIXME: do not assume we can only have eta and pt axes (or eta-pt when implemented)
-                    # bin ID are retrieved adding some small constants to bin edges, low/high edge is increased/decreased
-                    if ax == "x":
-                        xbinLow = hnomiroot.GetXaxis().FindFixBin(decorrDict["edges"][ibin]+0.001)
-                        xbinHigh = hnomiroot.GetXaxis().FindFixBin(decorrDict["edges"][ibin+1]-0.001)
-                        ybinLow = 1
-                        ybinHigh = hnomiroot.GetNbinsY()
-                    elif ax == "y":
-                        xbinLow = 1
-                        xbinHigh = hnomiroot.GetNbinsX()
-                        ybinLow = hnomiroot.GetYaxis().FindFixBin(decorrDict["edges"][ibin]+0.001)
-                        ybinHigh = hnomiroot.GetYaxis().FindFixBin(decorrDict["edges"][ibin+1]-0.001)
-                    hsystrootDecorr = copy.deepcopy(hnomiroot.Clone(newname))
-                    ROOT.wrem.fillTH3fromTH3part(hsystrootDecorr, hsystroot,
-                                                 xbinLow, ybinLow, 1,
-                                                 xbinHigh, ybinHigh, hnomiroot.GetNbinsZ())
-                    ret[newname] = narf.root_to_hist(hsystrootDecorr, axis_names = hnomi.axes.name)
-            else:
-                edgesX = decorrDict["edges"][0]
-                edgesY = decorrDict["edges"][1]
-                for ix in range(len(edgesX)-1):
-                    for iy in range(len(edgesY)-1):
-                        xbinLow = hnomiroot.GetXaxis().FindFixBin(edgesX[ix]+0.001)
-                        xbinHigh = hnomiroot.GetXaxis().FindFixBin(edgesX[ix+1]-0.001)
-                        ybinLow = hnomiroot.GetYaxis().FindFixBin(edgesY[iy]+0.001)
-                        ybinHigh = hnomiroot.GetYaxis().FindFixBin(edgesY[iy+1]-0.001)
-                        upDown = "Up" if name.endswith("Up") else "Down" if name.endswith("Down") else ""
-                        newname = name[:-len(upDown)] if len(upDown) else name[:]
-                        newname = f"{newname}_{decorrSystLabel[0]}{ix}{decorrSystLabel[1]}{iy}{upDown}"
-                        logger.warning(f"Decorrelating syst {name} by {ax} bins: preparing new histogram {newname}")
-                        hsystrootDecorr = copy.deepcopy(hnomiroot.Clone(newname))
-                        ROOT.wrem.fillTH3fromTH3part(hsystrootDecorr, hsystroot,
-                                                     xbinLow, ybinLow, 1,
-                                                     xbinHigh, ybinHigh, hnomiroot.GetNbinsZ())
-                        ret[newname] = narf.root_to_hist(hsystrootDecorr, axis_names = hnomi.axes.name)
-        return ret
 
-                
     def writeForProcess(self, h, proc, syst, check_systs=True):
-        decorrelateByBin = {}
         hnom = None
         systInfo = None
         if syst != self.nominalName:
@@ -797,11 +729,9 @@ class CardTool(object):
                 h = hh.extendHistByMirror(h, hnom,
                                           downAsUp=systInfo["mirrorDownVarEqualToUp"],
                                           downAsNomi=systInfo["mirrorDownVarEqualToNomi"])            
-            if systInfo["decorrByBin"]:
-                decorrelateByBin = systInfo["decorrByBin"]
 
         logger.info(f"   {syst} for process {proc}")
-        var_map = self.systHists(h, syst)
+        var_map = self.systHists(h, syst, hnom)
 
         if syst != self.nominalName:
             if not systInfo["mirror"] and systInfo["symmetrize"] is not None:
@@ -823,8 +753,7 @@ class CardTool(object):
         # this is a big loop a bit slow, but it might be mainly the hist->root conversion and writing into the root file
         for name, var in var_map.items():
             if name != "":
-                self.writeHist(var, proc, name, setZeroStatUnc=setZeroStatUnc,
-                               decorrByBin=decorrelateByBin, hnomi=hnom)
+                self.writeHist(var, proc, name, setZeroStatUnc=setZeroStatUnc, hnomi=hnom)
 
     def loadPseudodata(self, forceNonzero=True):
         datagroups = self.pseudodata_datagroups
@@ -1086,11 +1015,6 @@ class CardTool(object):
         # Deduplicate while keeping order
         systNames = list(dict.fromkeys(names))
 
-        # if decorrelating by bin, define new nuisances
-        if systInfo["decorrByBin"]:
-            systNamesTmp = self.makeDecorrelatedSystNuisances(systNames, systInfo["decorrByBin"])
-            systNames = systNamesTmp[:]
-                
         systnamesPruned = [s for s in systNames if not self.isExcludedNuisance(s)]
         systNames = systnamesPruned[:]
         for chan in self.channels:
@@ -1167,7 +1091,7 @@ class CardTool(object):
         hout.SetName(f"{name}_{self.channels[0]}" if self.channels else name)
         hout.Write()
     
-    def writeHist(self, h, proc, syst, setZeroStatUnc=False, decorrByBin={}, hnomi=None):
+    def writeHist(self, h, proc, syst, setZeroStatUnc=False, hnomi=None):
         if self.skipHist:
             return
         if self.fit_axes:
@@ -1207,8 +1131,6 @@ class CardTool(object):
         name = self.variationName(proc, syst)
 
         hists = {name: h} # always keep original variation in output file for checks
-        if decorrByBin:
-            hists.update(self.makeDecorrelatedSystHistograms(h, hnomi, syst, decorrByBin))
 
         for hname, histo in hists.items():
             if self.writeByCharge:

@@ -24,8 +24,10 @@
     "massShiftZ": "Z mass",
     "massShiftW": "W mass",
     "pdfMSHT20": "PDF",
+    "pdfCT18Z": "PDF",
     "pdfMSHT20NoAlphaS": "PDF",
     "pdfMSHT20AlphaS": "$\\alpha_\\mathrm{S} \\ \\mathrm{PDF}$",
+    "pdfCT18ZAlphaS": "$\\alpha_\\mathrm{S} \\ \\mathrm{PDF}$",
     "resum": "$p_{\\mathrm{T}}^{\\mathrm{V}} \\ \\mathrm{modelling}$",
     "resumTNP": "Non pert. trans.",
     "resumNonpert": "Non pert.",
@@ -39,7 +41,7 @@
     "muonPrefire": "L1 muon prefire",
     "ecalPrefire": "L1 ecal prefire",
     "stat": "Data stat.",
-    "luminosity": "Luminosity",
+    "lumi": "Luminosity",
     "theory_ew": "EW"
 }
 

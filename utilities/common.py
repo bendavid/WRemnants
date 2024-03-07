@@ -150,8 +150,8 @@ def common_parser(for_reco_highPU=False):
             filtered_values = [x for x in values if x not in ["none", None]]
             setattr(namespace, self.dest, filtered_values)
 
-    parser.add_argument("--pdfs", type=str, nargs="*", default=["msht20"], choices=theory_tools.pdfMap.keys(), action=PDFFilterAction, 
-        help="PDF sets to reweight and produce error hists for. If empty, use PDF set used in production (weight=1).")
+    parser.add_argument("--pdfs", type=str, nargs="*", default=["ct18z"], 
+        choices=theory_tools.pdfMap.keys(), help="PDF sets to produce error hists for. If empty, use PDF set used in production (weight=1).", action=PDFFilterAction)
     parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
     parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=None)
     parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by group name or (subset) of name", default=[])
@@ -162,7 +162,6 @@ def common_parser(for_reco_highPU=False):
         default=["scetlib_dyturbo", "winhacnloew", "virtual_ew_wlike", "horaceqedew_FSR", "horacelophotosmecoffew_FSR"], choices=theory_corrections.valid_theory_corrections(), 
         help="Apply corrections from indicated generator. First will be nominal correction.")
     parser.add_argument("--theoryCorrAltOnly", action='store_true', help="Save hist for correction hists but don't modify central weight")
-    parser.add_argument("--widthVariations", action='store_true', help="Store variations of W and Z widths.")
     parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
     parser.add_argument("--eta", nargs=3, type=float, help="Eta binning as 'nbins min max' (only uniform for now)", default=[48,-2.4,2.4])
     parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[30,26.,56.])

@@ -148,6 +148,56 @@ def multiplyHists(h1, h2, allowBroadcast=True, createNew=True, flow=True):
 
     return outh
 
+# TODO: Figure out the overflow
+def concatenateHists(h1, h2, allowBroadcast=True, by_ax_name=True):
+    if allowBroadcast:
+        h1 = broadcastSystHist(h1, h2, flow=False, by_ax_name=by_ax_name)
+        h2 = broadcastSystHist(h2, h1, flow=False, by_ax_name=by_ax_name)
+
+    axes = []
+    for ax1, ax2 in zip(h1.axes, h2.axes):
+        if ax1 == ax2:
+            axes.append(ax1)
+            continue
+
+        if type(ax1) != type(ax2):
+            raise ValueError("Cannot combine inconsistent axis types!")
+
+        if type(ax1) == hist.axis.StrCategory:
+            new_entries = list(ax1)+list(ax2)
+            if len(new_entries) != len(set(new_entries)):
+                raise ValueError("Cannot concatenate StrCategory axes with duplicate labels")
+            axes.append(hist.axis.StrCategory(new_entries, name=ax1.name))
+        else:
+            if ax1.edges[0] > ax2.edges[0]:
+                ax1,ax2 = ax2,ax1
+
+            if ax1.edges[-1] == ax2.edges[0]:
+                axes.append(hist.axis.Variable(np.concatenate((ax1.edges, ax2.edges[1:])), name=ax1.name, 
+                    underflow=ax1.traits.underflow, overflow=ax2.traits.overflow))
+            else:
+                raise ValueError(f"Cannot concatenate hists with inconsistent axes: {ax1.name} and {ax2.name}")
+
+    newh = hist.Hist(*axes, storage=h1.storage_type())
+    fill_by_centers(newh, h1)
+    fill_by_centers(newh, h2)
+
+    return newh
+
+def concatenate_syst_hists(hists, has_nominal=True):
+    if len(hists) < 2:
+        raise ValueError("At least two hists required to concatenate")
+    hcat = hists[0]
+    for h in hists[1:]:
+        hcat = concatenateHists(hcat, h[...,has_nominal:], allowBroadcast=False)
+
+    return hcat
+
+def fill_by_centers(h, href):
+    to_fill = [list(y) if type(y) == hist.axis.StrCategory else x for x,y in zip(href.axes.centers, href.axes)]
+    h.view()[h.axes.index(*to_fill)] = href.view()
+    return h
+
 def addHists(h1, h2, allowBroadcast=True, createNew=True, scale1=None, scale2=None, flow=True, by_ax_name=True):
     if allowBroadcast:
         h1 = broadcastSystHist(h1, h2, flow=flow, by_ax_name=by_ax_name)
@@ -211,8 +261,8 @@ def extendHistByMirror(hvar, hnom, downAsUp=False, downAsNomi=False):
 def addGenChargeAxis(h, idx):
     return addGenericAxis(h, hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "qGen"), idx, add_trailing=False, flow=True)
     
-def addSystAxis(h, size=1, offset=0):
-    return addGenericAxis(h, hist.axis.Regular(size,offset,size+offset, name="systIdx"))
+def addSystAxis(h, size=1, offset=0, axname="systIdx"):
+    return addGenericAxis(h, hist.axis.Regular(size,offset,size+offset, name=axName))
 
 def addGenericAxis(h, axis, idx=None, add_trailing=True, flow=True):
     axes = [*h.axes, axis] if add_trailing else [axis, *h.axes]
@@ -249,24 +299,29 @@ def scaleHist(h, scale, createNew=True, flow=True):
             h.variances(flow=flow)[...] *= scale*scale
         return h
     
-def normalize(h, scale=1e6, createNew=True):
-    scale = scale/h.sum(flow=True).value
-    return scaleHist(h, scale, createNew)
+def normalize(h, scale=1e6, createNew=True, flow=True):
+    if h.storage_type == hist.storage.Weight:
+        scale = scale/h.sum(flow=flow).value
+    else:
+        scale = scale/h.sum(flow=flow)
+    return scaleHist(h, scale, createNew, flow)
 
 def makeAbsHist(h, axis_name, rename=True):
     ax = h.axes[axis_name]
     axidx = list(h.axes).index(ax)
+    axInfo = dict(underflow=False, overflow=ax.traits.overflow, name=f"abs{axis_name}" if rename else axis_name)
     if ax.size == 1 and -ax.edges[0] == ax.edges[-1]:
-        abs_ax = hist.axis.Regular(1, 0, ax.edges[-1], underflow=False, name=f"abs{axis_name}" if rename else axis_name)
-        return hist.Hist(*h.axes[:axidx], abs_ax, *h.axes[axidx+1:], storage=h.storage_type(), data=h.view())
+        abs_ax = hist.axis.Regular(1, 0, ax.edges[-1], **axInfo)
+        return hist.Hist(*h.axes[:axidx], abs_ax, *h.axes[axidx+1:], storage=h.storage_type(), data=h.view(flow=True))
 
     if 0 not in ax.edges:
         raise ValueError("Can't mirror around 0 if it isn't a bin boundary")
-    abs_ax = hist.axis.Variable(ax.edges[ax.index(0.):], underflow=False, name=f"abs{axis_name}" if rename else axis_name)
+    abs_ax = hist.axis.Variable(ax.edges[ax.index(0.):], **axInfo)
     hnew = hist.Hist(*h.axes[:axidx], abs_ax, *h.axes[axidx+1:], storage=h.storage_type())
     
     s = hist.tag.Slicer()
-    hnew[...] = h[{axis_name : s[ax.index(0):]}].view() + np.flip(h[{axis_name : s[:ax.index(0)]}].view(), axis=axidx)
+    view = h[{axis_name : s[ax.index(0):]}].view(flow=True) + np.flip(h[{axis_name : s[:ax.index(0)]}].view(flow=True), axis=axidx)
+    hnew[...] = np.take(view, range(ax.traits.underflow, abs_ax.size+ax.traits.underflow), axidx)
     return hnew
 
 # Checks if edges1 could be rebinned to edges2. Order is important!
@@ -291,7 +346,7 @@ def rebinHist(h, axis_name, edges):
     ax_idx = [a.name for a in h.axes].index(axis_name)
 
     if type(edges) == list:
-        if all(x == y for x,y in zip(edges, ax.edges)):
+        if len(edges) == len(ax.edges) and all(x == y for x,y in zip(edges, ax.edges)):
             return h
     elif type(edges) == np.array:
         if edges.shape == ax.edges.shape and np.isclose(edges, ax.edges).all():
@@ -631,10 +686,12 @@ def rescaleBandVariation(histo, factor):
         histo[...]= np.stack([new_lower,new_upper],axis=-1)
         return histo
 
-def rssHist(h, syst_axis, scale=1.):
+def rssHists(h, syst_axis, scale=1., hnom=None):
     s = hist.tag.Slicer()
 
-    hnom = h[{syst_axis : 0}]
+    if hnom is None:
+        hnom = h[{syst_axis : 0}]
+
     hdiff = addHists(h, hnom, scale2=-1.)*scale
     hss = multiplyHists(hdiff, hdiff)
 
@@ -644,3 +701,15 @@ def rssHist(h, syst_axis, scale=1.):
 
     return hUp, hDown
 
+def rssHistsMid(h, syst_axis, scale=1.):
+    s = hist.tag.Slicer()
+
+    hnom = 0.5*(h[{"downUpVar" : -1j, syst_axis : 0 }]+h[{"downUpVar" : 1j, syst_axis : 0 }])
+    hdiff = addHists(h, hnom, scale2=-1.)*scale
+    hss = multiplyHists(hdiff, hdiff)
+
+    hrss = sqrtHist(hss[{syst_axis : s[0:hist.overflow:hist.sum]}])
+    hUp = addHists(hnom, hrss[{"downUpVar" : 1j}])
+    hDown = addHists(hnom, hrss[{"downUpVar" : -1j}], scale2=-1.)
+
+    return hUp, hDown

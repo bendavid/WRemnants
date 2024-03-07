@@ -1,4 +1,5 @@
-export WREM_BASE=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+WREM_BASE=$( cd "$( dirname "${BASH_SOURCE[0]}" )" && pwd )
+export WREM_BASE=$(readlink -f "$WREM_BASE")
 
 source ${WREM_BASE}/narf/setup.sh
 
