@@ -30,6 +30,14 @@ def syst_transform_map(base_hist, hist_name):
     transforms["scetlib_dyturboMSHT20Down"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[1], "procs" : common.vprocs_all}
     transforms["scetlib_dyturboMSHT20an3loUp"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[0], "procs" : common.zprocs_all}
     transforms["scetlib_dyturboMSHT20an3loDown"] = {"action" : lambda h: pdfUnc(h, "pdfMSHT20", "vars")[1], "procs" : common.zprocs_all}
+    transforms["ewUp"] = {"action" : lambda h,**args: h if "systIdx" not in h.axes.name else h[{"systIdx" : 0}]}
+    transforms["ewDown"] = {"requiresNominal" : True, "action" : lambda h,**args: h if "systIdx" not in h.axes.name else hh.mirrorHist(h[{"systIdx" : 0}], **args)}
+    transforms["muonScaleUp"] = {"action" : lambda h: h if "unc" not in h.axes.name else hh.rssHistsMid(h, "unc")[1]}
+    transforms["muonScaleDown"] = {"action" : lambda h: h if "unc" not in h.axes.name else hh.rssHistsMid(h, "unc")[0]}
+    transforms["muonScale3Up"] = {"action" : lambda h: h if "unc" not in h.axes.name else hh.rssHistsMid(h, "unc", 3.35)[1]}
+    transforms["muonScale3Down"] = {"action" : lambda h: h if "unc" not in h.axes.name else hh.rssHistsMid(h, "unc", 3.35)[0]}
+    transforms["muonResUp"] = {"requiresNominal" : True, "action" : lambda h,**args: h if "smearing_variation" not in h.axes.name else hh.rssHists(h, "smearing_variation", **args)[1]}
+    transforms["muonResDown"] = {"requiresNominal" : True, "action" : lambda h,**args: h if "smearing_variation" not in h.axes.name else hh.rssHists(h, "smearing_variation", **args)[0]}
 
     s = hist.tag.Slicer()
     transforms.update({
@@ -217,7 +225,59 @@ def scale_helicity_hist_to_variations(scale_hist, sum_axes=[], pt_ax="ptVgen", g
     scale_variation_hist = hist.Hist(*scale_hist.axes, 
                                      name = out_name, data = systhist)
 
-    return scale_variation_hist 
+    return scale_variation_hist
+
+def decorrelateByAxis(hvar, hnom, axisToDecorrName, decorrEdges, newDecorrAxisName=None):
+
+    commonMessage = f"Requested to decorrelate uncertainty in histogram {hvar.name} by {axisToDecorrName} axis"
+    if axisToDecorrName not in hnom.axes.name:
+        raise ValueError(f"{commonMessage}, but available axes for nominal histogram are {hnom.axes.name}")
+    
+    # for convenience, broadcast the nominal into the same shape as hvar
+    # hvar may often have the same dimension as hnom, but sometimes it might have been mirrored and thus have at least the mirror axis
+    hnomAsVar = hh.broadcastSystHist(hnom, hvar)
+
+    ax = hnomAsVar.axes[axisToDecorrName]
+    axisToDecorrIndex = list(hnomAsVar.axes).index(ax)
+    logger.debug(f"Decorrelating versus axis {axisToDecorrName} with index {axisToDecorrIndex}")
+
+    if len(decorrEdges):
+        if len(decorrEdges) < 3:
+            raise ValueError(f"{commonMessage}, but less than 3 edges (thus 2 bins) were specified.")
+        # check that the edges in decorrEdges correspond to a subset of the edges of axis names axisToDecorrName
+        badEdges = []
+        for edge in decorrEdges:
+            if all(not np.isclose(edge, j, atol=0.0001) for j in ax.edges):
+                badEdges.append(edge)
+        if len(badEdges):
+            raise ValueError(f"Inconsistent edges specified to decorrelate uncertainty versus axis {axisToDecorrName}\n"
+                             f"Original axis edges: {ax.edges}\n"
+                             f"Decorrelation edges: {decorrEdges}\n"
+                             f"Inconsistent edges:  {badEdges}")
+    else:
+        # empty array automatically uses all edges of the chosen axis
+        decorrEdges = [x for x in ax.edges]
+
+    # add new axis to the broadcasted nominal (then we will copy the syst in the relevant bins)
+    axis_decorr_name = newDecorrAxisName if newDecorrAxisName != None else f"{axisToDecorrName}_decorr"
+    axis_decorr = hist.axis.Variable(decorrEdges, underflow=False, overflow=False, name=axis_decorr_name)
+    hvarnew = hh.addGenericAxis(hnomAsVar, axis_decorr)
+
+    for isyst in range(len(decorrEdges)-1):
+        indexLow = ax.index(decorrEdges[isyst] + 0.001) # add epsilon to ensure picking the bin on the right of the edge (note that the second bin index is excluded from the slice selection below)
+        # for the upper edge add an additional protection for the very last edge in case the axis doesn't have the overflow bin, since the edge lookup might be undefined in that case
+        # since the upper edge is no longer associated to the following bin, which would be the overflow bin, but to the inner bin (adding epsilon seems to work nonetheless, but it is probably by chance)
+        indexHigh = ax.index(decorrEdges[isyst+1] + 0.001) if decorrEdges[isyst+1] < ax.edges[-1] else ax.size # it seems hist.overflow doesn't work inside slice()
+        slices = [slice(None) if n != axisToDecorrIndex else slice(indexLow,indexHigh) for n in range(len(hnomAsVar.axes.name))]
+        hvarnew.values(flow=False)[*slices, isyst] = hvar.values(flow=False)[*slices] # use values instead of view, because hvar has storage=Double(), while hnom (and hence hvarnew) has storage=Weight
+
+    # if there is a mirror axis, put it at the end, since CardTool.py requires it like that
+    if "mirror" in hvarnew.axes.name:
+        sortedAxes = [n for n in hvarnew.axes.name if n != "mirror"]
+        sortedAxes.append("mirror")
+        hvarnew = hvarnew.project(*sortedAxes)
+
+    return hvarnew
 
 def make_fakerate_variation(href, fakerate_axes, fakerate_axes_syst, variation_fakerate=0.5, flow=False):
     # 1) calculate fakerate in bins of fakerate axes
@@ -360,11 +420,8 @@ def widthWeightNames(matches=None, proc=""):
     else:
         raise RuntimeError(f"No width found for process {proc}")
     # 0 and 1 are Up, Down from mass uncertainty EW fit (already accounted for in mass variations)
-    names = [f"width{proc[0]}{str(widths[i]).replace('.','p')}GeV" for i in (0, 1)]
     # 2, 3, and 4 are PDG width Down, Central, Up
-    names.append(f"widthShift{proc[0]}{str(2.3 if proc[0] == 'Z' else 42).replace('.','p')}MeVDown")
-    names.append(f"width{proc[0]}{str(widths[central]).replace('.','p')}GeV")
-    names.append(f"widthShift{proc[0]}{str(2.3 if proc[0] == 'Z' else 42).replace('.','p')}MeVUp")
+    names = [f"width{proc[0]}{str(width).replace('.','p')}GeV" for width in widths]
 
     return [x if not matches or any(y in x for y in matches) else "" for x in names]
 
@@ -458,7 +515,17 @@ def add_luminosity_unc_hists(results, df, args, axes, cols, addhelicity=False):
         luminosity = df.HistoBoost("nominal_luminosity", axes, [*cols, "luminosityScaling"], tensor_axes = [common.down_up_axis], storage=hist.storage.Double())
         results.append(luminosity)
     return df
-    
+
+# TODO: generalize to non-constant scaling if needed
+def add_scaledByCondition_unc_hists(results, df, args, axes, cols, newWeightName, histName, condition, scale):
+    # scale represents the scaling factor of the nominal weight, 1.1 means +10%, 2.0 means + 100% and so on
+    df = df.Define(newWeightName, f"({condition}) ? ({scale}*nominal_weight) : nominal_weight")
+    # df = df.Filter(f"wrem::printVar({newWeightName})")
+    # df = df.Filter(f"wrem::printVar(nominal_weight)")
+    scaledHist = df.HistoBoost(f"nominal_{histName}", axes, [*cols, newWeightName], storage=hist.storage.Double())
+    results.append(scaledHist)
+    return df
+
 def add_muon_efficiency_unc_hists(results, df, helper_stat, helper_syst, axes, cols, base_name="nominal", what_analysis=ROOT.wrem.AnalysisType.Wmass, smooth3D=False, addhelicity=False):
     # TODO: update for dilepton
     if what_analysis == ROOT.wrem.AnalysisType.Wmass:
@@ -624,8 +691,7 @@ def add_theory_hists(results, df, args, dataset_name, corr_helpers, qcdScaleByHe
 
     df = theory_tools.define_scale_tensor(df)
     df = define_mass_weights(df, dataset_name)
-    if args.widthVariations:
-        df = define_width_weights(df, dataset_name)
+    df = define_width_weights(df, dataset_name)
 
     add_pdf_hists(results, df, dataset_name, axes, cols, args.pdfs, base_name=base_name, addhelicity=addhelicity)
     add_qcdScale_hist(results, df, scale_axes, scale_cols, base_name=base_name, addhelicity=addhelicity)
@@ -647,7 +713,6 @@ def add_theory_hists(results, df, args, dataset_name, corr_helpers, qcdScaleByHe
 
         # TODO: Should have consistent order here with the scetlib correction function
         add_massweights_hist(results, df, axes, cols, proc=dataset_name, base_name=base_name, addhelicity=addhelicity)
-        if args.widthVariations:
-            add_widthweights_hist(results, df, axes, cols, proc=dataset_name, base_name=base_name)
+        add_widthweights_hist(results, df, axes, cols, proc=dataset_name, base_name=base_name)
 
     return df

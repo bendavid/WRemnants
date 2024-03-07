@@ -152,12 +152,13 @@ def read_dyturbo_vars_hist(base_name, var_axis=None, axes=("Y", "qT"), charge=No
     # map from scetlib fo variations naming to dyturbo naming
     # *FIXME* this is sensitive to presence or absence of trailing zeros for kappas
     scales_map = {
+            "pdf0" : "mur1-muf1",
             "kappaFO0.5-kappaf2." : "murH-muf1",
             "kappaFO2.-kappaf0.5" : "mur2-muf1",
             "kappaf0.5" : "mur1-mufH",
             "kappaf2." : "mur1-muf2",
             "kappaFO0.5" : "murH-mufH",
-            "kappaFO2." : "mur2-muf2"
+            "kappaFO2." : "mur2-muf2",
         }
 
     var_hist = None
@@ -169,8 +170,8 @@ def read_dyturbo_vars_hist(base_name, var_axis=None, axes=("Y", "qT"), charge=No
             pdf_member = int(var.removeprefix("pdf"))
         else:
             pdf_member = 0
-        if ("kappaf" in var or "kappaFO" in var) and var not in scales_map:
-            raise ValueError(f"Scale variation {var} found for fo_sing piece but no corresponding variation found for dyturbo")
+        if var in scales_map.keys() and var not in scales_map:
+            raise ValueError(f"Scale variation {var} found for fo_sing piece but no corresponding variation for dyturbo")
         dyturbo_scale = scales_map.get(var, "mur1-muf1")
         dyturbo_name = base_name.format(i=pdf_member, scale=dyturbo_scale)
         h = read_dyturbo_hist([dyturbo_name], axes=axes, charge=charge)
@@ -183,12 +184,25 @@ def read_dyturbo_vars_hist(base_name, var_axis=None, axes=("Y", "qT"), charge=No
 
 def read_dyturbo_hist(filenames, path="", axes=("y", "pt"), charge=None, coeff=None):
     filenames = [os.path.expanduser(os.path.join(path, f)) for f in filenames]
-    isfile = list(filter(lambda x: os.path.isfile(x), filenames))
 
-    if not isfile:
-        raise ValueError(f"Did not find any valid files in {filenames}")
+    hists = []
+    for fn in filenames:
+        expandedf = fn.split("+")
 
-    hists = [read_dyturbo_file(f, axes, charge, coeff) for f in isfile]
+        hs = []
+        for f in expandedf:
+            if not os.path.isfile(f):
+                raise ValueError(f"{f} is not a valid file!")
+
+        if len(expandedf) == 1:
+            hs.append(read_dyturbo_file(fn, axes, charge, coeff))
+        elif len(expandedf) == 2:
+            hs.append(hh.concatenateHists(*[read_dyturbo_file(f, axes, charge, coeff) for f in expandedf]))
+        else:
+            raise ValueError("Concatenate only supported for 2 files at present")
+
+        hists.extend(hs)
+
     if len(hists) > 1:
         hists = hh.rebinHistsToCommon(hists, 0)
 

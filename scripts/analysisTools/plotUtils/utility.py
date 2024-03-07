@@ -16,10 +16,14 @@ logger = logging.child_logger(__name__)
 # trying to use same colors as mathplotlib in wremnants
 colors_plots_ = {"Wmunu"      : ROOT.TColor.GetColor("#8B0000"), #ROOT.kRed+2,
                  "Zmumu"      : ROOT.TColor.GetColor("#87CEFA"), #lightskyblue, #ADD8E6 is lightblue #ROOT.kAzure+2,
+                 "ZmumuVeto"  : ROOT.TColor.GetColor("#ADD8E6"),
                  "DYlowMass"  : ROOT.TColor.GetColor("#00BFFF"), #deepskyblue,
+                 "DYlowMassVeto" : ROOT.TColor.GetColor("#00FFFF"), # cyan
                  "Wtau"       : ROOT.TColor.GetColor("#FFA500"), #ROOT.kCyan+1, #backward compatibility
                  "Wtaunu"     : ROOT.TColor.GetColor("#FFA500"), # orange, use #FF8C00 for darkOrange #ROOT.kCyan+1,
-                 "Ztautau"    : ROOT.TColor.GetColor("#00008B"), #ROOT.kSpring+9,
+                 "WmunuOOA"   : ROOT.TColor.GetColor("#FF8C00"), # dark orange
+                 "Ztautau"    : ROOT.TColor.GetColor("#00008B"), #green
+                 "ZtautauVeto" : ROOT.TColor.GetColor("#90EE90"), #lightgreen
                  "Top"        : ROOT.TColor.GetColor("#008000"), #ROOT.kGreen+2,
                  "Diboson"    : ROOT.TColor.GetColor("#FFC0CB"), #ROOT.kViolet,
                  "PhotonInduced" : ROOT.TColor.GetColor("#FFFF99"),
@@ -30,10 +34,14 @@ colors_plots_ = {"Wmunu"      : ROOT.TColor.GetColor("#8B0000"), #ROOT.kRed+2,
 
 legEntries_plots_ = {"Wmunu"      : "W#rightarrow#mu#nu",
                      "Zmumu"      : "Z#rightarrow#mu#mu",
-                     "DYlowMass"  : "Z#rightarrow#mu#mu 10<m<50 GeV",
+                     "ZmumuVeto"  : "veto Z#rightarrow#mu#mu",
+                     "DYlowMass"  : "Z#rightarrow#mu#mu 10<m<50",
+                     "DYlowMassVeto" : "veto Z#rightarrow#mu#mu 10<m<50",
                      "Wtau"       : "W#rightarrow#tau#nu", #backward compatibility
                      "Wtaunu"     : "W#rightarrow#tau#nu",
+                     "WmunuOOA"   : "W#rightarrow#mu#nu OOA",
                      "Ztautau"    : "Z#rightarrow#tau#tau",
+                     "ZtautauVeto": "veto Z#rightarrow#tau#tau",
                      "Top"        : "t quark",
                      "Diboson"    : "Diboson",
                      "PhotonInduced" : "Photon-induced",
@@ -1745,19 +1753,6 @@ def drawNTH1(hists=[],
             for i in range(0,len(textForLines)):
                 ytext = ymax - ytextOffsetFromTop*(ymax - ymin)
                 bintext.DrawLatex(etarange*i + etarange/sliceLabelOffset, ytext, textForLines[i])
-    
-    # if len(drawVertLines):
-    #     nLines = len(drawVertLines)
-    #     sliceLabelOffset = 10.
-    #     for i in range(nLines):
-    #         vertline.DrawLine(float(drawVertLines[i]), 0.0, float(drawVertLines[i]), ymax)
-    #     if len(textForLines):
-    #         for i in range(len(textForLines)): # we need nLines
-    #             ytext = (1.1)*ymax/2.
-    #             if i == 0:
-    #                 bintext.DrawLatex(h1.GetXaxis().GetBinLowEdge(0) + sliceLabelOffset, ytext, textForLines[i])
-    #             else:                    
-    #                 bintext.DrawLatex(drawVertLines[i-1] + sliceLabelOffset, ytext, textForLines[i])
 
     # redraw legend, or vertical lines appear on top of it
     leg.Draw("same")
@@ -3845,7 +3840,14 @@ def drawGraphCMS(grList,
     etabin.SetTextFont(42)
     etabin.SetTextColor(ROOT.kBlack)
     if etabinText:
-        etabin.DrawLatex(0.15,0.15,etabinText)
+        etabinText_x = 0.15
+        etabinText_y = 0.15
+        if "::" in etabinText:
+            etabinText_x,etabinText_y = etabinText.split("::")[1].split(",")
+            etabinText_text = etabinText.split("::")[0]
+        else:
+            etabinText_text = etabinText
+        etabin.DrawLatex(float(etabinText_x), float(etabinText_y), etabinText_text)
 
     canvas.RedrawAxis("sameaxis")
     leg.Draw("same")

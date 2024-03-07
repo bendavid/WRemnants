@@ -488,6 +488,7 @@ class TheoryHelper(object):
         pdf = input_tools.args_from_metadata(self.card_tool, "pdfs")[0]
         pdfInfo = theory_tools.pdf_info_map("ZmumuPostVFP", pdf)
         pdfName = pdfInfo["name"]
+        scale = scale if scale != 1.0 else pdfInfo["inflationFactor"]
         pdf_hist = pdfName
         symmetrize = "quadratic"
 
@@ -501,7 +502,7 @@ class TheoryHelper(object):
                 logger.error(f"Did not find {pdf_hist} correction in file! Cannot use SCETlib+DYTurbo PDF uncertainties")
             pdf_hist += "Corr"
 
-        logger.info(f"Using PDF hist {pdf_hist}")
+        logger.info(f"Using PDF hist {pdf_hist}, apply scaling of {scale}")
 
         pdf_ax = self.syst_ax if from_corr else "pdfVar"
         symHessian = pdfInfo["combine"] == "symHessian"
@@ -549,7 +550,7 @@ class TheoryHelper(object):
             group=pdfName,
             splitGroup={f"{pdfName}AlphaS": '.*'},
             systAxes=["vars" if from_corr else "alphasVar"],
-            scale=0.75 if asRange == "002" else 1.5,
+            scale=(0.75 if asRange == "002" else 1.5)*scale,
             symmetrize=symmetrize,
             passToFakes=self.propagate_to_fakes,
         )
@@ -558,7 +559,6 @@ class TheoryHelper(object):
         else:
             as_args["systNameReplace"] = as_replace
             as_args['skipEntries'] = [{"alphasVar" : "as0118"}]
-            
         self.card_tool.addSystematic(**as_args)
 
     def add_transition_fo_scale_uncertainties(self, transition = True, scale=True):

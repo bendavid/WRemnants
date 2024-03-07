@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 
-from wremnants.datasets.datagroups2016 import make_datagroups_2016
+from wremnants.datasets.datagroups import Datagroups
 from wremnants import histselections as sel
 #from wremnants import plot_tools,theory_tools,syst_tools
 from utilities import boostHistHelpers as hh,common, logging
@@ -36,6 +36,25 @@ from scripts.analysisTools.plotUtils.utility import *
 
 sys.path.append(os.getcwd())
 from scripts.analysisTools.tests.cropNegativeTemplateBins import cropNegativeContent
+
+def plotDistribution2D(args, groups, datasets, histname, outdir, canvas2Dshapes=None,
+                       xAxisName="x axis", yAxisName="y axis", zAxisName="Events"):
+    
+    groups.setNominalName(histname)
+    groups.loadHistsForDatagroups(histname, syst="", procsToRead=datasets)
+    histInfo = groups.getDatagroups()
+    rootHists = {}
+    
+    for d in datasets:
+        hnarf = histInfo[d].hists[histname]
+        rootHists[d] = narf.hist_to_root(hnarf)
+        rootHists[d].SetName(f"{histname}_{d}")
+        rootHists[d].SetTitle(f"{d}")
+        
+        drawCorrelationPlot(rootHists[d], xAxisName, yAxisName, zAxisName,
+                            f"{rootHists[d].GetName()}", plotLabel="ForceTitle", outdir=outdir,
+                            smoothPlot=False, drawProfileX=False, scaleToUnitArea=False,
+                            draw_both0_noLog1_onlyLog2=2, passCanvas=canvas2Dshapes)
 
 def plotDistribution1D(hdata, hmc, datasets, outfolder_dataMC, canvas1Dshapes=None,
                        xAxisName="variable", plotName="variable_failIso_jetInclusive",
@@ -85,7 +104,11 @@ if __name__ == "__main__":
                         help='Choose what processes to plot, otherwise all are done')
     parser.add_argument('--plot', nargs='+', type=str,
                         help='Choose what distribution to plot by name')
-    parser.add_argument("-x", "--x-axis-name", dest="xAxisName", nargs='+', type=str, help="x axis name")
+    parser.add_argument("-x", "--xAxisName", nargs='+', type=str, help="x axis name")
+    parser.add_argument("-r", "--ratioRange", nargs=2, type=float, default=[0.9,1.1], help="Min and max of ratio range")
+    parser.add_argument(     '--plot2D', action='store_true',   help='To plot 2D histograms and 1D projections')
+    parser.add_argument("-y", "--yAxisName", nargs='+', type=str, help="y axis name (only for 2D plots)")
+    parser.add_argument("-l", "--lumi", type=float, default=None, help="Normalization for 2D plots (if the input does not have data the luminosity is set to 1/fb)")
     args = parser.parse_args()
     
     logger = logging.setup_logger(os.path.basename(__file__), args.verbose)
@@ -98,12 +121,27 @@ if __name__ == "__main__":
 
     adjustSettings_CMS_lumi()
     canvas1D = ROOT.TCanvas("canvas1D", "", 800, 900)
+    canvas2D = ROOT.TCanvas("canvas2D", "", 900, 800)
 
-    groups = make_datagroups_2016(fname)
+    groups = Datagroups(fname)
+    if args.lumi:
+        groups.lumi = args.lumi
+        logger.warning(f"Renormalizing MC to {args.lumi}/fb")
     datasets = groups.getNames()
     if args.processes is not None and len(args.processes):
         datasets = list(filter(lambda x: x in args.processes, datasets))
     logger.info(f"Will plot datasets {datasets}")
+
+    if args.plot2D:
+        for ip,p in enumerate(args.plot):
+            xAxisName=args.xAxisName[ip]
+            yAxisName=args.yAxisName[ip]
+            plotDistribution2D(args, groups, datasets, p, outdir, canvas2D, xAxisName, yAxisName)
+        quit()
+            
+    ratioMin = args.ratioRange[0]
+    ratioMax = args.ratioRange[1]
+    ratioPadYaxisTitle=f"Data/pred::{ratioMin},{ratioMax}"
 
     for ip,p in enumerate(args.plot):
 
@@ -121,5 +159,5 @@ if __name__ == "__main__":
         hdata = rootHists["Data"]
         hmc = {d : rootHists[d] for d in datasets if d != "Data"}
         plotDistribution1D(hdata, hmc, datasets, outdir, canvas1Dshapes=canvas1D,
-                           xAxisName=args.xAxisName[ip], plotName=p)
+                           xAxisName=args.xAxisName[ip], plotName=p, ratioPadYaxisTitle=ratioPadYaxisTitle)
 

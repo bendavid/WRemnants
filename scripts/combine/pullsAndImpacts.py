@@ -430,8 +430,7 @@ def producePlots(fitresult, args, poi, group=False, normalize=False, fitresult_r
     elif args.output_mode == 'output':
         postfix = poi
         meta = input_tools.get_metadata(args.inputFile)
-        if args.outFolder and not os.path.isdir(args.outFolder):
-            os.makedirs(args.outFolder)
+
         outdir = output_tools.make_plot_dir(args.outFolder, "", eoscp=args.eoscp)
         if group:
             outfile = os.path.splitext(args.outputFile)

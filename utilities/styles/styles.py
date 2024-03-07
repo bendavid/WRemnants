@@ -1,27 +1,48 @@
 
 process_colors = {
     "Data": "black",
-    "Zmumu": "lightblue",
-    "Zee": "lightblue",
-    "Ztautau": "darkblue",
-    "Wmunu": "darkred",
-    "Wenu": "darkred",
-    "Wtaunu": "orange",
+    "Zmumu": "#5790FC",
+    "Z": "#5790FC",
+    "Zll": "#5790FC",
+    "Zee": "#5790FC",
+    "Ztautau": "#7A21DD",
+    "Wmunu": "#E42536",
+    "Wenu": "#E42536",
+    "Wtaunu": "#F89C20",
     "DYlowMass": "deepskyblue",
     "PhotonInduced": "gold",
     "Top": "green",
-    "Diboson": "pink",
-    "QCD": "grey",
-    "Other": "grey",
-    "Fake": "grey",
-    "Fake_e": "grey",
-    "Fake_mu": "grey",
+    "Diboson": "#964A8B",
+    "Rare": "#964A8B",
+    "QCD": "#9C9CA1",
+    "Other": "#9C9CA1",
+    "Fake": "#9C9CA1",
+    "Fake_e": "#9C9CA1",
+    "Fake_mu": "#9C9CA1",
 }
+
+process_supergroups = {
+    "wmass":{
+        "Z": ["Ztautau", "Zmumu", "DYlowMass"],
+        "Rare": ["PhotonInduced", "Top", "Diboson"],
+    },
+    "dilepton":{
+        "Other": ["Other","PhotonInduced", "Ztautau"],
+    },
+    "lowpu_w":{
+        "Z": ["Ztautau", "Zmumu", "Zee", "DYlowMass"],
+        "Rare": ["PhotonInduced", "Top", "Diboson"],
+    },
+}
+process_supergroups["wlike"]=process_supergroups["dilepton"]
+process_supergroups["lowpu_z"]=process_supergroups["dilepton"]
 
 process_labels = {
     "Data": "Data",
     "Zmumu": r"Z$\to\mu\mu$",
     "Zee": r"Z$\to ee$",
+    "Zll": r"Z$\to\ell\ell$",
+    "Z": r"Z",
     "Ztautau": r"Z$\to\tau\tau$",
     "Wmunu":  r"W$^{\pm}\to\mu\nu$",
     "Wenu": r"W$^{\pm}\to e\nu$",
@@ -57,7 +78,8 @@ xlabels = {
     "ptMinus" : r"p$_{\mathrm{T}}^{\ell(-)}$ (GeV)",
     "etaSum":r"$\eta^{\ell(+)} + \eta^{\ell(-)}$",
     "etaDiff":r"$\eta^{\ell(+)} - \eta^{\ell(-)}$",
-    "massVgen": "massVgen",
+    "etaDiff":r"$\eta^{\ell(+)} - \eta^{\ell(-)}$",
+    "etaAbsEta": r"$\eta^{\ell[\mathrm{argmax(|\eta^{\ell}|)}]}$",
     "ewMll": "ewMll",
     "ewMlly": "ewMlly",
     "ewLogDeltaM": "ewLogDeltaM",

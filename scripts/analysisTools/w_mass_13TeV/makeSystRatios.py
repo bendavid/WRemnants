@@ -52,7 +52,7 @@ def plotUnrolledHistogram(h, process, syst, outdir, canvas, hist2DforBins, yAxis
     h.SetMarkerStyle(1)
     #h.SetFillColor(ROOT.kGray+3)
     #h.SetFillColorAlpha(ROOT.kGray+3, 0.4)
-    
+
     miny, maxy = getMinMaxHisto(h, sumError=True if errorBars else False)
     diff = maxy - miny
     #print(f"min,max = {miny}, {maxy}:   diff = {diff}")
@@ -124,7 +124,9 @@ if __name__ == "__main__":
     parser.add_argument(     '--systPostfix', type=str, default=None, help="Postfix for plot showing some syst variations")
     parser.add_argument(     '--fakeSystToW', default=False , action='store_true',   help='Make additional plots where systs on fakes are translated into signal variation')
     parser.add_argument(     '--sumFakeAndW', default=False , action='store_true',   help='In addition to other plots, and as alternative to --fakeSystToW, sum Fake and W and show variations from varying signal or Fake only')
+    parser.add_argument(     '--compareSingleSystToNomi', default=False , action='store_true',   help='Make plots comparing each single variation with nominal, rather than puttng all in the same plot when multiple are selected')
     parser.add_argument(     '--difference', dest='addDifference',  action='store_true', help='Also plot difference of syst and nomi, not just their ratio')
+    parser.add_argument(     '--ratioRange', default=None, type=float, nargs=2, help="Range for ratio plot (if None, use default from plotted histograms)")
     args = parser.parse_args()
 
     doUnrolled = (args.plot == "unrolled") or (args.plot == "all")
@@ -132,10 +134,7 @@ if __name__ == "__main__":
     
     fname = args.rootfile[0]
     outdir = args.outdir[0] + "/"
-    if outdir and not os.path.exists(outdir):
-        os.makedirs(outdir)
-        htmlpath = "./templates/index.php"
-        shutil.copy(htmlpath, outdir)
+    createPlotDirAndCopyPhp(outdir)
 
     isWrem = True if args.source == "wrem" else False
     if isWrem and not args.charge:
@@ -163,7 +162,7 @@ if __name__ == "__main__":
     ratios = {p : [] for p in processes}
 
     canvas = ROOT.TCanvas("canvas","",900,800) 
-    canvas1D = ROOT.TCanvas("canvas","",800,1000) 
+    canvas1D = ROOT.TCanvas("canvas1D","",800,1000) 
 
     canvas_unroll = ROOT.TCanvas("canvas_unroll","",3000,800) 
     leftMargin = 0.06
@@ -353,6 +352,10 @@ if __name__ == "__main__":
                     plotUnrolledHistogram(ratioStatUnc_unrolled, pname, f"{sname}_statUncRatioWithNomi", outdir, canvas_unroll, ratioStatUnc, errorBars=False, yAxisTitle="stat. uncertainty ratio: syst/nomi", channelCharge=args.charge)
     print()
 
+    ratioRange = ""
+    if args.ratioRange != None:
+        ratioRange = f"::{args.ratioRange[0]},{args.ratioRange[1]}"
+
     ptBinRanges = []
     for i in range(nominals[p].GetNbinsY()):
         ptBinRanges.append("") # keep dummy otherwise there's too much text here
@@ -360,57 +363,100 @@ if __name__ == "__main__":
     if args.systPostfix:
         systPostfix += f"_{args.systPostfix}"
     for p in processes:
-        if len(systList[p]) > 11:
-            print("Not running drawNTH1() function to draw curves, there are too many lines ({})".format(len(systList[p])))
-        else:
-            drawNTH1(systList[p], systLeg[p], "Unrolled eta-p_{T} bin", "Events", f"nominalAndSyst_{p}{systPostfix}", outdir,
-                     topMargin=0.2, leftMargin=0.06, rightMargin=0.01, labelRatioTmp="syst/nomi",
-                     legendCoords="0.06,0.99,0.84,0.99;4", lowerPanelHeight=0.5, skipLumi=True, passCanvas=canvas_unroll,
-                     yAxisExtendConstant=1.4, ytextOffsetFromTop=0.22,
-                     drawVertLines="{a},{b}".format(a=nominals[p].GetNbinsY(),b=nominals[p].GetNbinsX()),
-                     textForLines=ptBinRanges, transparentLegend=False,
-                     onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=1)
-            #
-            drawNTH1(systList_eta[p], systLeg[p], "Muon eta", "Events", f"nominalAndSyst_{p}{systPostfix}_projEta", outdir,
-                     topMargin=0.25, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="syst/nomi",
-                     legendCoords="0.01,0.99,0.80,0.99;2", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
-                     transparentLegend=False,
-                     onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=2)
-            #
-            drawNTH1(systList_pt[p], systLeg[p], "Muon p_{T} (GeV)", "Events", f"nominalAndSyst_{p}{systPostfix}_projPt", outdir,
-                     topMargin=0.25, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="syst/nomi",
-                     legendCoords="0.01,0.99,0.80,0.99;2", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
-                     transparentLegend=False,
-                     onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=2)
-            if transformFakeIntoSignalVariation and p == "Wmunu":
-                histFakesOnSignal = [systList[p][0]] + [x for x in systList_FakeOnSignal]
-                drawNTH1(histFakesOnSignal, systLeg[p], "Unrolled eta-p_{T} bin", "Events",
-                         f"nominalAndSyst_{p}{systPostfix}_FakeOnSignal", outdir,
-                         topMargin=0.2, leftMargin=0.06, rightMargin=0.01, labelRatioTmp="syst/nomi",
+        if args.compareSingleSystToNomi:
+            systNames = [l for l in systLeg[p][1:]]
+            for isys,s in enumerate(systLeg[p]):
+                if isys == 0 or s not in systNames: continue # logic needed also to skip systs (Down/Up which might have been plotted already)
+                systNames.remove(s)
+                hlist = [systList[p][0], systList[p][isys]]
+                hlist_eta = [systList_eta[p][0], systList_eta[p][isys]]
+                hlist_pt = [systList_pt[p][0], systList_pt[p][isys]]
+                leglist = [systLeg[p][0], systLeg[p][isys]]
+                leglist_eta = [x for x in leglist]
+                leglist_pt = [x for x in leglist]
+                if "Up" in s or "Down" in s:
+                    antis = s.replace("Down", "Up") if "Down" in s else s.replace("Up", "Down")
+                    if antis in systNames:
+                        antisID = systLeg[p].index(antis)
+                        hlist.append(systList[p][antisID])
+                        hlist_eta.append(systList_eta[p][antisID])
+                        hlist_pt.append(systList_pt[p][antisID])
+                        leglist.append(systLeg[p][antisID])
+                        leglist_eta.append(systLeg[p][antisID])
+                        leglist_pt.append(systLeg[p][antisID])
+                        systNames.remove(antis)
+                systPostfixSingle = s.replace("Down", "").replace("Up", "")
+                drawNTH1(hlist, leglist, "Unrolled eta-p_{T} bin", "Events", f"nominalAndSyst_{p}{systPostfixSingle}", outdir,
+                         topMargin=0.2, leftMargin=0.06, rightMargin=0.01, labelRatioTmp=f"syst/nomi{ratioRange}",
                          legendCoords="0.06,0.99,0.84,0.99;4", lowerPanelHeight=0.5, skipLumi=True, passCanvas=canvas_unroll,
                          yAxisExtendConstant=1.4, ytextOffsetFromTop=0.22,
                          drawVertLines="{a},{b}".format(a=nominals[p].GetNbinsY(),b=nominals[p].GetNbinsX()),
                          textForLines=ptBinRanges, transparentLegend=False,
-                         onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True,
-                         setOnlyLineRatio=True, lineWidth=1)
+                         onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=1)
                 #
-                histFakesOnSignal = [systList_eta[p][0]] + [x for x in systList_eta_FakeOnSignal]
-                drawNTH1(histFakesOnSignal, systLeg[p], "Muon eta", "Events",
-                         f"nominalAndSyst_{p}{systPostfix}_projEta_FakeOnSignal", outdir,
+                drawNTH1(hlist_eta, leglist_eta, "Muon eta", "Events", f"nominalAndSyst_{p}{systPostfixSingle}_projEta", outdir,
+                         topMargin=0.25, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="syst/nomi",
+                         legendCoords="0.01,0.99,0.80,0.99;1", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
+                         transparentLegend=False,
+                         onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=2)
+                #
+                drawNTH1(hlist_pt, leglist_pt, "Muon p_{T} (GeV)", "Events", f"nominalAndSyst_{p}{systPostfixSingle}_projPt", outdir,
+                         topMargin=0.25, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="syst/nomi",
+                         legendCoords="0.01,0.99,0.80,0.99;1", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
+                         transparentLegend=False,
+                         onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=2)
+        else:
+            if len(systList[p]) > 11:
+                print("Not running drawNTH1() function to draw curves, there are too many lines ({})".format(len(systList[p])))
+            else:
+                drawNTH1(systList[p], systLeg[p], "Unrolled eta-p_{T} bin", "Events", f"nominalAndSyst_{p}{systPostfix}", outdir,
+                         topMargin=0.2, leftMargin=0.06, rightMargin=0.01, labelRatioTmp=f"syst/nomi{ratioRange}",
+                         legendCoords="0.06,0.99,0.84,0.99;4", lowerPanelHeight=0.5, skipLumi=True, passCanvas=canvas_unroll,
+                         yAxisExtendConstant=1.4, ytextOffsetFromTop=0.22,
+                         drawVertLines="{a},{b}".format(a=nominals[p].GetNbinsY(),b=nominals[p].GetNbinsX()),
+                         textForLines=ptBinRanges, transparentLegend=False,
+                         onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=1)
+                #
+                drawNTH1(systList_eta[p], systLeg[p], "Muon eta", "Events", f"nominalAndSyst_{p}{systPostfix}_projEta", outdir,
                          topMargin=0.25, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="syst/nomi",
                          legendCoords="0.01,0.99,0.80,0.99;2", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
                          transparentLegend=False,
-                         onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True,
-                         setOnlyLineRatio=True, lineWidth=2)
+                         onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=2)
                 #
-                histFakesOnSignal = [systList_pt[p][0]] + [x for x in systList_pt_FakeOnSignal]
-                drawNTH1(histFakesOnSignal, systLeg[p], "Muon p_{T} (GeV)", "Events",
-                         f"nominalAndSyst_{p}{systPostfix}_projPt_FakeOnSignal", outdir,
+                drawNTH1(systList_pt[p], systLeg[p], "Muon p_{T} (GeV)", "Events", f"nominalAndSyst_{p}{systPostfix}_projPt", outdir,
                          topMargin=0.25, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="syst/nomi",
                          legendCoords="0.01,0.99,0.80,0.99;2", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
                          transparentLegend=False,
-                         onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True,
-                         setOnlyLineRatio=True, lineWidth=2)
+                         onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=2)
+                if transformFakeIntoSignalVariation and p == "Wmunu":
+                    histFakesOnSignal = [systList[p][0]] + [x for x in systList_FakeOnSignal]
+                    drawNTH1(histFakesOnSignal, systLeg[p], "Unrolled eta-p_{T} bin", "Events",
+                             f"nominalAndSyst_{p}{systPostfix}_FakeOnSignal", outdir,
+                             topMargin=0.2, leftMargin=0.06, rightMargin=0.01, labelRatioTmp="syst/nomi",
+                             legendCoords="0.06,0.99,0.84,0.99;4", lowerPanelHeight=0.5, skipLumi=True, passCanvas=canvas_unroll,
+                             yAxisExtendConstant=1.4, ytextOffsetFromTop=0.22,
+                             drawVertLines="{a},{b}".format(a=nominals[p].GetNbinsY(),b=nominals[p].GetNbinsX()),
+                             textForLines=ptBinRanges, transparentLegend=False,
+                             onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True,
+                             setOnlyLineRatio=True, lineWidth=1)
+                    #
+                    histFakesOnSignal = [systList_eta[p][0]] + [x for x in systList_eta_FakeOnSignal]
+                    drawNTH1(histFakesOnSignal, systLeg[p], "Muon eta", "Events",
+                             f"nominalAndSyst_{p}{systPostfix}_projEta_FakeOnSignal", outdir,
+                             topMargin=0.25, leftMargin=0.16, rightMargin=0.05, labelRatioTmp=f"syst/nomi{ratioRange}",
+                             legendCoords="0.01,0.99,0.80,0.99;2", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
+                             transparentLegend=False,
+                             onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True,
+                             setOnlyLineRatio=True, lineWidth=2)
+                    #
+                    histFakesOnSignal = [systList_pt[p][0]] + [x for x in systList_pt_FakeOnSignal]
+                    drawNTH1(histFakesOnSignal, systLeg[p], "Muon p_{T} (GeV)", "Events",
+                             f"nominalAndSyst_{p}{systPostfix}_projPt_FakeOnSignal", outdir,
+                             topMargin=0.25, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="syst/nomi",
+                             legendCoords="0.01,0.99,0.80,0.99;2", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
+                             transparentLegend=False,
+                             onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True,
+                             setOnlyLineRatio=True, lineWidth=2)
 
     if args.sumFakeAndW:
         # create syst vars
@@ -436,7 +482,7 @@ if __name__ == "__main__":
             
         drawNTH1(systList_WmunuAndFake, systLeg_WmunuAndFake, "Unrolled eta-p_{T} bin", "Events",
                  f"nominalAndSyst_{systPostfix}_WmunuAndFake", outdir,
-                 topMargin=0.2, leftMargin=0.06, rightMargin=0.01, labelRatioTmp="syst/nomi",
+                 topMargin=0.2, leftMargin=0.06, rightMargin=0.01, labelRatioTmp=f"syst/nomi{ratioRange}",
                  legendCoords="0.06,0.99,0.84,0.99;4", lowerPanelHeight=0.5, skipLumi=True, passCanvas=canvas_unroll,
                  yAxisExtendConstant=1.4, ytextOffsetFromTop=0.22,
                  drawVertLines="{a},{b}".format(a=nominals[p].GetNbinsY(),b=nominals[p].GetNbinsX()),
