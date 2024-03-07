@@ -190,6 +190,7 @@ for dataset, corr_hists in corr_dict.items():
         all_labels = []
         all_axes = []
         
+        has_charge=False
         for corr, corrh in corr_hists.items():
             has_charge=False
             sel = {} # bin selections
