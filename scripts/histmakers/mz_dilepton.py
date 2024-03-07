@@ -26,7 +26,7 @@ parser = common.set_parser_default(parser, "genVars", ["ptVGen", "absYVGen"])
 parser = common.set_parser_default(parser, "pt", [34,26.,60.])
 parser = common.set_parser_default(parser, "eta", [48,-2.4,2.4])
 parser = common.set_parser_default(parser, "aggregateGroups", ["Diboson", "Top", "Wtaunu", "Wmunu"])
-parser = common.set_parser_default(parser, "addTheoryCorrs", ["virtual_ew", "horaceqedew_FSR", "horacelophotosmecoffew_FSR",])
+parser = common.set_parser_default(parser, "addTheoryCorrs", ["virtual_ew", "pythiaew_ISR", "horaceqedew_FSR", "horacelophotosmecoffew_FSR",])
 
 args = common.parse_histmaker_args(parser)
 
