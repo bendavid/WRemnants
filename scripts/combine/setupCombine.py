@@ -52,8 +52,8 @@ def make_parser(parser=None):
     parser.add_argument("--noTransitionUnc", action="store_true", help="Do not include matching transition parameter variations.")
     parser.add_argument("--npUnc", default="Delta_Lambda", type=str, choices=combine_theory_helper.TheoryHelper.valid_np_models, help="Nonperturbative uncertainty model")
     parser.add_argument("--tnpMagnitude", default=1, type=float, help="Variation size for the TNP")
-    parser.add_argument("--scaleTNP", default=12, type=float, help="Scale the TNP uncertainties by this factor")
-    parser.add_argument("--scalePdf", default=1, type=float, help="Scale the PDF hessian uncertainties by this factor (overrides the inflation factor)")
+    parser.add_argument("--scaleTNP", default=5, type=float, help="Scale the TNP uncertainties by this factor")
+    parser.add_argument("--scalePdf", default=1, type=float, help="Scale the PDF hessian uncertainties by this factor")
     parser.add_argument("--pdfUncFromCorr", action='store_true', help="Take PDF uncertainty from correction hist (Requires having run that correction)")
     parser.add_argument("--massVariation", type=float, default=100, help="Variation of boson mass")
     parser.add_argument("--ewUnc", type=str, nargs="*", default=["default"], help="Include EW uncertainty (other than pure ISR or FSR)", 

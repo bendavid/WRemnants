@@ -324,7 +324,8 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
         hresum = hresum.project(*newaxes)
 
     dyturbo_axes = axes if axes else hfo_sing.axes.name[:-1]
-    if hfo_sing.axes["vars"].size > 1:
+    dyturbo_vars = hfo_sing.axes["vars"].size > 1 and "{scale}" in dyturbo_fo or "{i}" in dyturbo_fo
+    if dyturbo_vars:
         hfo = read_dyturbo_vars_hist(dyturbo_fo, var_axis=hfo_sing.axes["vars"], axes=dyturbo_axes, charge=charge)
     else:
         hfo = read_dyturbo_hist([dyturbo_fo], axes=dyturbo_axes, charge=charge, coeff=coeff)
@@ -348,27 +349,29 @@ def read_matched_scetlib_dyturbo_hist(scetlib_resum, scetlib_fo_sing, dyturbo_fo
     # variations are driven by resummed result, collect common variations from nonsingular piece
     # if needed
     if hnonsing.axes["vars"] != hresum.axes["vars"]:
+        if not dyturbo_vars:
+            hnonsing = hnonsing[...,0]
+        else:
+            # remapping is needed for scale variations which have slightly different parameter
+            # definitions for resummed vs fixed-order pieces
+            # *FIXME* this is sensitive to presence or absence of trailing zeros for kappas
+            scales_map = {"mufdown": "kappaf0.5",
+                        "mufup" : "kappaf2.",
+                        "mufdown-kappaFO0.5-kappaf2." : "kappaFO0.5",
+                        "mufup-kappaFO2.-kappaf0.5" : "kappaFO2.",
+                        }
 
-        # remapping is needed for scale variations which have slightly different parameter
-        # definitions for resummed vs fixed-order pieces
-        # *FIXME* this is sensitive to presence or absence of trailing zeros for kappas
-        scales_map = {"mufdown": "kappaf0.5",
-                      "mufup" : "kappaf2.",
-                      "mufdown-kappaFO0.5-kappaf2." : "kappaFO0.5",
-                      "mufup-kappaFO2.-kappaf0.5" : "kappaFO2.",
-                      }
+            htmp_nonsing = hist.Hist(*hnonsing.axes[:-1], hresum.axes["vars"], storage = hnonsing._storage_type())
 
-        htmp_nonsing = hist.Hist(*hnonsing.axes[:-1], hresum.axes["vars"], storage = hnonsing._storage_type())
+            for i, var in enumerate(hresum.axes["vars"]):
+                var_nonsing = scales_map.get(var, var)
+                if ("muf" in var or "kappaf" in var or "kappaFO" in var) and var_nonsing not in hnonsing.axes["vars"]:
+                    raise ValueError(f"Scale variation {var} found for resummed piece which should correspond to {var_nonsing} for nonsingular piece but is not found")
+                var_nonsing = var_nonsing if var_nonsing in hnonsing.axes["vars"] else hnonsing.axes["vars"][0]
 
-        for i, var in enumerate(hresum.axes["vars"]):
-            var_nonsing = scales_map.get(var, var)
-            if ("muf" in var or "kappaf" in var or "kappaFO" in var) and var_nonsing not in hnonsing.axes["vars"]:
-                raise ValueError(f"Scale variation {var} found for resummed piece which should correspond to {var_nonsing} for nonsingular piece but is not found")
-            var_nonsing = var_nonsing if var_nonsing in hnonsing.axes["vars"] else hnonsing.axes["vars"][0]
+                htmp_nonsing[{"vars" : i}] = hnonsing[{"vars" : var_nonsing}].view(flow=True)
 
-            htmp_nonsing[{"vars" : i}] = hnonsing[{"vars" : var_nonsing}].view(flow=True)
-
-        hnonsing = htmp_nonsing
+            hnonsing = htmp_nonsing
 
     htotal = hh.addHists(hresum, hnonsing, by_ax_name=False)
 

@@ -123,6 +123,8 @@ def postprocess_corr_hist(corrh):
     resum_scale_vars_exclusive = [var for var in corrh.axes["vars"] if any(resum_scale in var for resum_scale in resum_scales)]
     resum_scale_vars = ["pdf0"] + resum_scale_vars_exclusive
 
+    if len(resum_scale_vars) == 1:
+        return corrh
 
     transition_vars_exclusive = ["transition_points0.2_0.35_1.0", "transition_points0.2_0.75_1.0"]
 

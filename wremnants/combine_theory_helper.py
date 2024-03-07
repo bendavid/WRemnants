@@ -75,6 +75,10 @@ class TheoryHelper(object):
         self.add_nonpert_unc(model=self.np_model)
         self.add_resum_unc(magnitude=self.tnp_magnitude, mirror=self.mirror_tnp, scale=self.tnp_scale)
         self.add_pdf_uncertainty(from_corr=self.pdf_from_corr, operation=self.pdf_operation, scale=self.scale_pdf_unc)
+        try:
+            self.add_quark_mass_vars()
+        except ValueError as e:
+            logger.warning(e)
 
     def set_minnlo_unc(self, minnloUnc):
         self.minnlo_unc = minnloUnc
@@ -596,3 +600,42 @@ class TheoryHelper(object):
                 outNames=outNames,
                 rename=f"resumTransitionFOScale{name_append}",
             )
+
+    def add_quark_mass_vars(self, from_minnlo=False):
+        pdfs = input_tools.args_from_metadata(self.card_tool, "pdfs")
+        theory_corrs = input_tools.args_from_metadata(self.card_tool, "theoryCorr")
+
+        from_minnlo = "scetlib_dyturboMSHT20mcrange" in theory_corrs and "scetlib_dyturboMSHT20mcrange" in theory_corrs and "msht20" in pdfs[0]
+
+        if not (from_minnlo and ("msht20mbrange" in pdfs and "msht20mcrange" in pdfs) or \
+                ("scetlib_dyturboMSHT20mcrange" in theory_corrs and "scetlib_dyturboMSHT20mcrange" in theory_corrs)):
+            raise ValueError("Neither PDFs nor SCETlib corrections were found for msht20mbrange and msht20mcrange. " \
+                            "The uncertainty will not be included.")
+
+            if not ("msht20mbrange" in pdfs and "msht20mcrange" in pdfs):
+                raise ValueError("The PDFS msht20mbrange and msht20mcrange must be included to add quark mass variations from MiNNLO")
+            if pdfs[0] not in ["msht20", "msht20mbrange", "msht20mcrange"]:
+                raise ValueError("Using the mass variation sets from MiNNLO requires MSHT20 as the central set")
+            
+        bhist = "pdfMSHT20mbrange" if from_minnlo else "scetlib_dyturboMSHT20mbrangeCorr"
+        syst_ax = "pdfVar" if from_minnlo else "vars"
+
+        self.card_tool.addSystematic(name=bhist,
+            processes=self.samples,
+            systAxes=[syst_ax],
+            symmetrize = "quadratic",
+            group="bcQuarkMass",
+            passToFakes=self.propagate_to_fakes,
+            outNames=["", "pdfMSHT20mbrangeDown",]+[""]*4+["pdfMSHT20mbrangeUp"],
+        )
+        
+        self.card_tool.addSystematic(name=bhist.replace("brange", "crange"),
+            processes=self.samples,
+            systAxes=[syst_ax],
+            symmetrize = "quadratic",
+            group="bcQuarkMass",
+            passToFakes=self.propagate_to_fakes,
+            outNames=["", "pdfMSHT20mcrangeDown",]+[""]*6+["pdfMSHT20mcrangeUp"],
+        )
+
+

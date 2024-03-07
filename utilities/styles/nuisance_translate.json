@@ -21,8 +21,8 @@
     "FakemuLowMT": "FakeLowMT",
     "FakeeHighMT": "FakeHighMT",
     "FakeeLowMT": "FakeLowMT",
-    "massShiftZ": "Z mass",
-    "massShiftW": "W mass",
+    "massShiftZ": "Z boson mass",
+    "massShiftW": "W boson mass",
     "pdfMSHT20": "PDF",
     "pdfCT18Z": "PDF",
     "pdfMSHT20NoAlphaS": "PDF",
@@ -42,6 +42,7 @@
     "ecalPrefire": "L1 ecal prefire",
     "stat": "Data stat.",
     "lumi": "Luminosity",
-    "theory_ew": "EW"
+    "theory_ew": "EW",
+    "bcQuarkMass" : "b,c quark masses"
 }
 

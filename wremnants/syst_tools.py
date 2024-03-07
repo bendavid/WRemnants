@@ -85,22 +85,22 @@ def syst_transform_map(base_hist, hist_name):
                 "transition_points0.2_0.45_0.7", "transition_points0.4_0.75_1.1", ],
                  no_flow=["ptVgen"], do_min=True)},
        "resumTNPUp" : {
-           "action" : lambda h: h if "vars" not in h.axes.name else hh.rssHist(h[{"vars" : resum_tnps}], "vars")[0]
+           "action" : lambda h: h if "vars" not in h.axes.name else hh.rssHists(h[{"vars" : resum_tnps}], "vars")[0]
         },
        "resumTNPDown" : {
-           "action" : lambda h: h if "vars" not in h.axes.name else hh.rssHist(h[{"vars" : resum_tnps}], "vars")[1]
+           "action" : lambda h: h if "vars" not in h.axes.name else hh.rssHists(h[{"vars" : resum_tnps}], "vars")[1]
         },
        "resumTNPx5Up" : {
-           "action" : lambda h: h if "vars" not in h.axes.name else hh.rssHist(h[{"vars" : resum_tnps}], "vars", scale=5)[0]
+           "action" : lambda h: h if "vars" not in h.axes.name else hh.rssHists(h[{"vars" : resum_tnps}], "vars", scale=5)[0]
         },
        "resumTNPx5Down" : {
-           "action" : lambda h: h if "vars" not in h.axes.name else hh.rssHist(h[{"vars" : resum_tnps}], "vars", scale=5)[1]
+           "action" : lambda h: h if "vars" not in h.axes.name else hh.rssHists(h[{"vars" : resum_tnps}], "vars", scale=5)[1]
         },
        "resumTNPx12Up" : {
-           "action" : lambda h: h if "vars" not in h.axes.name else hh.rssHist(h[{"vars" : resum_tnps}], "vars", scale=12)[0]
+           "action" : lambda h: h if "vars" not in h.axes.name else hh.rssHists(h[{"vars" : resum_tnps}], "vars", scale=12)[0]
         },
        "resumTNPx12Down" : {
-           "action" : lambda h: h if "vars" not in h.axes.name else hh.rssHist(h[{"vars" : resum_tnps}], "vars", scale=12)[1]
+           "action" : lambda h: h if "vars" not in h.axes.name else hh.rssHists(h[{"vars" : resum_tnps}], "vars", scale=12)[1]
         },
        "resumScaleAllUp" : {
            "action" : lambda h: h if "vars" not in h.axes.name else hh.syst_min_or_max_env_hist(h, projAx(hist_name), "vars",
@@ -445,23 +445,24 @@ def add_pdf_hists(results, df, dataset, axes, cols, pdfs, base_name="nominal", a
             logger.warning(f"PDF {pdf} was not found for sample {dataset}. Skipping uncertainty hist!")
             continue
 
-        if pdfInfo["alphasRange"] == "001":
-            alphaSHistName = Datagroups.histName(base_name, syst=f"{pdfName}alphaS001")
-            as_ax = hist.axis.StrCategory(["as0118", "as0117", "as0119"], name="alphasVar")
-        else:
-            alphaSHistName = Datagroups.histName(base_name, syst=f"{pdfName}alphaS002")
-            as_ax = hist.axis.StrCategory(["as0118", "as0116", "as0120"], name="alphasVar")
+        has_as = "alphasRange" in pdfInfo
+        if has_as:
+            asr = pdfInfo["alphasRange"] 
+            alphaSHistName = Datagroups.histName(base_name, syst=f"{pdfName}alphaS{asr}")
+            as_ax = hist.axis.StrCategory(["as0118"]+(["as0117", "as0119"] if asr == "001" else ["as0116", "as0120"]), name="alphasVar")
 
         if addhelicity:
             pdfHeltensor, pdfHeltensor_axes =  make_pdfweight_helper_helicity(npdf, pdf_ax)
             df = df.Define(f'{tensorName}_helicity', pdfHeltensor, [tensorName, "helWeight_tensor"])
             pdfHist = df.HistoBoost(pdfHistName, axes, [*cols, f'{tensorName}_helicity'], tensor_axes=pdfHeltensor_axes, storage=hist.storage.Double())
-            alphaSHeltensor, alphaSHeltensor_axes =  make_pdfweight_helper_helicity(3, as_ax)
-            df = df.Define(f'{tensorASName}_helicity', alphaSHeltensor, [tensorASName, "helWeight_tensor"])
-            alphaSHist = df.HistoBoost(alphaSHistName, axes, [*cols, f'{tensorASName}_helicity'], tensor_axes=alphaSHeltensor_axes, storage=hist.storage.Double())
+            if has_as:
+                alphaSHeltensor, alphaSHeltensor_axes =  make_pdfweight_helper_helicity(3, as_ax)
+                df = df.Define(f'{tensorASName}_helicity', alphaSHeltensor, [tensorASName, "helWeight_tensor"])
+                alphaSHist = df.HistoBoost(alphaSHistName, axes, [*cols, f'{tensorASName}_helicity'], tensor_axes=alphaSHeltensor_axes, storage=hist.storage.Double())
         else:
             pdfHist = df.HistoBoost(pdfHistName, axes, [*cols, tensorName], tensor_axes=[pdf_ax], storage=hist.storage.Double())
-            alphaSHist = df.HistoBoost(alphaSHistName, axes, [*cols, tensorASName], tensor_axes=[as_ax], storage=hist.storage.Double())
+            if has_as:
+                alphaSHist = df.HistoBoost(alphaSHistName, axes, [*cols, tensorASName], tensor_axes=[as_ax], storage=hist.storage.Double())
 
             if propagateToHelicity:
 
