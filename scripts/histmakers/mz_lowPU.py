@@ -9,7 +9,7 @@ parser = common.set_parser_default(parser, "genVars", ["ptVGen"])
 parser = common.set_parser_default(parser, "pt", [34, 26, 60])
 parser = common.set_parser_default(parser, "aggregateGroups", ["Diboson", "Top", "Wtaunu", "Wmunu", "Wenu"])
 
-args = common.parse_histmaker_args(parser)
+args = parser.parse_args()
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 import narf
@@ -84,7 +84,8 @@ axis_mt = hist.axis.Regular(200, 0., 200., name = "mt", underflow=False)
 axes_mT = [axis_mt]
 cols_mT = ["transverseMass"]
 
-corr_helpers = theory_corrections.load_corr_helpers([d.name for d in datasets if d.name in common.vprocs_lowpu], args.theoryCorr)
+theory_corrs = [*args.theoryCorr, *args.ewTheoryCorr]
+corr_helpers = theory_corrections.load_corr_helpers([d.name for d in datasets if d.name in common.vprocs_lowpu], theory_corrs)
 
 # recoil initialization
 args.noRecoil = True

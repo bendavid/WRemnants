@@ -83,9 +83,10 @@ smearing_helper, smearing_uncertainty_helper = (None, None) if args.noSmearing e
 
 bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibration else None
 
+theory_corrs = [*args.theoryCorr, *args.ewTheoryCorr]
 procsWithTheoryCorr = [d.name for d in datasets if d.name in common.vprocs]
 if len(procsWithTheoryCorr):
-    corr_helpers = theory_corrections.load_corr_helpers(procsWithTheoryCorr, args.theoryCorr, allowMissingTheoryCorr=args.allowMissingTheoryCorr)
+    corr_helpers = theory_corrections.load_corr_helpers(procsWithTheoryCorr, [*args.theoryCorr, *args.ewTheoryCorr], allowMissingTheoryCorr=args.allowMissingTheoryCorr)
 else:
     corr_helpers = {}
 

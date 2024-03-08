@@ -27,6 +27,7 @@ parser.add_argument("--ptqVgen", action='store_true', help="To store qt by Q var
 
 parser = common.set_parser_default(parser, "filterProcs", common.vprocs)
 parser = common.set_parser_default(parser, "theoryCorr", [])
+parser = common.set_parser_default(parser, "ewTheoryCorr", [])
 
 args = parser.parse_args()
 
@@ -92,7 +93,8 @@ axis_chargeZgen = hist.axis.Integer(
 axis_l_eta_gen = hist.axis.Regular(48, -2.4, 2.4, name = "eta")
 axis_l_pt_gen = hist.axis.Regular(29, 26., 55., name = "pt")
 
-corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, args.theoryCorr)
+theory_corrs = [*args.theoryCorr, *args.ewTheoryCorr]
+corr_helpers = theory_corrections.load_corr_helpers(common.vprocs, theory_corrs)
 
 def build_graph(df, dataset):
     logger.info("build graph")
@@ -270,13 +272,13 @@ def build_graph(df, dataset):
         if "LHEPdfWeight" in df.GetColumnNames():
             syst_tools.add_pdf_hists(results, df, dataset.name, nominal_axes, nominal_cols, args.pdfs, "nominal_gen", propagateToHelicity=args.propagatePDFstoHelicity)
 
-    if args.theoryCorr and dataset.name in corr_helpers:
+    if theory_corrs and dataset.name in corr_helpers:
         results.extend(theory_tools.make_theory_corr_hists(df, "nominal_gen", nominal_axes, nominal_cols,
-            corr_helpers[dataset.name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly, isW=isW)
+            corr_helpers[dataset.name], theory_corrs, modify_central_weight=not args.theoryCorrAltOnly, isW=isW)
         )
         if args.singleLeptonHists:
             results.extend(theory_tools.make_theory_corr_hists(df, "nominal_genlep", lep_axes, lep_cols, 
-                corr_helpers[dataset.name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly, isW=isW)
+                corr_helpers[dataset.name], theory_corrs, modify_central_weight=not args.theoryCorrAltOnly, isW=isW)
             )
 
     if "MEParamWeight" in df.GetColumnNames():
