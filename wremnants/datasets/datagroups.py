@@ -414,7 +414,7 @@ class Datagroups(object):
     def getDatagroups(self):
         return self.groups
 
-    def getNames(self, matches=[], exclude=False):
+    def getNames(self, matches=[], exclude=False, match_exact=False):
         # This method returns the names from the defined groups, unless one selects further.
         listOfNames = list(x for x in self.groups.keys())
         if not matches:
@@ -424,6 +424,8 @@ class Datagroups(object):
             # thus a string will match if the process name contains that string anywhere inside it
             if exclude:
                 return list(filter(lambda x: all([re.search(expr, x) is None for expr in matches]), listOfNames))
+            elif match_exact:
+                return [x for x in listOfNames if x in matches]
             else:
                 return list(filter(lambda x: any([re.search(expr, x) for expr in matches]), listOfNames))
               

@@ -198,6 +198,8 @@ def define_scale_tensor(df):
 theory_corr_weight_map = {
         "scetlib_dyturboMSHT20_pdfas" : pdfMap["msht20"]["alphas"],
         "scetlib_dyturboMSHT20Vars" : expand_pdf_entries("msht20"),
+        "scetlib_dyturboCT18ZVars" : expand_pdf_entries("ct18z"),
+        "scetlib_dyturboCT18Z_pdfas" : pdfMap["ct18z"]["alphas"],
         "scetlib_dyturboMSHT20an3lo_pdfas" : pdfMap["msht20an3lo"]["alphas"],
         "scetlib_dyturboMSHT20an3loVars" : expand_pdf_entries("msht20an3lo"),
         # Tested this, better not to treat this way unless using MSHT20nnlo as central set

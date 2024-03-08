@@ -195,13 +195,13 @@ groups.sortByYields(args.baseName, nominalName=nominalName)
 histInfo = groups.getDatagroups()
 
 logger.info(f"Unstacked processes are {exclude}")
-prednames = list(reversed(groups.getNames([d for d in datasets if d not in exclude], exclude=False)))
+prednames = list(reversed(groups.getNames([d for d in datasets if d not in exclude], exclude=False, match_exact=True)))
 logger.info(f"Stacked processes are {prednames}")
 
 def collapseSyst(h):
     if type(h.axes[-1]) == hist.axis.StrCategory:
         return h[...,0]
-    for ax in ["systIdx", "tensor_axis_0", "vars"]:
+    for ax in ["systIdx", "tensor_axis_0", "vars", "pdfVar"]:
         if ax in h.axes.name:
             return h[{ax : 0}].copy()
     return h
