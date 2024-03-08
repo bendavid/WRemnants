@@ -160,7 +160,7 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--theoryCorr", nargs="*", type=str, action=NoneFilterAction,
         default=["scetlib_dyturbo", ], choices=theory_corrections.valid_theory_corrections(), 
         help="Apply corrections from indicated generator. First will be nominal correction.")
-    parser.add_argument("--addTheoryCorrs", nargs="*", default=["winhacnloew", "virtual_ew_wlike", "horaceqedew_FSR", "horacelophotosmecoffew_FSR", "scetlib_dyturboMSHT20mbrange", "scetlib_dyturboMSHT20mcrange"],
+    parser.add_argument("--addTheoryCorrs", nargs="*", default=["winhacnloew", "virtual_ew_wlike", "horaceqedew_FSR", "horacelophotosmecoffew_FSR", ],
         type=str, help="add theory corrections without modifying the default list. Will be appended to args.theoryCorrs")
     parser.add_argument("--theoryCorrAltOnly", action='store_true', help="Save hist for correction hists but don't modify central weight")
     parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")

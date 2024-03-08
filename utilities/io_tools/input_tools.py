@@ -167,7 +167,11 @@ def read_dyturbo_vars_hist(base_name, var_axis=None, axes=("Y", "qT"), charge=No
 
     for i, var in enumerate(var_axis):
         if var.startswith("pdf"):
-            pdf_member = int(var.removeprefix("pdf"))
+            index = var.removeprefix("pdf")
+            if index.isnumeric():
+                pdf_member = int(index)
+            else:
+                pdf_member = i
         else:
             pdf_member = 0
         if var in scales_map.keys() and var not in scales_map:
