@@ -51,9 +51,8 @@ ewMassBins = theory_tools.make_ew_binning(mass = 91.1535, width = 2.4932, initia
 dilepton_ptV_binning = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 20, 23, 27, 32, 40, 54, 100] if not args.finePtBinning else range(60)
 # available axes for dilepton validation plots
 all_axes = {
-    "mll": hist.axis.Regular(60, 60., 120., name = "mll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
-    # "mll": hist.axis.Variable([60,70,75,78,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,100,102,105,110,120], name = "mll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
-    "yll": hist.axis.Regular(20, -2.5, 2.5, name = "yll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
+    # "mll": hist.axis.Regular(60, 60., 120., name = "mll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
+    "mll": hist.axis.Variable([60,70,75,78,80,82,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,100,102,105,110,120], name = "mll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),    "yll": hist.axis.Regular(20, -2.5, 2.5, name = "yll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
     "absYll": hist.axis.Regular(10, 0., 2.5, name = "absYll", underflow=False, overflow=not args.excludeFlow),
     "ptll": hist.axis.Variable(dilepton_ptV_binning, name = "ptll", underflow=False, overflow=not args.excludeFlow),
     "etaPlus": hist.axis.Variable([-2.4,-1.2,-0.3,0.3,1.2,2.4], name = "etaPlus"),
@@ -61,6 +60,7 @@ all_axes = {
     "etaRegion": hist.axis.Regular(3, 0, 3, name = "etaRegion"),
     "absEtaPlus": hist.axis.Regular(8, 0, 2.4, name = "absEtaPlus"),
     "absEtaMinus": hist.axis.Regular(8, 0, 2.4, name = "absEtaMinus"),
+    "etaAbsEta": hist.axis.Variable([-2.4, -2.0, -1.6, -1.4, -1.2, -1.0, -0.6, 0.0, 0.6, 1.0, 1.2, 1.4, 1.6, 2.0, 2.4], name = "etaAbsEta"),
     "etaSum": hist.axis.Regular(12, -4.8, 4.8, name = "etaSum"),
     "etaDiff": hist.axis.Variable([-4.8, -1.0, -0.6, -0.2, 0.2, 0.6, 1.0, 4.8], name = "etaDiff"),
     "ptPlus": hist.axis.Regular(int(args.pt[0]), args.pt[1], args.pt[2], name = "ptPlus"),
@@ -219,6 +219,7 @@ def build_graph(df, dataset):
     df = df.Define("absEtaMinus", "std::fabs(nonTrigMuons_eta0)")
     df = df.Define("ptPlus", "trigMuons_pt0")
     df = df.Define("ptMinus", "nonTrigMuons_pt0")
+    df = df.Define("etaAbsEta", "std::fabs(trigMuons_eta0) > std::fabs(nonTrigMuons_eta0) ? trigMuons_eta0 : nonTrigMuons_eta0")
 
     df = df.Define("etaRegion", "(std::abs(trigMuons_eta0)>1.2) + (std::abs(nonTrigMuons_eta0)>1.2)") # eta region: 0: barrel-barrel, 1: endcap-barrel, 2: endcap-endcap
 
