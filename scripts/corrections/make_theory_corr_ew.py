@@ -20,6 +20,7 @@ parser.add_argument("--noSmoothing", action="store_true", default=False, help="D
 parser.add_argument("--debug", action='store_true', help="Print debug output")
 parser.add_argument("--baseName", default="ew_MllPTll", type=str, help="histogram name")
 parser.add_argument("--project", default=["ewMll", "ewPTll"], nargs="*", type=str, help="axes to project to")
+parser.add_argument("--outname", type=str, default=None, help="Output name for correction file")
 parser.add_argument("--outpath", type=str, default=f"{common.data_dir}/TheoryCorrections", help="Output path")
 
 args = parser.parse_args()
@@ -32,7 +33,7 @@ charge_dict = {'Zmumu': 0, 'Wplusmunu': 1, 'Wminusmunu': 0}
 procs_dict = {
     "Zmumu": "ZmumuPostVFP",
     "Wminusmunu": "WminusmunuPostVFP",
-    "WplusToMuNu": "WplusmunuPostVFP",
+    "Wplusmunu": "WplusmunuPostVFP",
 }
 
 project = args.project
@@ -62,7 +63,7 @@ for proc in procs:
             histo = hh.normalize(histo)
             logger.info(f'Integral for {name} after normalizing {np.sum(histo.values(flow=True))}')
         else:
-            histo = hh.scaleHist(histo, res[proc_name]["dataset"]["xsec"]*10e6/res[proc_name]['weight_sum'], createNew=False)
+            histo = hh.scaleHist(histo, res[proc_name]["dataset"]["xsec"]/res[proc_name]['weight_sum'], createNew=False)
             logger.info(f'Integral for {name} after scaling {np.sum(histo.values(flow=True))}')
 
         if "ewMll" in histo.axes.name:
@@ -88,27 +89,7 @@ for proc in procs:
                 logger.info(f"Rebin axis ewMll by {rebinN}")
                 histo = hh.rebinHist(histo, "ewMll", rebin_edges)
         
-        base_dev = args.baseName.split("_")[0]
-        if base_dev not in ["nominal", "ew"]:                
-            for ax in histo.axes:
-                old_name = ax._ax.metadata["name"]
-                if base_dev == "lhe":
-                    # use pre FSR definition for lhe correction
-                    translate = {
-                        "ewMll":"massVgen",
-                        "ewAbsYll":"absYVgen",
-                        "ewPTll":"ptVgen",
-                    }
-                else:
-                    translate = {
-                        "ewMll":"dressed_MV",
-                        "ewAbsYll":"dressed_absYV",
-                        "ewPTll":"dressed_PTV",
-                    }
-                new_name = translate[old_name]
-                logger.info(f"Rename axis {old_name} for corrections to {new_name}")
-                ax._ax.metadata["name"] = new_name
-            
+        base_dev = args.baseName.split("_")[0]            
         return histo
     
     nums = []
@@ -176,14 +157,15 @@ for proc in procs:
         corrh[name][proc]["den"] = hcharge_den
 
     for num, hnum in zip(nums, hnums):
+        outname = args.outname if args.outname else num
 
-        make_correction(hnum, hden, f"{num}ew")
+        make_correction(hnum, hden, f"{outname}ew")
 
         for ax in project:
             hnum1D = hnum.project(ax)
             hden1D = hden.project(ax)
 
-            make_correction(hnum1D, hden1D, f"{num}ew_{ax}")
+            make_correction(hnum1D, hden1D, f"{outname}ew_{ax}")
 
 for name, corr_dict in corrh.items():
     outname = name.replace('-', '')

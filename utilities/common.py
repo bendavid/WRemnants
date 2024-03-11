@@ -20,12 +20,13 @@ xsec_ZmmMass10to50PostVFP = 6997.0
 Z_TAU_TO_LEP_RATIO = (1.-(1. - BR_TAUToMU - BR_TAUToE)**2)
 
 wprocs = ["WplusmunuPostVFP", "WminusmunuPostVFP", "WminustaunuPostVFP", "WplustaunuPostVFP", 
+    'Wplusmunu_MiNNLO-noqedisr', 'Wminusmunu_MiNNLO-noqedisr',
     'Wplusmunu_horace-lo-photos', 'Wplusmunu_horace-lo-photos-mecoff', 'Wplusmunu_horace-nlo', 'Wplusmunu_horace-lo', 'Wplusmunu_horace-qed', 
     'Wminusmunu_horace-lo-photos', 'Wminusmunu_horace-lo-photos-mecoff', 'Wminusmunu_horace-nlo', 'Wminusmunu_horace-lo', 'Wminusmunu_horace-qed',
     'Wplusmunu_winhac-lo-photos', 'Wplusmunu_winhac-lo', 'Wplusmunu_winhac-nlo', 
     'Wminusmunu_winhac-lo-photos', 'Wminusmunu_winhac-lo', 'Wminusmunu_winhac-nlo']
-zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS", 
-    'Zmumu_horace-lo-photos', 'Zmumu_horace-lo-photos-mecoff', 'Zmumu_horace-nlo', 'Zmumu_horace-lo', 'Zmumu_horace-new', 'Zmumu_horace-qed',
+zprocs = ["ZmumuPostVFP", "ZtautauPostVFP", "ZmumuMiNLO", "ZmumuNNLOPS", 'Zmumu_MiNNLO-noqedisr',
+    'Zmumu_horace-lo-photos', 'Zmumu_horace-lo-photos-isroff', 'Zmumu_horace-lo-photos-mecoff', 'Zmumu_horace-nlo', 'Zmumu_horace-lo', 'Zmumu_horace-new', 'Zmumu_horace-qed',
     'Zmumu_horace-alpha-fsr-off-isr-off', 'Zmumu_horace-alpha-old-fsr-off-isr-off', 'Zmumu_horace-alpha-old-fsr-off-isr-pythia',
     'Zmumu_renesance-lo', 'Zmumu_renesance-nlo',
     'Zmumu_powheg-lo', 'Zmumu_powheg-nloew-qedveto', 'Zmumu_powheg-nloew'
@@ -140,7 +141,7 @@ def common_parser(for_reco_highPU=False):
             # Filter unique values, but keep first item in its position
             if "herapdf20" in values:
                 values.append("herapdf20ext")
-            unique_values = [values[0], *set([x for x in values[1:]])]
+            unique_values = [values[0], *set([x for x in values[1:]])] if len(values) >= 1 else []
             setattr(namespace, self.dest, unique_values)
 
     class NoneFilterAction(argparse.Action):
@@ -149,8 +150,8 @@ def common_parser(for_reco_highPU=False):
             filtered_values = [x for x in values if x not in ["none", None]]
             setattr(namespace, self.dest, filtered_values)
 
-    parser.add_argument("--pdfs", type=str, nargs="+", default=["ct18z", "msht20mcrange_renorm", "msht20mbrange_renorm"], 
-        choices=theory_tools.pdfMap.keys(), help="PDF sets to produce error hists for", action=PDFFilterAction)
+    parser.add_argument("--pdfs", type=str, nargs="*", default=["ct18z", "msht20mcrange_renorm", "msht20mbrange_renorm"], 
+        choices=theory_tools.pdfMap.keys(), help="PDF sets to produce error hists for. If empty, use PDF set used in production (weight=1).", action=PDFFilterAction)
     parser.add_argument("--altPdfOnlyCentral", action='store_true', help="Only store central value for alternate PDF sets")
     parser.add_argument("--maxFiles", type=int, help="Max number of files (per dataset)", default=None)
     parser.add_argument("--filterProcs", type=str, nargs="*", help="Only run over processes matched by group name or (subset) of name", default=[])
@@ -160,9 +161,10 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("--theoryCorr", nargs="*", type=str, action=NoneFilterAction,
         default=["scetlib_dyturbo", ], choices=theory_corrections.valid_theory_corrections(), 
         help="Apply corrections from indicated generator. First will be nominal correction.")
-    parser.add_argument("--addTheoryCorrs", nargs="*", default=["winhacnloew", "virtual_ew_wlike", "horaceqedew_FSR", "horacelophotosmecoffew_FSR", ],
-        type=str, help="add theory corrections without modifying the default list. Will be appended to args.theoryCorrs")
     parser.add_argument("--theoryCorrAltOnly", action='store_true', help="Save hist for correction hists but don't modify central weight")
+    parser.add_argument("--ewTheoryCorr", nargs="*", type=str, action=NoneFilterAction, choices=theory_corrections.valid_ew_theory_corrections(), 
+        default=["winhacnloew", "virtual_ew_wlike", "pythiaew_ISR", "horaceqedew_FSR", "horacelophotosmecoffew_FSR", ],
+        help="Add EW theory corrections without modifying the default theoryCorr list. Will be appended to args.theoryCorr")
     parser.add_argument("--skipHelicity", action='store_true', help="Skip the qcdScaleByHelicity histogram (it can be huge)")
     parser.add_argument("--eta", nargs=3, type=float, help="Eta binning as 'nbins min max' (only uniform for now)", default=[48,-2.4,2.4])
     parser.add_argument("--pt", nargs=3, type=float, help="Pt binning as 'nbins,min,max' (only uniform for now)", default=[30,26.,56.])
@@ -312,11 +314,3 @@ def list_to_string(list_str):
             "list_to_string(): cannot convert an input that is"
             " neither a single string or a list of strings"
         )
-
-def parse_histmaker_args(parser):
-    args = parser.parse_args()
-    if args.addTheoryCorrs:
-        if not args.theoryCorr:
-            raise ValueError("--addTheoryCorrs should only be used together with --theoryCorr")
-        args.theoryCorr.extend([x for x in args.addTheoryCorrs if x not in args.theoryCorr])
-    return args

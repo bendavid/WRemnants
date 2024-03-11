@@ -65,7 +65,7 @@ def add_electroweak_uncertainty(card_tool, ewUncs, flavor="mu", samples="single_
                     skipEntries=[(0, -1), (2, -1)],
                 )                     
         else:
-            if "ISR" in ewUnc or "FSR" in ewUnc:
+            if "FSR" in ewUnc:
                 if flavor == "e":
                     logger.warning("ISR/FSR EW uncertainties are not implemented for electrons, proceed w/o")
                     continue

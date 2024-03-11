@@ -26,9 +26,9 @@ parser = common.set_parser_default(parser, "genVars", ["ptVGen", "absYVGen"])
 parser = common.set_parser_default(parser, "pt", [34,26.,60.])
 parser = common.set_parser_default(parser, "eta", [48,-2.4,2.4])
 parser = common.set_parser_default(parser, "aggregateGroups", ["Diboson", "Top", "Wtaunu", "Wmunu"])
-parser = common.set_parser_default(parser, "addTheoryCorrs", ["virtual_ew", "horaceqedew_FSR", "horacelophotosmecoffew_FSR",])
+parser = common.set_parser_default(parser, "ewTheoryCorr", ["virtual_ew", "pythiaew_ISR", "horaceqedew_FSR", "horacelophotosmecoffew_FSR",])
 
-args = common.parse_histmaker_args(parser)
+args = parser.parse_args()
 
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
@@ -137,7 +137,8 @@ smearing_helper, smearing_uncertainty_helper = (None, None) if args.noSmearing e
 
 bias_helper = muon_calibration.make_muon_bias_helpers(args) 
 
-corr_helpers = theory_corrections.load_corr_helpers([d.name for d in datasets if d.name in common.vprocs], args.theoryCorr)
+theory_corrs = [*args.theoryCorr, *args.ewTheoryCorr]
+corr_helpers = theory_corrections.load_corr_helpers([d.name for d in datasets if d.name in common.vprocs], theory_corrs)
 
 def build_graph(df, dataset):
     logger.info(f"build graph for dataset: {dataset.name}")

@@ -701,9 +701,10 @@ def add_theory_hists(results, df, args, dataset_name, corr_helpers, qcdScaleByHe
 
     isZ = dataset_name in common.zprocs_all
 
-    if args.theoryCorr and dataset_name in corr_helpers:
+    theory_corrs = [*args.theoryCorr, *args.ewTheoryCorr]
+    if theory_corrs and dataset_name in corr_helpers:
         results.extend(theory_tools.make_theory_corr_hists(df, base_name, axes, cols, 
-            corr_helpers[dataset_name], args.theoryCorr, modify_central_weight=not args.theoryCorrAltOnly, isW = not isZ)
+            corr_helpers[dataset_name], theory_corrs, modify_central_weight=not args.theoryCorrAltOnly, isW = not isZ)
         )
 
     if for_wmass or isZ:

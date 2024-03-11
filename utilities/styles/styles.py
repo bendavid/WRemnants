@@ -165,6 +165,7 @@ axis_labels = {
     "ptgen": r"$\mathrm{Pre\ FSR}\ p_\mathrm{T}^{\ell}$",
     "etagen": r"$\mathrm{Pre\ FSR}\ \eta^{\ell}$", 
     "ptVgen": r"$\mathrm{Pre\ FSR}\ p_\mathrm{T}^{\ell\ell}$",
+    "absYVgen": r"$\mathrm{Pre\ FSR}\ |Y^{\ell\ell}|$", 
     "massVgen": r"$\mathrm{Pre\ FSR}\ m^{\ell\ell}$", 
     "qT" : r"$\mathrm{Pre\ FSR}\ p_\mathrm{T}^{\ell\ell}$",
     "Q" : r"$\mathrm{Pre\ FSR}\ m^{\ell\ell}$", 
