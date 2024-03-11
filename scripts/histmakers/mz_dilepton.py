@@ -58,6 +58,7 @@ all_axes = {
     "ptll": hist.axis.Variable(dilepton_ptV_binning, name = "ptll", underflow=False, overflow=not args.excludeFlow),
     "etaPlus": hist.axis.Variable([-2.4,-1.2,-0.3,0.3,1.2,2.4], name = "etaPlus"),
     "etaMinus": hist.axis.Variable([-2.4,-1.2,-0.3,0.3,1.2,2.4], name = "etaMinus"),
+    "etaRegion": hist.axis.Regular(3, 0, 3, name = "etaRegion"),
     "absEtaPlus": hist.axis.Regular(8, 0, 2.4, name = "absEtaPlus"),
     "absEtaMinus": hist.axis.Regular(8, 0, 2.4, name = "absEtaMinus"),
     "etaSum": hist.axis.Regular(12, -4.8, 4.8, name = "etaSum"),
@@ -219,14 +220,14 @@ def build_graph(df, dataset):
     df = df.Define("ptPlus", "trigMuons_pt0")
     df = df.Define("ptMinus", "nonTrigMuons_pt0")
 
+    df = df.Define("etaRegion", "(std::abs(trigMuons_eta0)>1.2) + (std::abs(nonTrigMuons_eta0)>1.2)") # eta region: 0: barrel-barrel, 1: endcap-barrel, 2: endcap-endcap
+
     df = df.Define("etaSum", "nonTrigMuons_eta0 + trigMuons_eta0") 
     df = df.Define("etaDiff", "trigMuons_eta0-nonTrigMuons_eta0") # plus - minus 
 
-    if args.csVarsHist:
-        df = df.Define("csSineCosThetaPhill", "wrem::csSineCosThetaPhi(nonTrigMuons_mom4, trigMuons_mom4)")
-    
-        df = df.Define("cosThetaStarll", "csSineCosThetaPhill.costheta")
-        df = df.Define("phiStarll", "std::atan2(csSineCosThetaPhill.sinphi, csSineCosThetaPhill.cosphi)")
+    df = df.Define("csSineCosThetaPhill", "wrem::csSineCosThetaPhi(nonTrigMuons_mom4, trigMuons_mom4)")
+    df = df.Define("cosThetaStarll", "csSineCosThetaPhill.costheta")
+    df = df.Define("phiStarll", "std::atan2(csSineCosThetaPhill.sinphi, csSineCosThetaPhill.cosphi)")
 
     logger.debug(f"Define weights and store nominal histograms")
 
@@ -275,7 +276,7 @@ def build_graph(df, dataset):
         logger.debug(f"Creating special histogram '{noiAsPoiHistName}' for unfolding to treat POIs as NOIs")
         results.append(df.HistoBoost(noiAsPoiHistName, [*nominal_axes, *unfolding_axes], [*nominal_cols, *unfolding_cols, "nominal_weight"]))       
 
-    for obs in ["ptll", "mll", "yll", "etaPlus", "etaMinus", "ptPlus", "ptMinus"]:
+    for obs in ["ptll", "mll", "yll", "cosThetaStarll", "phiStarll", "etaPlus", "etaMinus", "ptPlus", "ptMinus"]:
         if dataset.is_data:
             results.append(df.HistoBoost(f"nominal_{obs}", [all_axes[obs]], [obs]))
         else:

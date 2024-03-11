@@ -632,6 +632,13 @@ jobs:
       - name: dilepton plotting yll
         run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal_yll --nominalRef nominal_yll --hists yll --fineGroups -o $WEB_DIR -f $PLOT_DIR -p z $HIST_FILE
 
+      - name: dilepton plotting cosThetaStarll
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal_cosThetaStarll --nominalRef nominal_cosThetaStarll --hists cosThetaStarll --fineGroups -o $WEB_DIR -f $PLOT_DIR -p z $HIST_FILE
+
+      - name: dilepton plotting phiStarll
+        run: scripts/ci/run_with_singularity.sh scripts/ci/setup_and_run_python.sh scripts/plotting/makeDataMCStackPlot.py --yscale 1.3 --baseName nominal_phiStarll --nominalRef nominal_phiStarll --hists phiStarll --fineGroups -o $WEB_DIR -f $PLOT_DIR -p z $HIST_FILE
+
+
   gen:
     # The type of runner that the job will run on
     runs-on: [self-hosted, linux, x64]
