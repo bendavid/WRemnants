@@ -409,7 +409,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                             hh.swap_histogram_bins(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "charge", 0)) 
                                         for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members},
                 )
-            elif args.fitMassDiff == "cosThetaStar":
+            elif args.fitMassDiff == "cosThetaStarll":
                 cardTool.addSystematic(**mass_diff_args, 
                                     preOpMap={m.name: (lambda h: 
                                             hh.swap_histogram_bins(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "cosThetaStarll", hist.tag.Slicer()[0:complex(0,0):]))

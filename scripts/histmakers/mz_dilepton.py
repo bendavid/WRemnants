@@ -32,9 +32,8 @@ args = parser.parse_args()
 
 logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
-thisAnalysis = ROOT.wrem.AnalysisType.Dilepton if args.useDileptonTriggerSelection else ROOT.wrem.AnalysisType.Wlike
+triggerStrategy = ROOT.wrem.AnalysisType.Dilepton if args.useDileptonTriggerSelection else ROOT.wrem.AnalysisType.Wlike
 era = args.era
-
 datasets = getDatasets(maxFiles=args.maxFiles,
                        filt=args.filterProcs,
                        excl=args.excludeProcs, 
@@ -57,7 +56,8 @@ all_axes = {
     "ptll": hist.axis.Variable(dilepton_ptV_binning, name = "ptll", underflow=False, overflow=not args.excludeFlow),
     "etaPlus": hist.axis.Variable([-2.4,-1.2,-0.3,0.3,1.2,2.4], name = "etaPlus"),
     "etaMinus": hist.axis.Variable([-2.4,-1.2,-0.3,0.3,1.2,2.4], name = "etaMinus"),
-    "etaRegion": hist.axis.Regular(3, 0, 3, name = "etaRegion"),
+    "etaRegionSign": hist.axis.Regular(3, 0, 3, name = "etaRegionSign"),
+    "etaRegionRange": hist.axis.Regular(3, 0, 3, name = "etaRegionRange"),
     "absEtaPlus": hist.axis.Regular(8, 0, 2.4, name = "absEtaPlus"),
     "absEtaMinus": hist.axis.Regular(8, 0, 2.4, name = "absEtaMinus"),
     "etaAbsEta": hist.axis.Variable([-2.4, -2.0, -1.6, -1.4, -1.2, -1.0, -0.6, 0.0, 0.6, 1.0, 1.2, 1.4, 1.6, 2.0, 2.4], name = "etaAbsEta"),
@@ -120,7 +120,7 @@ else:
     muon_efficiency_helper, muon_efficiency_helper_syst, muon_efficiency_helper_stat = wremnants.make_muon_efficiency_helpers_smooth(filename = args.sfFile,
                                                                                                                                      era = era,
                                                                                                                                      max_pt = args.pt[2],
-                                                                                                                                     what_analysis = thisAnalysis, isoEfficiencySmoothing=args.isoEfficiencySmoothing, smooth3D=args.smooth3dsf, isoDefinition=args.isolationDefinition)
+                                                                                                                                     what_analysis = triggerStrategy, isoEfficiencySmoothing=args.isoEfficiencySmoothing, smooth3D=args.smooth3dsf, isoDefinition=args.isolationDefinition)
 logger.info(f"SF file: {args.sfFile}")
 
 pileup_helper = wremnants.make_pileup_helper(era = era)
@@ -196,37 +196,49 @@ def build_graph(df, dataset):
     df = muon_selections.select_veto_muons(df, nMuons=2)
     df = muon_selections.select_good_muons(df, args.pt[1], args.pt[2], dataset.group, nMuons=2, use_trackerMuons=args.trackerMuons, use_isolation=True, isoDefinition=args.isolationDefinition)
 
-    # for dilepton analysis we will call trigMuons (nonTrigMuons) those with charge plus (minus). In fact both might be triggering, naming scheme might be improved
-    df = muon_selections.define_trigger_muons(df, what_analysis=thisAnalysis)
+    df = muon_selections.define_trigger_muons(df, dilepton=args.useDileptonTriggerSelection)
 
-    df = muon_selections.select_z_candidate(df, mass_min, mass_max)
+    df = muon_selections.select_z_candidate(df, mass_min, mass_max, name_first="trigMuons", name_second="nonTrigMuons")
 
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "trigMuons")
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "nonTrigMuons")
 
     if args.useDileptonTriggerSelection:
-        df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0", "nonTrigMuons_eta0", "nonTrigMuons_phi0", era=era)
+        df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons", "nonTrigMuons", era=era)
+        df = df.Alias("muonsMinus_pt0", "trigMuons_pt0")
+        df = df.Alias("muonsPlus_pt0", "nonTrigMuons_pt0")
+        df = df.Alias("muonsMinus_eta0", "trigMuons_eta0")
+        df = df.Alias("muonsPlus_eta0", "nonTrigMuons_eta0")
+        df = df.Alias("muonsMinus_mon4", "trigMuons_mom4")
+        df = df.Alias("muonsPlus_mon4", "nonTrigMuons_mom4")
     else:
-        df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0", era=era)
-
+        df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons", era=era)
+        df = df.Define("muonsMinus_pt0",  "trigMuons_charge0 == -1 ? trigMuons_pt0 : nonTrigMuons_pt0")
+        df = df.Define("muonsPlus_pt0",   "trigMuons_charge0 == -1 ? nonTrigMuons_pt0 : trigMuons_pt0")
+        df = df.Define("muonsMinus_eta0", "trigMuons_charge0 == -1 ? trigMuons_eta0 : nonTrigMuons_eta0")
+        df = df.Define("muonsPlus_eta0",  "trigMuons_charge0 == -1 ? nonTrigMuons_eta0 : trigMuons_eta0")
+        df = df.Define("muonsMinus_mon4", "trigMuons_charge0 == -1 ? trigMuons_mom4 : nonTrigMuons_mom4")
+        df = df.Define("muonsPlus_mon4",  "trigMuons_charge0 == -1 ? nonTrigMuons_mom4 : trigMuons_mom4")
+    
     df = df.Define("ptll", "ll_mom4.pt()")
     df = df.Define("yll", "ll_mom4.Rapidity()")
     df = df.Define("absYll", "std::fabs(yll)")
     # "renaming" to write out corresponding axis
-    df = df.Define("etaPlus", "trigMuons_eta0")
-    df = df.Define("etaMinus", "nonTrigMuons_eta0")
-    df = df.Define("absEtaPlus", "std::fabs(trigMuons_eta0)")
-    df = df.Define("absEtaMinus", "std::fabs(nonTrigMuons_eta0)")
-    df = df.Define("ptPlus", "trigMuons_pt0")
-    df = df.Define("ptMinus", "nonTrigMuons_pt0")
-    df = df.Define("etaAbsEta", "std::fabs(trigMuons_eta0) > std::fabs(nonTrigMuons_eta0) ? trigMuons_eta0 : nonTrigMuons_eta0")
+    df = df.Alias("ptMinus", "muonsMinus_pt0")
+    df = df.Alias("ptPlus", "muonsPlus_pt0")
+    df = df.Alias("etaMinus", "muonsMinus_eta0")
+    df = df.Alias("etaPlus", "muonsPlus_eta0")
+    df = df.Define("absEtaMinus", "std::fabs(etaMinus)")
+    df = df.Define("absEtaPlus", "std::fabs(etaPlus)")
+    df = df.Define("etaAbsEta", "absEtaMinus > absEtaPlus ? etaMinus : etaPlus")
 
-    df = df.Define("etaRegion", "(std::abs(trigMuons_eta0)>1.2) + (std::abs(nonTrigMuons_eta0)>1.2)") # eta region: 0: barrel-barrel, 1: endcap-barrel, 2: endcap-endcap
+    df = df.Define("etaRegionRange", "(std::abs(muonsPlus_eta0) > 0.9) + (std::abs(muonsMinus_eta0) > 0.9)") # eta region: 0: barrel-barrel, 1: endcap-barrel, 2: endcap-endcap
+    df = df.Define("etaRegionSign", "(muonsPlus_eta0 > 0) + (muonsMinus_eta0 > 0)") # eta region: 0: both muons in negative eta, 1: one muon in negative eta, 2: both muons in positive eta
 
-    df = df.Define("etaSum", "nonTrigMuons_eta0 + trigMuons_eta0") 
-    df = df.Define("etaDiff", "trigMuons_eta0-nonTrigMuons_eta0") # plus - minus 
+    df = df.Define("etaSum", "muonsPlus_eta0 + muonsMinus_eta0") 
+    df = df.Define("etaDiff", "muonsPlus_eta0 - muonsMinus_eta0") # plus - minus 
 
-    df = df.Define("csSineCosThetaPhill", "wrem::csSineCosThetaPhi(nonTrigMuons_mom4, trigMuons_mom4)")
+    df = df.Define("csSineCosThetaPhill", "wrem::csSineCosThetaPhi(muonsPlus_mon4, muonsMinus_mon4)")
     df = df.Define("cosThetaStarll", "csSineCosThetaPhill.costheta")
     df = df.Define("phiStarll", "std::atan2(csSineCosThetaPhill.sinphi, csSineCosThetaPhill.cosphi)")
 
@@ -243,7 +255,6 @@ def build_graph(df, dataset):
             weight_expr = "weight_pu*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
         else:
             weight_expr = "weight_pu*L1PreFiringWeight_Muon_Nom*L1PreFiringWeight_ECAL_Nom"
-
 
         if not args.noVertexWeight:
             weight_expr += "*weight_vtx"            
@@ -314,7 +325,7 @@ def build_graph(df, dataset):
 
     if not dataset.is_data and not args.onlyMainHistograms:
 
-        df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, axes, cols, what_analysis=thisAnalysis, smooth3D=args.smooth3dsf)
+        df = syst_tools.add_muon_efficiency_unc_hists(results, df, muon_efficiency_helper_stat, muon_efficiency_helper_syst, axes, cols, what_analysis=triggerStrategy, smooth3D=args.smooth3dsf)
         df = syst_tools.add_L1Prefire_unc_hists(results, df, muon_prefiring_helper_stat, muon_prefiring_helper_syst, axes, cols)
 
         # n.b. this is the W analysis so mass weights shouldn't be propagated

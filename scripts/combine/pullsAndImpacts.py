@@ -75,6 +75,8 @@ def plotImpacts(df, poi, pulls=False, normalize=False, oneSidedImpacts=False):
         impact_title = "Impact on mass diff. (charge) (MeV)"
     elif poi and poi.startswith("massDiffEta"):
         impact_title = "$\\mathrm{Impact\\ on\\ mass\\ diff. }(\\eta)\\ (\\mathrm{MeV})$"
+    else:
+        impact_title=poi
 
     impacts = bool(np.count_nonzero(df['absimpact'])) and not args.noImpacts
     ncols = pulls+impacts
