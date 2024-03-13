@@ -57,14 +57,17 @@ calib_filepaths = {
     },
     'data_corrfile': {
         'massfit': f"{calib_dir}/calibrationJDATA_ideal.root",
-        'lbl_massfit': f"{calib_dir}/calibrationJDATA_MCstat_inclusive_smeared.root"
+        'lbl_massfit': f"{calib_dir}/calibrationJDATA_MCstat_inclusive_binsel.root"
+        # 'lbl_massfit': f"{calib_dir}/calibrationJZ_DATA_MCstat_binsel.root"
     },
     'mc_resofile': f"{calib_dir}/sigmaMC_LBL_JYZ.root",
     'data_resofile': f"{calib_dir}/sigmaDATA_LBL_JYZ.root",
     'tflite_file': f"{calib_dir}/muon_response.tflite"
+    # 'tflite_file': f"{calib_dir}/muon_response_nosmearing.tflite"
 }
 closure_filepaths = {
-    'parametrized': f"{closure_dir}/parametrizedClosureZ_inclusive_smeared.root",
+    'parametrized': f"{closure_dir}/parametrizedClosureZ_ORkinweight_binsel_newres_MCstat_new.root",
+    # 'parametrized': f"{closure_dir}/parametrizedClosureZ_ORkinweight_binsel_MCstat_simul.root",
     'binned': f"{closure_dir}/closureZ_LBL_smeared_v721.root"
 }
 
