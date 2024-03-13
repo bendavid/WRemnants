@@ -196,7 +196,7 @@ def make_muon_smearing_helpers_binned(filename = f"{data_dir}/calibration/smeari
 def make_muon_smearing_helpers(filenamedata = f"{data_dir}/calibration/resolutionDATA_LBL_JZ_deltaphim_d50.root",
                                filenamemc = f"{data_dir}/calibration/resolutionMC_LBL_JZ_deltaphim_d50.root",
                                override_d = None,
-                               dummary_vars = False):
+                               dummy_vars = False):
     # this helper smears muon pT to match the resolution in data
 
     def load_res(filename):
