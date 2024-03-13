@@ -173,6 +173,10 @@ z_non_closure_parametrized_helper, z_non_closure_binned_helper = muon_calibratio
 
 mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = muon_calibration.make_muon_calibration_helpers(args)
 
+closure_unc_helper = wremnants.muon_calibration.make_closure_uncertainty_helper(common.closure_filepaths["parametrized"])
+closure_unc_helper_A = wremnants.muon_calibration.make_uniform_closure_uncertainty_helper(0, common.correlated_variation_base_size["A"])
+closure_unc_helper_M = wremnants.muon_calibration.make_uniform_closure_uncertainty_helper(2, common.correlated_variation_base_size["M"])
+
 smearing_helper, smearing_uncertainty_helper = (None, None) if args.noSmearing else muon_calibration.make_muon_smearing_helpers()
 
 bias_helper = muon_calibration.make_muon_bias_helpers(args) if args.biasCalibration else None
@@ -188,6 +192,7 @@ else:
 if not args.noRecoil:
     from wremnants import recoil_tools
     recoilHelper = recoil_tools.Recoil("highPU", args, flavor="mu")
+
 
 ######################################################
 ######################################################
@@ -525,6 +530,70 @@ def build_graph(df, dataset):
                     df = muon_validation.make_hists_for_muon_scale_var_weights(
                         df, axes, results, cols, cols_gen_smeared
                     )
+
+                # extra uncertainties from non-closure stats
+                df = df.Define("muonScaleClosSyst_responseWeights_tensor_splines", closure_unc_helper,
+                    [
+                        f"{reco_sel_GF}_recoPt",
+                        f"{reco_sel_GF}_recoEta",
+                        f"{reco_sel_GF}_recoCharge",
+                        f"{reco_sel_GF}_genPt",
+                        f"{reco_sel_GF}_genEta",
+                        f"{reco_sel_GF}_genCharge",
+                        f"{reco_sel_GF}_response_weight",
+                        "nominal_weight"
+                    ]
+                )
+                nominal_muonScaleClosSyst_responseWeights = df.HistoBoost(
+                    "nominal_muonScaleClosSyst_responseWeights", axes,
+                    [*nominal_cols, "muonScaleClosSyst_responseWeights_tensor_splines"],
+                    tensor_axes = closure_unc_helper.tensor_axes,
+                    storage = hist.storage.Double()
+                )
+                results.append(nominal_muonScaleClosSyst_responseWeights)
+
+                # extra uncertainties for A (fully correlated)
+                df = df.Define("muonScaleClosASyst_responseWeights_tensor_splines", closure_unc_helper_A,
+                    [
+                        f"{reco_sel_GF}_recoPt",
+                        f"{reco_sel_GF}_recoEta",
+                        f"{reco_sel_GF}_recoCharge",
+                        f"{reco_sel_GF}_genPt",
+                        f"{reco_sel_GF}_genEta",
+                        f"{reco_sel_GF}_genCharge",
+                        f"{reco_sel_GF}_response_weight",
+                        "nominal_weight"
+                    ]
+                )
+                nominal_muonScaleClosASyst_responseWeights = df.HistoBoost(
+                    "nominal_muonScaleClosASyst_responseWeights", axes,
+                    [*nominal_cols, "muonScaleClosASyst_responseWeights_tensor_splines"],
+                    tensor_axes = closure_unc_helper_A.tensor_axes,
+                    storage = hist.storage.Double()
+                )
+                results.append(nominal_muonScaleClosASyst_responseWeights)
+
+                # extra uncertainties for M (fully correlated)
+                df = df.Define("muonScaleClosMSyst_responseWeights_tensor_splines", closure_unc_helper_M,
+                    [
+                        f"{reco_sel_GF}_recoPt",
+                        f"{reco_sel_GF}_recoEta",
+                        f"{reco_sel_GF}_recoCharge",
+                        f"{reco_sel_GF}_genPt",
+                        f"{reco_sel_GF}_genEta",
+                        f"{reco_sel_GF}_genCharge",
+                        f"{reco_sel_GF}_response_weight",
+                        "nominal_weight"
+                    ]
+                )
+                nominal_muonScaleClosMSyst_responseWeights = df.HistoBoost(
+                    "nominal_muonScaleClosMSyst_responseWeights", axes,
+                    [*nominal_cols, "muonScaleClosMSyst_responseWeights_tensor_splines"],
+                    tensor_axes = closure_unc_helper_M.tensor_axes,
+                    storage = hist.storage.Double()
+                )
+                results.append(nominal_muonScaleClosMSyst_responseWeights)
+
             ####################################################
 
             df = df.Define("Muon_cvhMomCov", "wrem::splitNestedRVec(Muon_cvhMomCov_Vals, Muon_cvhMomCov_Counts)")

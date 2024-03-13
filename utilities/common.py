@@ -71,6 +71,12 @@ closure_filepaths = {
     'binned': f"{closure_dir}/closureZ_LBL_smeared_v721.root"
 }
 
+# some constants for momentum scale uncertainties
+correlated_variation_base_size = {
+    "A" : 1e-5,
+    "M" : 1e-6,
+    }
+
 ## 5% quantiles from aMC@NLO used in SMP-18-012
 #ptV_5quantiles_binning = [0.0, 1.971, 2.949, 3.838, 4.733, 5.674, 6.684, 7.781, 8.979, 10.303, 11.777, 13.435, 15.332, 17.525, 20.115, 23.245, 27.173, 32.414, 40.151, 53.858, 13000.0]
 ## 10% quantiles from aMC@NLO used in SMP-18-012 with some rounding <== This one worked fine with toys
