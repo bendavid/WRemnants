@@ -212,9 +212,9 @@ for h in args.hists:
         sp = h.split("-")
         action = lambda x: sel.unrolledHist(collapseSyst(x[select]), binwnorm=1, obs=sp)
         xlabel=f"{'-'.join([styles.xlabels.get(s,s).replace('(GeV)','') for s in sp])} bin"
-        xlabel=styles.xlabels.get(h,h)
     else:
         action = lambda x: hh.projectNoFlow(collapseSyst(x[select]), h, overflow_ax)
+        xlabel=styles.xlabels.get(h,h)
     fig = plot_tools.makeStackPlotWithRatio(histInfo, prednames, histName=args.baseName, ylim=args.ylim, yscale=args.yscale, logy=args.logy,
             fill_between=args.fillBetween if hasattr(args, "fillBetween") else None, 
             action=action, unstacked=unstack, 
