@@ -198,7 +198,7 @@ def build_graph(df, dataset):
 
     df = muon_selections.define_trigger_muons(df, dilepton=args.useDileptonTriggerSelection)
 
-    df = muon_selections.select_z_candidate(df, mass_min, mass_max, name_first="trigMuons", name_second="nonTrigMuons")
+    df = muon_selections.select_z_candidate(df, mass_min, mass_max)
 
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "trigMuons")
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "nonTrigMuons")

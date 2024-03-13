@@ -300,7 +300,8 @@ def build_graph(df, dataset):
         hltString=muon_selections.hlt_string(era)
         df = df.Define("passTrigger", f"{hltString} && wrem::hasTriggerMatch(goodMuons_eta0,goodMuons_phi0,TrigObj_eta[GoodTrigObjs],TrigObj_phi[GoodTrigObjs])")
     else:
-        df = muon_selections.apply_triggermatching_muon(df, dataset, "goodMuons_eta0", "goodMuons_phi0", era=era)
+        df = muon_selections.apply_triggermatching_muon(df, dataset, "goodMuons", era=era)
+
 
     if isWorZ:
         df = muon_validation.define_cvh_reco_muon_kinematics(df)

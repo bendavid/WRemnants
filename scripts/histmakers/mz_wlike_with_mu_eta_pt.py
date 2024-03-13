@@ -164,14 +164,14 @@ def build_graph(df, dataset):
     df = muon_selections.select_veto_muons(df, nMuons=2)
     df = muon_selections.select_good_muons(df, template_minpt, template_maxpt, dataset.group, nMuons=2, use_trackerMuons=args.trackerMuons, use_isolation=True, isoDefinition=args.isolationDefinition)
 
-    df = muon_selections.define_trigger_muons(df, what_analysis=thisAnalysis)
+    df = muon_selections.define_trigger_muons(df)
 
     df = muon_selections.select_z_candidate(df, mass_min, mass_max)
 
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "trigMuons")
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "nonTrigMuons")
 
-    df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0", era=era)
+    df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons", era=era)
 
     if dataset.is_data:
         df = df.DefinePerSample("nominal_weight", "1.0")
