@@ -181,6 +181,7 @@ if __name__ == "__main__":
     rf = safeOpenFile(fname)
     # get nominals
     for p in processes:
+        print(f"Process {p}")
         if (rf.GetDirectory(p)):
             print(f"Browsing file into subfolder {p}")
             f = rf.GetDirectory(p)
@@ -386,7 +387,7 @@ if __name__ == "__main__":
                         leglist_pt.append(systLeg[p][antisID])
                         systNames.remove(antis)
                 systPostfixSingle = s.replace("Down", "").replace("Up", "")
-                drawNTH1(hlist, leglist, "Unrolled eta-p_{T} bin", "Events", f"nominalAndSyst_{p}{systPostfixSingle}", outdir,
+                drawNTH1(hlist, leglist, "Unrolled eta-p_{T} bin", "Events", f"nominalAndSyst_{p}_{systPostfixSingle}", outdir,
                          topMargin=0.2, leftMargin=0.06, rightMargin=0.01, labelRatioTmp=f"syst/nomi{ratioRange}",
                          legendCoords="0.06,0.99,0.84,0.99;4", lowerPanelHeight=0.5, skipLumi=True, passCanvas=canvas_unroll,
                          yAxisExtendConstant=1.4, ytextOffsetFromTop=0.22,
@@ -394,13 +395,13 @@ if __name__ == "__main__":
                          textForLines=ptBinRanges, transparentLegend=False,
                          onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=1)
                 #
-                drawNTH1(hlist_eta, leglist_eta, "Muon eta", "Events", f"nominalAndSyst_{p}{systPostfixSingle}_projEta", outdir,
+                drawNTH1(hlist_eta, leglist_eta, "Muon eta", "Events", f"nominalAndSyst_{p}_{systPostfixSingle}_projEta", outdir,
                          topMargin=0.25, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="syst/nomi",
                          legendCoords="0.01,0.99,0.80,0.99;1", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
                          transparentLegend=False,
                          onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=2)
                 #
-                drawNTH1(hlist_pt, leglist_pt, "Muon p_{T} (GeV)", "Events", f"nominalAndSyst_{p}{systPostfixSingle}_projPt", outdir,
+                drawNTH1(hlist_pt, leglist_pt, "Muon p_{T} (GeV)", "Events", f"nominalAndSyst_{p}_{systPostfixSingle}_projPt", outdir,
                          topMargin=0.25, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="syst/nomi",
                          legendCoords="0.01,0.99,0.80,0.99;1", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
                          transparentLegend=False,
@@ -409,7 +410,7 @@ if __name__ == "__main__":
             if len(systList[p]) > 11:
                 print("Not running drawNTH1() function to draw curves, there are too many lines ({})".format(len(systList[p])))
             else:
-                drawNTH1(systList[p], systLeg[p], "Unrolled eta-p_{T} bin", "Events", f"nominalAndSyst_{p}{systPostfix}", outdir,
+                drawNTH1(systList[p], systLeg[p], "Unrolled eta-p_{T} bin", "Events", f"nominalAndSyst_{p}_{systPostfix}", outdir,
                          topMargin=0.2, leftMargin=0.06, rightMargin=0.01, labelRatioTmp=f"syst/nomi{ratioRange}",
                          legendCoords="0.06,0.99,0.84,0.99;4", lowerPanelHeight=0.5, skipLumi=True, passCanvas=canvas_unroll,
                          yAxisExtendConstant=1.4, ytextOffsetFromTop=0.22,
@@ -417,13 +418,13 @@ if __name__ == "__main__":
                          textForLines=ptBinRanges, transparentLegend=False,
                          onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=1)
                 #
-                drawNTH1(systList_eta[p], systLeg[p], "Muon eta", "Events", f"nominalAndSyst_{p}{systPostfix}_projEta", outdir,
+                drawNTH1(systList_eta[p], systLeg[p], "Muon eta", "Events", f"nominalAndSyst_{p}_{systPostfix}_projEta", outdir,
                          topMargin=0.25, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="syst/nomi",
                          legendCoords="0.01,0.99,0.80,0.99;2", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
                          transparentLegend=False,
                          onlyLineColor=True, noErrorRatioDen=True, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=2)
                 #
-                drawNTH1(systList_pt[p], systLeg[p], "Muon p_{T} (GeV)", "Events", f"nominalAndSyst_{p}{systPostfix}_projPt", outdir,
+                drawNTH1(systList_pt[p], systLeg[p], "Muon p_{T} (GeV)", "Events", f"nominalAndSyst_{p}_{systPostfix}_projPt", outdir,
                          topMargin=0.25, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="syst/nomi",
                          legendCoords="0.01,0.99,0.80,0.99;2", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
                          transparentLegend=False,
@@ -431,7 +432,7 @@ if __name__ == "__main__":
                 if transformFakeIntoSignalVariation and p == "Wmunu":
                     histFakesOnSignal = [systList[p][0]] + [x for x in systList_FakeOnSignal]
                     drawNTH1(histFakesOnSignal, systLeg[p], "Unrolled eta-p_{T} bin", "Events",
-                             f"nominalAndSyst_{p}{systPostfix}_FakeOnSignal", outdir,
+                             f"nominalAndSyst_{p}_{systPostfix}_FakeOnSignal", outdir,
                              topMargin=0.2, leftMargin=0.06, rightMargin=0.01, labelRatioTmp="syst/nomi",
                              legendCoords="0.06,0.99,0.84,0.99;4", lowerPanelHeight=0.5, skipLumi=True, passCanvas=canvas_unroll,
                              yAxisExtendConstant=1.4, ytextOffsetFromTop=0.22,
@@ -442,7 +443,7 @@ if __name__ == "__main__":
                     #
                     histFakesOnSignal = [systList_eta[p][0]] + [x for x in systList_eta_FakeOnSignal]
                     drawNTH1(histFakesOnSignal, systLeg[p], "Muon eta", "Events",
-                             f"nominalAndSyst_{p}{systPostfix}_projEta_FakeOnSignal", outdir,
+                             f"nominalAndSyst_{p}_{systPostfix}_projEta_FakeOnSignal", outdir,
                              topMargin=0.25, leftMargin=0.16, rightMargin=0.05, labelRatioTmp=f"syst/nomi{ratioRange}",
                              legendCoords="0.01,0.99,0.80,0.99;2", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
                              transparentLegend=False,
@@ -451,7 +452,7 @@ if __name__ == "__main__":
                     #
                     histFakesOnSignal = [systList_pt[p][0]] + [x for x in systList_pt_FakeOnSignal]
                     drawNTH1(histFakesOnSignal, systLeg[p], "Muon p_{T} (GeV)", "Events",
-                             f"nominalAndSyst_{p}{systPostfix}_projPt_FakeOnSignal", outdir,
+                             f"nominalAndSyst_{p}_{systPostfix}_projPt_FakeOnSignal", outdir,
                              topMargin=0.25, leftMargin=0.16, rightMargin=0.05, labelRatioTmp="syst/nomi",
                              legendCoords="0.01,0.99,0.80,0.99;2", lowerPanelHeight=0.4, skipLumi=True, passCanvas=canvas1D,
                              transparentLegend=False,

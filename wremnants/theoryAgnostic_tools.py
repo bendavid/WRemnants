@@ -1,17 +1,18 @@
 from utilities import differential
 import wremnants
-from wremnants import syst_tools, theory_tools, logging, helicity_utils
+from wremnants import syst_tools, theory_tools, logging, helicity_utils, helicity_utils_polvar
 from copy import deepcopy
 import hist
 
 logger = logging.child_logger(__name__)
 
-def select_fiducial_space(df, ptVgenMax, absYVgenMax, accept=True, select=True):
+def select_fiducial_space(df, ptVgenMax, absYVgenMax, accept=True, select=True, usePtOverM=False):
     # accept defines the selection for in-acceptance (IA) or out-of-acceptance (OOA)
     # select is needed to actually apply the selection. For --poiAsNoi one integrates over the gen bins to build the nominal histogram in setupCombine/CardTool.py,
     # so all bins must be kept including overflows, and thus the explicit cut must be removed, although this is only for IA, since OOA is usually built as an independent histogram)
     # In the future the OOA might be build from the overflow bins directly (it might be possible to define multiple pieces too)
-    selection = f"ptVgen < {ptVgenMax} && absYVgen < {absYVgenMax}"
+    ptvar = "qtOverQ" if usePtOverM else "ptVgen"
+    selection = f"{ptvar} < {ptVgenMax} && absYVgen < {absYVgenMax}"
     df = df.Define("fiducial", selection)
     if accept:
         if select:

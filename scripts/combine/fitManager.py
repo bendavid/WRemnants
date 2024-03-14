@@ -123,13 +123,13 @@ def prepareChargeFit(options, charges=["plus"]):
         else:
             print("Running text2hdf5.py, it might take time ...")
             safeSystem(txt2hdf5Cmd, dryRun=options.dryRun)
-            
+
         metafilename = combinedCard.replace('.txt','.hdf5')
         if args.theoryAgnostic:
             metafilename = metafilename.replace('.hdf5','_sparse.hdf5')
         if len(postfix):
             metafilename = metafilename.replace('.hdf5','_%s.hdf5' % postfix)
-            
+
         bbboptions = " --binByBinStat "
         if not options.noCorrelateXsecStat: bbboptions += "--correlateXsecStat "
         combineCmd = 'combinetf.py -t -1 {bbb} {metafile} --doImpacts --saveHists --computeHistErrors '.format(metafile=metafilename, bbb="" if options.noBBB else bbboptions)
@@ -139,7 +139,7 @@ def prepareChargeFit(options, charges=["plus"]):
             combineCmd += " --POIMode mu --allowNegativePOI"
         else:
             combineCmd += " --POIMode none"                        
-            
+
         fitdir_data = "{od}/fit/data/".format(od=os.path.abspath(cardSubfolderFullName))
         fitdir_Asimov = fitdir_data.replace("/fit/data/", "/fit/hessian/")
         fitdir_toys = fitdir_data.replace("/fit/data/", "/fit/toys/")
