@@ -344,20 +344,11 @@ def build_graph(df, dataset):
 
                 # extra uncertainties from non-closure stats
                 df = df.Define("muonScaleClosSyst_responseWeights_tensor_splines", closure_unc_helper,
-                    [
-                        f"{reco_sel_GF}_recoPt",
-                        f"{reco_sel_GF}_recoEta",
-                        f"{reco_sel_GF}_recoCharge",
-                        f"{reco_sel_GF}_genPt",
-                        f"{reco_sel_GF}_genEta",
-                        f"{reco_sel_GF}_genCharge",
-                        f"{reco_sel_GF}_response_weight",
-                        "nominal_weight"
-                    ]
+                    [*input_kinematics, "nominal_weight"]
                 )
                 nominal_muonScaleClosSyst_responseWeights = df.HistoBoost(
                     "nominal_muonScaleClosSyst_responseWeights", axes,
-                    [*nominal_cols, "muonScaleClosSyst_responseWeights_tensor_splines"],
+                    [*cols, "muonScaleClosSyst_responseWeights_tensor_splines"],
                     tensor_axes = closure_unc_helper.tensor_axes,
                     storage = hist.storage.Double()
                 )
@@ -365,20 +356,11 @@ def build_graph(df, dataset):
 
                 # extra uncertainties for A (fully correlated)
                 df = df.Define("muonScaleClosASyst_responseWeights_tensor_splines", closure_unc_helper_A,
-                    [
-                        f"{reco_sel_GF}_recoPt",
-                        f"{reco_sel_GF}_recoEta",
-                        f"{reco_sel_GF}_recoCharge",
-                        f"{reco_sel_GF}_genPt",
-                        f"{reco_sel_GF}_genEta",
-                        f"{reco_sel_GF}_genCharge",
-                        f"{reco_sel_GF}_response_weight",
-                        "nominal_weight"
-                    ]
+                    [*input_kinematics, "nominal_weight"]
                 )
                 nominal_muonScaleClosASyst_responseWeights = df.HistoBoost(
                     "nominal_muonScaleClosASyst_responseWeights", axes,
-                    [*nominal_cols, "muonScaleClosASyst_responseWeights_tensor_splines"],
+                    [*cols, "muonScaleClosASyst_responseWeights_tensor_splines"],
                     tensor_axes = closure_unc_helper_A.tensor_axes,
                     storage = hist.storage.Double()
                 )
@@ -386,20 +368,11 @@ def build_graph(df, dataset):
 
                 # extra uncertainties for M (fully correlated)
                 df = df.Define("muonScaleClosMSyst_responseWeights_tensor_splines", closure_unc_helper_M,
-                    [
-                        f"{reco_sel_GF}_recoPt",
-                        f"{reco_sel_GF}_recoEta",
-                        f"{reco_sel_GF}_recoCharge",
-                        f"{reco_sel_GF}_genPt",
-                        f"{reco_sel_GF}_genEta",
-                        f"{reco_sel_GF}_genCharge",
-                        f"{reco_sel_GF}_response_weight",
-                        "nominal_weight"
-                    ]
+                    [*input_kinematics, "nominal_weight"]
                 )
                 nominal_muonScaleClosMSyst_responseWeights = df.HistoBoost(
                     "nominal_muonScaleClosMSyst_responseWeights", axes,
-                    [*nominal_cols, "muonScaleClosMSyst_responseWeights_tensor_splines"],
+                    [*cols, "muonScaleClosMSyst_responseWeights_tensor_splines"],
                     tensor_axes = closure_unc_helper_M.tensor_axes,
                     storage = hist.storage.Double()
                 )
