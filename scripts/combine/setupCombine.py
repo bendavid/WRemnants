@@ -94,6 +94,7 @@ def make_parser(parser=None):
     # utility options to deal with charge when relevant, mainly for theory agnostic but also unfolding
     parser.add_argument("--recoCharge", type=str, default=["plus", "minus"], nargs="+", choices=["plus", "minus"], help="Specify reco charge to use, default uses both. This is a workaround for unfolding/theory-agnostic fit when running a single reco charge, as gen bins with opposite gen charge have to be filtered out")
     parser.add_argument("--forceRecoChargeAsGen", action="store_true", help="Force gen charge to match reco charge in CardTool, this only works when the reco charge is used to define the channel")
+    parser.add_argument("--forceConstrainMass", action='store_true', help="force mass to be constrained in fit")
     # TODO: some options that should exist only for a specific case, can implement a subparser to substitute --unfolding and --theoryAgnostic
     # some options are actually in common between them, so an intermediate subparser might be used
     ##parsers = parser.add_subparsers(dest='analysisFitSetup')
@@ -134,8 +135,8 @@ def setup(args, inputFile, fitvar, xnorm=False):
     dilepton = "dilepton" in datagroups.mode or any(x in ["ptll", "mll"] for x in fitvar)
 
     simultaneousABCD = wmass and args.ABCD and not xnorm
-    # constrainMass = (dilepton and not "mll" in fitvar) or args.fitXsec
-    constrainMass = dilepton or args.fitXsec
+    constrainMass = (dilepton and not "mll" in fitvar) or args.fitXsec
+    constrainMass = constrainMass or args.forceConstrainMass
 
     print("constrainMass", constrainMass)
 
