@@ -68,6 +68,9 @@ def make_parser(parser=None):
     parser.add_argument("--muonScaleVariation", choices=["smearingWeights", "massWeights", "manualShift"], default="smearingWeights", help="the method with which the muon scale variation histograms are derived")
     parser.add_argument("--scaleMuonCorr", type=float, default=1.0, help="Scale up/down dummy muon scale uncertainty by this factor")
     parser.add_argument("--correlatedNonClosureNuisances", action='store_true', help="get systematics from histograms for the Z non-closure nuisances without decorrelation in eta and pt")
+    parser.add_argument("--calibrationStatScaling", type=float, default=1.7, help="scaling of calibration statistical uncertainty")
+    parser.add_argument("--correlatedAdHocA", type=float, default=0.0, help="fully correlated ad-hoc uncertainty on b-field term A (in addition to Z pdg mass)")
+    parser.add_argument("--correlatedAdHocM", type=float, default=3.5e-6, help="fully correlated ad-hoc uncertainty on alignment term M")
     parser.add_argument("--noEfficiencyUnc", action='store_true', help="Skip efficiency uncertainty (useful for tests, because it's slow). Equivalent to --excludeNuisances '.*effSystTnP|.*effStatTnP' ")
     parser.add_argument("--effStatLumiScale", type=float, default=None, help="Rescale equivalent luminosity for efficiency stat uncertainty by this value (e.g. 10 means ten times more data from tag and probe)")
     parser.add_argument("--binnedScaleFactors", action='store_true', help="Use binned scale factors (different helpers and nuisances)")
@@ -131,7 +134,10 @@ def setup(args, inputFile, fitvar, xnorm=False):
     dilepton = "dilepton" in datagroups.mode or any(x in ["ptll", "mll"] for x in fitvar)
 
     simultaneousABCD = wmass and args.ABCD and not xnorm
-    constrainMass = (dilepton and not "mll" in fitvar) or args.fitXsec
+    # constrainMass = (dilepton and not "mll" in fitvar) or args.fitXsec
+    constrainMass = dilepton or args.fitXsec
+
+    print("constrainMass", constrainMass)
 
     if wmass:
         base_group = "Wenu" if datagroups.flavor == "e" else "Wmunu"
@@ -806,56 +812,51 @@ def setup(args, inputFile, fitvar, xnorm=False):
         passToFakes=passSystToFakes,
     )
 
-    non_closure_scheme = input_tools.args_from_metadata(cardTool, "nonClosureScheme")
-    correlated_non_closure = input_tools.args_from_metadata(cardTool, "correlatedNonClosureNP")
-    if non_closure_scheme in ["A-M-separated", "A-only"]:
-        cardTool.addSystematic("Z_non_closure_parametrized_A", 
-            processes=['single_v_samples'],
-            group="nonClosure",
-            splitGroup={f"muonCalibration" : f".*"},
-            baseName="Z_nonClosure_parametrized_A_",
-            systAxes=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
-            labelsByAxis=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
-            passToFakes=passSystToFakes
-        )
-    if non_closure_scheme in ["A-M-separated", "M-only", "binned-plus-M"]:
-        cardTool.addSystematic("Z_non_closure_parametrized_M", 
-            processes=['single_v_samples'],
-            group="nonClosure",
-            splitGroup={f"muonCalibration" : f".*"},
-            baseName="Z_nonClosure_parametrized_M_",
-            systAxes=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
-            labelsByAxis=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
-            passToFakes=passSystToFakes
-        )            
-    if non_closure_scheme == "A-M-combined":
-        cardTool.addSystematic("Z_non_closure_parametrized", 
-            processes=['single_v_samples'],
-            group="nonClosure",
-            splitGroup={f"muonCalibration" : f".*"},
-            baseName="Z_nonClosure_parametrized_",
-            systAxes=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
-            labelsByAxis=["unc", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
-            passToFakes=passSystToFakes
-        )
-    if non_closure_scheme in ["binned", "binned-plus-M"]:
-        cardTool.addSystematic("Z_non_closure_binned", 
-            processes=['single_v_samples'],
-            group="nonClosure",
-            splitGroup={f"muonCalibration" : f".*"},
-            baseName="Z_nonClosure_binned_",
-            systAxes=["unc_ieta", "unc_ipt", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
-            labelsByAxis=["unc_ieta", "unc_ipt", "downUpVar"] if not correlated_non_closure else ["downUpVar"],
-            passToFakes=passSystToFakes
-        )
-
     cardTool.addSystematic("muonScaleSyst_responseWeights",
         processes=['single_v_samples'],
         group="scaleCrctn",
         splitGroup={f"muonCalibration" : f".*"},
         baseName="Scale_correction_",
         systAxes=["unc", "downUpVar"],
-        passToFakes=passSystToFakes
+        passToFakes=passSystToFakes,
+        scale = args.calibrationStatScaling,
+    )
+    cardTool.addSystematic("muonScaleClosSyst_responseWeights",
+        processes=['single_v_samples'],
+        group="scaleClosCrctn",
+        splitGroup={f"muonCalibration" : f".*"},
+        baseName="ScaleClos_correction_",
+        systAxes=["unc", "downUpVar"],
+        passToFakes=passSystToFakes,
+    )
+
+    mzerr = 2.1e-3
+    mz0 = 91.18
+    adhocA = args.correlatedAdHocA
+    nomvarA = common.correlated_variation_base_size["A"]
+    scaleA = math.sqrt( (mzerr/mz0)**2 + adhocA**2 )/nomvarA
+
+    adhocM = args.correlatedAdHocM
+    nomvarM = common.correlated_variation_base_size["M"]
+    scaleM = adhocM/nomvarM
+
+    cardTool.addSystematic("muonScaleClosASyst_responseWeights",
+        processes=['single_v_samples'],
+        group="scaleClosACrctn",
+        splitGroup={f"muonCalibration" : f".*"},
+        baseName="ScaleClosA_correction_",
+        systAxes=["unc", "downUpVar"],
+        passToFakes=passSystToFakes,
+        scale = scaleA,
+    )
+    cardTool.addSystematic("muonScaleClosMSyst_responseWeights",
+        processes=['single_v_samples'],
+        group="scaleClosMCrctn",
+        splitGroup={f"muonCalibration" : f".*"},
+        baseName="ScaleClosM_correction_",
+        systAxes=["unc", "downUpVar"],
+        passToFakes=passSystToFakes,
+        scale = scaleM,
     )
     if not input_tools.args_from_metadata(cardTool, "noSmearing"):
         cardTool.addSystematic("muonResolutionSyst_responseWeights", 
@@ -865,7 +866,7 @@ def setup(args, inputFile, fitvar, xnorm=False):
             splitGroup={f"muonCalibration" : f".*"},
             baseName="Resolution_correction_",
             systAxes=["smearing_variation"],
-            passToFakes=passSystToFakes
+            passToFakes=passSystToFakes,
         )
        
     
