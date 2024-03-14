@@ -5,7 +5,7 @@
 ## scripts/histmakers/mw_with_mu_eta_pt_VETOEFFI.py
 
 # example
-# python scripts/analysisTools/w_mass_13TeV/makeWMCvetoEfficiency3D.py /scratch/mciprian/CombineStudies/testZmumuVeto/WMCtruthVetoEffi/mw_with_mu_eta_pt_VETOEFFI_scetlib_dyturboCorr_maxFiles_m1_genPt0_noRecoPtEta.hdf5 scripts/analysisTools/plots/fromMyWremnants/testZmumuVeto/WMCtruthVetoEffi_genPt0_noRecoPtEta/ -v 4 --rebinPt 2 
+# python scripts/analysisTools/w_mass_13TeV/makeWMCvetoEfficiency.py /scratch/mciprian/CombineStudies/testZmumuVeto/WMCtruthVetoEffi/mw_with_mu_eta_pt_VETOEFFI_scetlib_dyturboCorr_maxFiles_m1_genPt0_noRecoPtEta.hdf5 scripts/analysisTools/plots/fromMyWremnants/testZmumuVeto/WMCtruthVetoEffi_genPt0_noRecoPtEta/ -v 4 --rebinPt 2 
 
 from wremnants.datasets.datagroups import Datagroups
 from wremnants import histselections as sel
@@ -244,34 +244,7 @@ if __name__ == "__main__":
         resultDict[f"{d}_MC_eff_veto_etapt"] = eff_veto_boost2D
         resultDict[f"{d}_MC_eff_vetoplus_etapt"] = eff_vetoplus_boost2D
         resultDict[f"{d}_MC_eff_vetominus_etapt"] = eff_vetominus_boost2D
-        
-        # # plot uT distribution for each charge, vs mT (pass or fail, or inclusive), integrate anything else
-        # # do it for events passing trigger and isolation
-        # nPtBins = hTestUt.axes["pt"].size
-        # hTestUt = hTestUt[{"eta" : s[::hist.sum],
-        #                    "pt" :  s[0:nPtBins:hist.sum], # would s[::hist.sum] sum overflow pt bins?
-        #                    "passTrigger" : True,
-        #                    "passIso" : True}]
-        # for charge in [-1, 1]:
-        #     chargeStr = "plus" if charge > 0 else "minus"
-        #     hut = hTestUt[{"charge" : s[complex(0,charge)]}]
-        #     hut_allMt = hut[{"passMT": s[::hist.sum]}]
-        #     hut_passMt = hut[{"passMT": True}]
-        #     hut_failMt = hut[{"passMT": False}]
-        #     allHists = [hut_allMt, hut_passMt, hut_failMt]
-        #     allHistsRoot = []
-        #     hNamesRoot = ["allMT", "passMT", "failMT"]
-        #     for ih,htmp in enumerate(allHists):
-        #         hroot = narf.hist_to_root(htmp)
-        #         hroot.Scale(1./hroot.Integral()) # normalize to unit area to get shape
-        #         hNamesRoot[ih] += f"_{chargeStr}_{d}"
-        #         hroot.SetName(hNamesRoot[ih])
-        #         allHistsRoot.append(hroot)                
-        #     drawNTH1(allHistsRoot, hNamesRoot, "Projected recoil u_{T} (GeV)", "Normalized units", f"ut_{d}_{chargeStr}",
-        #              outdir, draw_both0_noLog1_onlyLog2=1, topMargin=0.05, labelRatioTmp="X / incl.::0.5,1.5",
-        #              legendCoords="0.2,0.8,0.77,0.92;1", passCanvas=canvas1D, skipLumi=True,
-        #              onlyLineColor=True, useLineFirstHistogram=True)
-                
+
     postfix = ""
     #toAppend = []
     #postfix = "_".join(toAppend)

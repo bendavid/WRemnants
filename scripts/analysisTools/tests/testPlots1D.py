@@ -38,7 +38,8 @@ sys.path.append(os.getcwd())
 from scripts.analysisTools.tests.cropNegativeTemplateBins import cropNegativeContent
 
 def plotDistribution2D(args, groups, datasets, histname, outdir, canvas2Dshapes=None,
-                       xAxisName="x axis", yAxisName="y axis", zAxisName="Events"):
+                       xAxisName="x axis", yAxisName="y axis", zAxisName="Events",
+                       scaleToUnitArea=False):
     
     groups.setNominalName(histname)
     groups.loadHistsForDatagroups(histname, syst="", procsToRead=datasets)
@@ -50,11 +51,11 @@ def plotDistribution2D(args, groups, datasets, histname, outdir, canvas2Dshapes=
         rootHists[d] = narf.hist_to_root(hnarf)
         rootHists[d].SetName(f"{histname}_{d}")
         rootHists[d].SetTitle(f"{d}")
-        
+
         drawCorrelationPlot(rootHists[d], xAxisName, yAxisName, zAxisName,
                             f"{rootHists[d].GetName()}", plotLabel="ForceTitle", outdir=outdir,
-                            smoothPlot=False, drawProfileX=False, scaleToUnitArea=False,
-                            draw_both0_noLog1_onlyLog2=2, passCanvas=canvas2Dshapes)
+                            smoothPlot=False, drawProfileX=False, scaleToUnitArea=scaleToUnitArea,
+                            draw_both0_noLog1_onlyLog2=1, passCanvas=canvas2Dshapes)
 
 def plotDistribution1D(hdata, hmc, datasets, outfolder_dataMC, canvas1Dshapes=None,
                        xAxisName="variable", plotName="variable_failIso_jetInclusive",
@@ -109,6 +110,7 @@ if __name__ == "__main__":
     parser.add_argument(     '--plot2D', action='store_true',   help='To plot 2D histograms and 1D projections')
     parser.add_argument("-y", "--yAxisName", nargs='+', type=str, help="y axis name (only for 2D plots)")
     parser.add_argument("-l", "--lumi", type=float, default=None, help="Normalization for 2D plots (if the input does not have data the luminosity is set to 1/fb)")
+    parser.add_argument(     '--normUnitArea', action='store_true',   help='Scale 2D histogram to unit area')
     args = parser.parse_args()
     
     logger = logging.setup_logger(os.path.basename(__file__), args.verbose)
@@ -136,9 +138,9 @@ if __name__ == "__main__":
         for ip,p in enumerate(args.plot):
             xAxisName=args.xAxisName[ip]
             yAxisName=args.yAxisName[ip]
-            plotDistribution2D(args, groups, datasets, p, outdir, canvas2D, xAxisName, yAxisName)
+            plotDistribution2D(args, groups, datasets, p, outdir, canvas2D, xAxisName, yAxisName, scaleToUnitArea=args.normUnitArea)
         quit()
-            
+
     ratioMin = args.ratioRange[0]
     ratioMax = args.ratioRange[1]
     ratioPadYaxisTitle=f"Data/pred::{ratioMin},{ratioMax}"

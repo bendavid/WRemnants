@@ -554,26 +554,18 @@ def runStudy(fname, charges, mainOutputFolder, args):
             hnarf_asNominal = hnarf.copy()
             # rebin eta-pt for actual test with fakes, while collapsing other axes for the simple plots as needed,
             # this is only to avoid that THn are too big
-            if args.rebinEta >= hnarf.axes["eta"].size:
-                hnarf = hnarf[{"eta" : s[0:hist.overflow]}]
-            else:
-                hnarf = hnarf[{"eta" : s[::hist.rebin(args.rebinEta)]}]
-            if args.rebinPt >= hnarf.axes["pt"].size:
-                logger.warning("Collapsing pt axis into a single bin")
-                hnarf = hnarf[{"pt" : s[0:hist.overflow]}]
-            else:
-                hnarf = hnarf[{"pt" : s[::hist.rebin(args.rebinPt)]}]
+            hnarf = hnarf[{"eta" : s[::hist.rebin(args.rebinEta)]}]
+            hnarf = hnarf[{"pt" : s[::hist.rebin(args.rebinPt)]}]
             # for fake rate versus deltaPhi
             # TODO: move to the other function specific for deltaPhi studies?
             if d == ("QCD" if args.useQCDMC else "Fake"):
                 # note, with python/boost/hist slicing the second edge is excluded from projections,
                 # also when it is used as actual bin id, so s[1:1:hist.sum] doesn't work, while s[1:2:hist.sum] picks bin 1
                 hnarf_fakerateDeltaPhi = copy.deepcopy(hnarf)
-                if hnarf_fakerateDeltaPhi.axes["pt"].size > 1:
-                    if args.maxPt > 0 and hnarf_fakerateDeltaPhi.axes["pt"].edges[-1] > args.maxPt:
-                        hnarf_fakerateDeltaPhi = hnarf_fakerateDeltaPhi[{"pt": s[0:complex(0,args.maxPt)]}]
-                    else:
-                        hnarf_fakerateDeltaPhi = hnarf_fakerateDeltaPhi[{"pt": s[0:hist.overflow]}]
+                if args.maxPt > 0 and hnarf_fakerateDeltaPhi.axes["pt"].edges[-1] > args.maxPt:
+                    hnarf_fakerateDeltaPhi = hnarf_fakerateDeltaPhi[{"pt": s[0:complex(0,args.maxPt)]}]
+                else:
+                    hnarf_fakerateDeltaPhi = hnarf_fakerateDeltaPhi[{"pt": s[0:hist.overflow]}]
                 # rebin a bit more in pt and eta
                 if hnarf_fakerateDeltaPhi.axes["eta"].size >= 12:
                     hnarf_fakerateDeltaPhi = hnarf_fakerateDeltaPhi[{"eta" : s[::hist.rebin(2)]}]
@@ -941,10 +933,15 @@ def runStudy(fname, charges, mainOutputFolder, args):
             lowEdge, highEdge = map(int, args.mtNominalRange.split(','))
             binStart = histoPassIso.GetZaxis().FindFixBin(lowEdge)
             binEnd = histoPassIso.GetZaxis().FindFixBin(highEdge+0.001) - 1 # bin up edges belong to "next" bin
+            # apply maxPt selection before unrolling
+            if args.maxPt > 0:
+                histoPassIso.GetYaxis().SetRange(1, h2PassIso.GetYaxis().FindFixBin(args.maxPt+0.001) - 1)
+                histoFailIso.GetYaxis().SetRange(1, h2PassIso.GetYaxis().FindFixBin(args.maxPt+0.001) - 1)
             h2PassIso = getTH2fromTH3(histoPassIso, f"pt_eta_nominalmt{lowEdge}to{highEdge}_passIso", binStart, binEnd)
             h2FailIso = getTH2fromTH3(histoFailIso, f"pt_eta_nominalmt{lowEdge}to{highEdge}_failIso", binStart, binEnd)
             cropNegativeContent(h2PassIso)
             cropNegativeContent(h2FailIso)
+            
             nominalFakerateFactor = h2PassIso.Clone(f"nominalFakerateFactor_mt{lowEdge}to{highEdge}")
             nominalFakerateFactor.SetTitle("%s m_{T} #in [%d, %d]" % (args.met, lowEdge, highEdge))        
             nominalFakerateFactor.Divide(h2FailIso)
@@ -977,9 +974,9 @@ def runStudy(fname, charges, mainOutputFolder, args):
                 ptBinRanges.append("[{ptmin},{ptmax}] GeV".format(ptmin=int(nominalFakerateFactor.GetYaxis().GetBinLowEdge(ipt+1)),
                                                                   ptmax=int(nominalFakerateFactor.GetYaxis().GetBinLowEdge(ipt+2))))
 
-            drawNTH1([nomiFRF_unrolled, highMtFRF_unrolled], [nominalFakerateFactor.GetTitle(), highMtFakerateFactor.GetTitle()], "Unrolled eta-p_{T} bin",
+            drawNTH1([highMtFRF_unrolled, nomiFRF_unrolled], [highMtFakerateFactor.GetTitle(), nominalFakerateFactor.GetTitle()], "Unrolled eta-p_{T} bin",
                      "Fakerate factor", f"FRFnomiAndHighMt_etaPt_{charge}", outfolder,
-                     leftMargin=0.06, rightMargin=0.01, labelRatioTmp="HighMt/nomi",
+                     leftMargin=0.06, rightMargin=0.01, labelRatioTmp="Nomi/highMt",
                      legendCoords="0.06,0.99,0.91,0.99;2", lowerPanelHeight=0.5, skipLumi=True, passCanvas=canvas_unroll,
                      drawVertLines="{a},{b}".format(a=nominalFakerateFactor.GetNbinsY(),b=nominalFakerateFactor.GetNbinsX()),
                      textForLines=ptBinRanges, transparentLegend=False,
@@ -992,14 +989,12 @@ def runStudy(fname, charges, mainOutputFolder, args):
         ptLow = round(0.01 + h2PassIso.GetYaxis().GetBinLowEdge(1), 1)
         ptHigh = round(0.01 + h2PassIso.GetYaxis().GetBinLowEdge(1+h2PassIso.GetNbinsY()), 1)
 
-        if args.maxPt > 0:
-            nPtBins = min(h2PassIso.GetNbinsY(), max(1, h2PassIso.GetYaxis().FindFixBin(args.maxPt-0.001)))
-        else:
-            nPtBins = h2PassIso.GetNbinsY()
-        rangeMaxPt = round(h2PassIso.GetYaxis().GetBinLowEdge(nPtBins+1)+0.01,1)
+        nPtBins = h2PassIso.GetNbinsY()
+        logger.warning(f"hFRFcorr defined with {nPtBins} pt bins from {round(ptLow,1)} to pt = {round(ptLow,1)}")
+
         hFRFcorr = ROOT.TH2D(f"fakerateFactorCorrection_{charge}", "%s m_{T} > %d GeV" % (args.met, int(args.mtNominalRange.split(',')[1])),
                                      h2PassIso.GetNbinsX(), round(etaLow,1), round(etaHigh,1),
-                                     nPtBins, round(ptLow,1), rangeMaxPt)
+                                     nPtBins, round(ptLow,1), round(ptLow,1))
         #hFRFcorrTestCap = copy.deepcopy(hFRFcorr.Clone(f"fakerateFactorCorrTestCap_{charge}"))
         if args.fitPolDegree == 1:
             histoChi2diffTest = ROOT.TH1D(f"histoChi2diffTest_{charge}", "Probability(#chi^{2}_{0} - #chi^{2}_{1})", 10, 0, 1)
@@ -1208,12 +1203,16 @@ def runStudy(fname, charges, mainOutputFolder, args):
 
         # now add plot to test FRF with correction compared to FRF measured before in high mt region
         #
-        # copy histogram with nominal FRF correction, which has bin errors = 0,
-        # then set errors to correction uncertainty by multiplying by histogram hUnityAndUnc
-        # then multiply by nominal FRF to get corrected FRF
+        logger.warning(f"nomi_unrolled defined with {nomi_unrolled.GetNbinsX()} eta-pt bins")
+        
         nomiFRFwithCorr_unrolled = copy.deepcopy(nomi_unrolled.Clone(f"nomiFRFwithCorr_unrolled_{charge}"))
-        nomiFRFwithCorr_unrolled.Multiply(hUnityAndUnc)
+        nomiFRFwithCorr_unrolled.Reset("ICESM")
+        for i in range(1, 1+ nomiFRFwithCorr_unrolled.GetNbinsX()):
+            nomiFRFwithCorr_unrolled.SetBinContent(i, nomi_unrolled.GetBinContent(i))
+            nomiFRFwithCorr_unrolled.SetBinError(i, hUnityAndUnc.GetBinError(i))
         nomiFRFwithCorr_unrolled.Multiply(nomiFRF_unrolled)
+        logger.warning(f"nomiFRFwithCorr_unrolled defined with {nomiFRFwithCorr_unrolled.GetNbinsX()} eta-pt bins")
+        logger.warning(f"nomiFRF_unrolled defined with {nomiFRF_unrolled.GetNbinsX()} eta-pt bins")
 
         drawNTH1([highMtFRF_unrolled, nomiFRF_unrolled, nomiFRFwithCorr_unrolled],
                  [highMtFakerateFactor.GetTitle(), nominalFakerateFactor.GetTitle(), f"{nominalFakerateFactor.GetTitle()} with FRF corr"], 
@@ -1357,20 +1356,18 @@ def runStudyVsDphi(fname, charges, mainOutputFolder, args):
             # rebin eta-pt for actual test with fakes, while collapsing other axes for the simple plots as needed,
             # this is only to avoid that THn are too big
             s = hist.tag.Slicer()
+            hnarf = hnarf[{"pt": s[0:complex(0,0.001+args.maxPt)]}]
             hnarf = hnarf[{"eta" : s[::hist.rebin(args.rebinEta)]}]
             hnarf = hnarf[{"pt" : s[::hist.rebin(args.rebinPt)]}]
             # note, with python/boost/hist slicing the second edge is excluded from projections,
             # also when it is used as actual bin id, so s[1:1:hist.sum] doesn't work, while s[1:2:hist.sum] picks bin 1
-            if hnarf.axes["pt"].size > 1:
-                if args.maxPt > 0 and hnarf.axes["pt"].edges[-1] > args.maxPt:
-                    hnarf = hnarf[{"pt": s[0:complex(0,args.maxPt)]}]
-                else:
-                    hnarf = hnarf[{"pt": s[0:hist.overflow]}]
             if "hasJets" in hnarf.axes.name:
                 if args.jetCut:
                     hnarf = hnarf[{"hasJets": True}]
                 else:
                     hnarf = hnarf[{"hasJets": s[::hist.sum]}]
+            if "absdz_cm" in hnarf.axes.name:
+                hnarf = hnarf[{"absdz_cm": s[::hist.sum]}]
             # rebin a bit more in eta-pt (not for QCD MC since the binning is already chosen by hand)
             nPtBins = hnarf.axes['pt'].size
             if not args.useQCDMC:
@@ -1378,61 +1375,66 @@ def runStudyVsDphi(fname, charges, mainOutputFolder, args):
                 hnarf = hnarf[{"pt" : s[::hist.rebin(2)]}]
             else:
                 logger.warning(f"Histogram has {nPtBins} pt bins")
+                
             lowMtUpperBound = int(args.mtNominalRange.split(",")[1])
             hnarf = hnarf[{"mt" : s[:complex(0,lowMtUpperBound):hist.sum]}]
+            #hnarf = hnarf[{"mt" : s[::hist.sum]}]
             chargeIndex = 0 if charge == "minus" else 1
             hnarf = hnarf[{"charge" : s[chargeIndex:chargeIndex+1:hist.sum]}]
-            # make all TH of FRF in bins of dphi
-            histo_fakes_dphiBins = narf.hist_to_root(hnarf) # this is a THnD with eta-pt-passIso-DphiMuonMet
-            histo_FRFvsDphi = {}
-            nBinsDphi = histo_fakes_dphiBins.GetAxis(3).GetNbins()
-            for idp in range(nBinsDphi):
-                idpBin = idp +1
-                histo_fakes_dphiBins.GetAxis(3).SetRange(idpBin, idpBin)
+
+            for ipt in range(nPtBins):
+                # make all TH of FRF in bins of dphi
+                histo_fakes_dphiBins = narf.hist_to_root(hnarf) # this is a THnD with eta-pt-passIso-DphiMuonMet
+                histo_FRFvsDphi = {}
+                nBinsDphi = histo_fakes_dphiBins.GetAxis(3).GetNbins()
+                for idp in range(nBinsDphi):
+                    idpBin = idp +1
+                    histo_fakes_dphiBins.GetAxis(3).SetRange(idpBin, idpBin)
+                    histo_fakes_dphiBins.GetAxis(2).SetRange(1, 1)
+                    histo_fakes_dphiBins_failIso = histo_fakes_dphiBins.Projection(1, 0, "E")
+                    histo_fakes_dphiBins_failIso.SetName(f"histo_fakes_dphiBins_failIso_idp{idp}")
+                    histo_fakes_dphiBins.GetAxis(3).SetRange(idpBin, idpBin)
+                    histo_fakes_dphiBins.GetAxis(2).SetRange(2, 2)
+                    histo_fakes_dphiBins_passIso = histo_fakes_dphiBins.Projection(1, 0, "E")
+                    histo_fakes_dphiBins_passIso.SetName(f"histo_fakes_dphiBins_passIso_idp{idp}")
+                    histo_FRFvsDphi[idp] = copy.deepcopy(histo_fakes_dphiBins_passIso.Clone(f"histo_FRFvsDphi_idp{idp}"))
+                    histo_FRFvsDphi[idp].Divide(histo_fakes_dphiBins_failIso)
+                ##
+                histo_fakes_dphiBins.GetAxis(3).SetRange(1, nBinsDphi)
                 histo_fakes_dphiBins.GetAxis(2).SetRange(1, 1)
                 histo_fakes_dphiBins_failIso = histo_fakes_dphiBins.Projection(1, 0, "E")
-                histo_fakes_dphiBins_failIso.SetName(f"histo_fakes_dphiBins_failIso_idp{idp}")
-                histo_fakes_dphiBins.GetAxis(3).SetRange(idpBin, idpBin)
+                histo_fakes_dphiBins_failIso.SetName("histo_fakes_dphiBins_failIso_idpInclusive")
+                histo_fakes_dphiBins.GetAxis(3).SetRange(1, nBinsDphi)
                 histo_fakes_dphiBins.GetAxis(2).SetRange(2, 2)
                 histo_fakes_dphiBins_passIso = histo_fakes_dphiBins.Projection(1, 0, "E")
-                histo_fakes_dphiBins_passIso.SetName(f"histo_fakes_dphiBins_passIso_idp{idp}")
-                histo_FRFvsDphi[idp] = copy.deepcopy(histo_fakes_dphiBins_passIso.Clone(f"histo_FRFvsDphi_idp{idp}"))
-                histo_FRFvsDphi[idp].Divide(histo_fakes_dphiBins_failIso)
-            ##
-            histo_fakes_dphiBins.GetAxis(3).SetRange(1, nBinsDphi)
-            histo_fakes_dphiBins.GetAxis(2).SetRange(1, 1)
-            histo_fakes_dphiBins_failIso = histo_fakes_dphiBins.Projection(1, 0, "E")
-            histo_fakes_dphiBins_failIso.SetName("histo_fakes_dphiBins_failIso_idpInclusive")
-            histo_fakes_dphiBins.GetAxis(3).SetRange(1, nBinsDphi)
-            histo_fakes_dphiBins.GetAxis(2).SetRange(2, 2)
-            histo_fakes_dphiBins_passIso = histo_fakes_dphiBins.Projection(1, 0, "E")
-            histo_fakes_dphiBins_passIso.SetName("histo_fakes_dphiBins_passIso_idpInclusive")
-            histo_FRFvsDphi["inclusive"] = copy.deepcopy(histo_fakes_dphiBins_passIso.Clone("histo_FRFvsDphi_idpInclusive"))
-            histo_FRFvsDphi["inclusive"].Divide(histo_fakes_dphiBins_failIso)
-            ##
-            # select a few eta-pt bins with index numbers (after rebinning)
-            etapt_bins = [(1, 2), (2, 2), (3, 2)] if nPtBins > 1 else [(1, 1), (2, 1), (3, 1)]
-            hists = {b : ROOT.TH1D(f"FRFvsDphi_{d}_ieta{b[0]}_ipt{b[1]}", "", nBinsDphi, 0, np.pi) for b in etapt_bins}
-            for b in hists.keys():
-                for i in range(hists[b].GetNbinsX()):
-                    hists[b].SetBinContent(i+1, histo_FRFvsDphi[i].GetBinContent(b[0], b[1]))
-                    hists[b].SetBinError(i+1, histo_FRFvsDphi[i].GetBinError(b[0], b[1]))
+                histo_fakes_dphiBins_passIso.SetName("histo_fakes_dphiBins_passIso_idpInclusive")
+                histo_FRFvsDphi["inclusive"] = copy.deepcopy(histo_fakes_dphiBins_passIso.Clone("histo_FRFvsDphi_idpInclusive"))
+                histo_FRFvsDphi["inclusive"].Divide(histo_fakes_dphiBins_failIso)
+                ##
+                # select a few eta-pt bins with index numbers (after rebinning)
+                iptroot = ipt + 1
+                etapt_bins = [(1, iptroot), (2, iptroot), (3, iptroot)]
+                hists = {b : ROOT.TH1D(f"FRFvsDphi_{d}_ieta{b[0]}_ipt{b[1]}", "", nBinsDphi, 0, np.pi) for b in etapt_bins}
+                for b in hists.keys():
+                    for i in range(hists[b].GetNbinsX()):
+                        hists[b].SetBinContent(i+1, histo_FRFvsDphi[i].GetBinContent(b[0], b[1]))
+                        hists[b].SetBinError(i+1, histo_FRFvsDphi[i].GetBinError(b[0], b[1]))
 
-            htmp = histo_FRFvsDphi["inclusive"]
-            hs = []
-            legEntries = []
-            for b in etapt_bins:
-                hs.append(hists[b])
-                etaText = f"{htmp.GetXaxis().GetBinLowEdge(b[0]):.1f} < #eta < {htmp.GetXaxis().GetBinLowEdge(b[0]+1):.1f}"
-                ptText = f"{htmp.GetYaxis().GetBinLowEdge(b[1]):.0f} < p_{{T}} < {htmp.GetYaxis().GetBinLowEdge(b[1]+1):.0f}"
-                legEntries.append(f"{etaText} && {ptText} GeV")
+                htmp = histo_FRFvsDphi["inclusive"]
+                hs = []
+                legEntries = []
+                for b in etapt_bins:
+                    hs.append(hists[b])
+                    etaText = f"{htmp.GetXaxis().GetBinLowEdge(b[0]):.1f} < #eta < {htmp.GetXaxis().GetBinLowEdge(b[0]+1):.1f}"
+                    ptText = f"{htmp.GetYaxis().GetBinLowEdge(b[1]):.0f} < p_{{T}} < {htmp.GetYaxis().GetBinLowEdge(b[1]+1):.0f}"
+                    legEntries.append(f"{etaText} && {ptText} GeV")
 
-            drawNTH1(hs, legEntries, "#Delta#phi(#mu,MET)", "Fakerate factor",
-                     f"FRFvsDeltaPhi_{d}_someBins_{charge}", outfolder,
-                     leftMargin=0.14, rightMargin=0.04, topMargin=0.16, lowerPanelHeight=0.0,
-                     legendCoords="0.14,0.96,0.84,0.99;1", skipLumi=True, passCanvas=canvas,
-                     transparentLegend=False, drawErrorAll=True,
-                     onlyLineColor=True, noErrorRatioDen=False, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=2)
+                drawNTH1(hs, legEntries, "#Delta#phi(#mu,MET)", "Fakerate factor",
+                         f"FRFvsDeltaPhi_{d}_someBins_ipt{ipt}_{charge}", outfolder,
+                         leftMargin=0.14, rightMargin=0.04, topMargin=0.16, lowerPanelHeight=0.0,
+                         legendCoords="0.14,0.96,0.84,0.99;1", skipLumi=True, passCanvas=canvas,
+                         transparentLegend=False, drawErrorAll=True,
+                         onlyLineColor=True, noErrorRatioDen=False, useLineFirstHistogram=True, setOnlyLineRatio=True, lineWidth=2)
                 
     ##
 
