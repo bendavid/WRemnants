@@ -501,17 +501,17 @@ def build_graph(df, dataset):
             ####################################################
             # nuisances from the muon momemtum scale calibration 
             if (args.muonCorrData in ["massfit", "lbl_massfit"]):
+                input_kinematics = [
+                    f"{reco_sel_GF}_recoPt",
+                    f"{reco_sel_GF}_recoEta",
+                    f"{reco_sel_GF}_recoCharge",
+                    f"{reco_sel_GF}_genPt",
+                    f"{reco_sel_GF}_genEta",
+                    f"{reco_sel_GF}_genCharge"
+                ]
                 if diff_weights_helper:
-                    df = df.Define(f'{reco_sel_GF}_response_weight', diff_weights_helper,
-                        [
-                            f"{reco_sel_GF}_recoPt",
-                            f"{reco_sel_GF}_recoEta",
-                            f"{reco_sel_GF}_recoCharge",
-                            f"{reco_sel_GF}_genPt",
-                            f"{reco_sel_GF}_genEta",
-                            f"{reco_sel_GF}_genCharge"
-                        ]
-                    )
+                    df = df.Define(f'{reco_sel_GF}_response_weight', diff_weights_helper, [*input_kinematics])
+                    input_kinematics.append(f'{reco_sel_GF}_response_weight')
 
                 # muon scale variation from stats. uncertainty on the jpsi massfit
                 df = muon_calibration.add_jpsi_crctn_stats_unc_hists(
