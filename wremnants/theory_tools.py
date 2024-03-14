@@ -283,11 +283,10 @@ def define_prefsr_vars(df, mode=None):
     df = df.Define("chargeVgen", "GenPart_pdgId[prefsrLeps[0]] + GenPart_pdgId[prefsrLeps[1]]")
     df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genlanti, genl)")
 
-    if mode in ["wlike", "dilepton"]:
-        # define gen lepton in wlike case for ew corrections
-        df = df.Define("ptgen", "isEvenEvent ? genl.pt() : genlanti.pt()")
-        df = df.Define("etagen", "isEvenEvent ? genl.eta() : genlanti.eta()")
-        df = df.Define("qgen", "isEvenEvent ? -1 : 1")
+    # define gen lepton in wlike case for ew corrections
+    df = df.Define("ptgen", "isEvenEvent ? genl.pt() : genlanti.pt()")
+    df = df.Define("etagen", "isEvenEvent ? genl.eta() : genlanti.eta()")
+    df = df.Define("qgen", "isEvenEvent ? -1 : 1")
 
     return df
 
