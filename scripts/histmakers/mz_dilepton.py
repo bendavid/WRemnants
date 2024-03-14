@@ -410,7 +410,7 @@ def build_graph(df, dataset):
                     )
                     hist_Z_non_closure_parametrized = df.HistoBoost(
                         "Z_non_closure_parametrized_gaus" if args.muonScaleVariation == 'smearingWeightsGaus' else "nominal_Z_non_closure_parametrized",
-                        nominal_axes,
+                        axes,
                         [*cols, "Z_non_closure_parametrized"],
                         tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
                         storage=hist.storage.Double()
