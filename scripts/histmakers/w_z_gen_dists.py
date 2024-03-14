@@ -119,6 +119,8 @@ def build_graph(df, dataset):
     # This sum should happen before any change of the weight
     weightsum = df.SumAndCount("weight")
 
+    df = df.Define("isEvenEvent", "event % 2 == 0")
+
     df = theory_tools.define_theory_weights_and_corrs(df, dataset.name, corr_helpers, args)
 
     if isZ:

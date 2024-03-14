@@ -130,6 +130,8 @@ def build_graph(df, dataset):
     else:
         df = df.Define("weight", "std::copysign(1.0, genWeight)")
 
+    df = df.Define("isEvenEvent", "event % 2 == 0")
+
     weightsum = df.SumAndCount("weight")
 
     axes = nominal_axes

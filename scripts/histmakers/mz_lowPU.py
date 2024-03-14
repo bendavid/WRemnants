@@ -104,7 +104,8 @@ def build_graph(df, dataset):
 
     if dataset.is_data: df = df.DefinePerSample("weight", "1.0")
     else: df = df.Define("weight", "std::copysign(1.0, genWeight)")
-  
+    df = df.Define("isEvenEvent", "event % 2 == 0")
+
     weightsum = df.SumAndCount("weight")
 
     axes = nominal_axes
@@ -126,7 +127,7 @@ def build_graph(df, dataset):
             axes = [*axes, *unfolding_axes] 
             cols = [*cols, *unfolding_cols]
 
-    df = df.Define("TrigLep_charge", "event % 2 == 0 ? -1 : 1") # wlike charge
+    df = df.Define("TrigLep_charge", "isEvenEvent ? -1 : 1") # wlike charge
  
     if flavor == "mumu":
     
@@ -274,7 +275,7 @@ def build_graph(df, dataset):
     results.append(df.HistoBoost("noTrigMatch", [axis_lin], ["noTrigMatch", "nominal_weight"]))
 
     # W-like
-    #df = df.Define("TrigLep_charge", "event % 2 == 0 ? -1 : 1")
+    #df = df.Define("TrigLep_charge", "isEvenEvent ? -1 : 1")
     df = df.Define("NonTrigLep_charge", "-TrigLep_charge")
     df = df.Define("trigLeps", "Lep_charge == TrigLep_charge")
     df = df.Define("nonTrigLeps", "Lep_charge == NonTrigLep_charge")

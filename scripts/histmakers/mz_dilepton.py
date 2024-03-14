@@ -155,6 +155,8 @@ def build_graph(df, dataset):
     else:
         df = df.Define("weight", "std::copysign(1.0, genWeight)")
 
+    df = df.Define("isEvenEvent", "event % 2 == 0")
+
     weightsum = df.SumAndCount("weight")
 
     axes = nominal_axes
@@ -213,12 +215,13 @@ def build_graph(df, dataset):
         df = df.Alias("muonsPlus_mon4", "nonTrigMuons_mom4")
     else:
         df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons", era=era)
-        df = df.Define("muonsMinus_pt0",  "trigMuons_charge0 == -1 ? trigMuons_pt0 : nonTrigMuons_pt0")
-        df = df.Define("muonsPlus_pt0",   "trigMuons_charge0 == -1 ? nonTrigMuons_pt0 : trigMuons_pt0")
-        df = df.Define("muonsMinus_eta0", "trigMuons_charge0 == -1 ? trigMuons_eta0 : nonTrigMuons_eta0")
-        df = df.Define("muonsPlus_eta0",  "trigMuons_charge0 == -1 ? nonTrigMuons_eta0 : trigMuons_eta0")
-        df = df.Define("muonsMinus_mon4", "trigMuons_charge0 == -1 ? trigMuons_mom4 : nonTrigMuons_mom4")
-        df = df.Define("muonsPlus_mon4",  "trigMuons_charge0 == -1 ? nonTrigMuons_mom4 : trigMuons_mom4")
+        df = df.Define("trigMuon_isNegative",  "trigMuons_charge0 == -1")
+        df = df.Define("muonsMinus_pt0",  "trigMuon_isNegative ? trigMuons_pt0 : nonTrigMuons_pt0")
+        df = df.Define("muonsPlus_pt0",   "trigMuon_isNegative ? nonTrigMuons_pt0 : trigMuons_pt0")
+        df = df.Define("muonsMinus_eta0", "trigMuon_isNegative ? trigMuons_eta0 : nonTrigMuons_eta0")
+        df = df.Define("muonsPlus_eta0",  "trigMuon_isNegative ? nonTrigMuons_eta0 : trigMuons_eta0")
+        df = df.Define("muonsMinus_mon4", "trigMuon_isNegative ? trigMuons_mom4 : nonTrigMuons_mom4")
+        df = df.Define("muonsPlus_mon4",  "trigMuon_isNegative ? nonTrigMuons_mom4 : trigMuons_mom4")
     
     df = df.Define("ptll", "ll_mom4.pt()")
     df = df.Define("yll", "ll_mom4.Rapidity()")

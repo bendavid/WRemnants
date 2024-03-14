@@ -52,8 +52,8 @@ def define_trigger_muons(df, name_first="trigMuons", name_second="nonTrigMuons",
     else:
         # mu- for even event numbers, mu+ for odd event numbers        
         logger.debug(f"Using w-like trigger selection, the trigger (non trigger) muon collection is named {name_first} ({name_second})")
-        df = df.Define(f"{name_first}_charge0", "event % 2 == 0 ? -1 : 1")
-        df = df.Define(f"{name_second}_charge0", f"-{name_first}_charge0")
+        df = df.Define(f"{name_first}_charge0", "isEvenEvent ? -1 : 1")
+        df = df.Define(f"{name_second}_charge0", "isEvenEvent ? 1 : -1")
 
     df = df.Define(name_first, f"goodMuons && Muon_correctedCharge == {name_first}_charge0")
     df = df.Define(name_second, f"goodMuons && Muon_correctedCharge == {name_second}_charge0")
