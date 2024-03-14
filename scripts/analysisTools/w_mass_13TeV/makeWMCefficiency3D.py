@@ -170,35 +170,35 @@ if __name__ == "__main__":
         
         # test, integrate uT and plot efficiencies vs eta-pt
         eff_iso_boost2D,eff_iso = getEtaPtEff(n_iso_pass, n_iso_tot, getRoot=True, rootName=f"{d}_MC_eff_iso", rootTitle="P(iso | trig)")
-        drawCorrelationPlot(eff_iso, xAxisName, xAxisName, f"MC isolation efficiency",
+        drawCorrelationPlot(eff_iso, xAxisName, yAxisName, f"MC isolation efficiency",
                             f"{eff_iso.GetName()}", plotLabel="ForceTitle", outdir=outdir,
                             smoothPlot=False, drawProfileX=False, scaleToUnitArea=False,
                             draw_both0_noLog1_onlyLog2=1, passCanvas=canvas,
                             nContours=args.nContours, palette=args.palette, invertePalette=args.invertPalette)
 
         eff_isonotrig_boost2D,eff_isonotrig = getEtaPtEff(n_isonotrig_pass, n_isonotrig_tot, getRoot=True, rootName=f"{d}_MC_eff_isonotrig", rootTitle="P(iso | ID+IP)")
-        drawCorrelationPlot(eff_isonotrig, xAxisName, xAxisName, f"MC isolation efficiency",
+        drawCorrelationPlot(eff_isonotrig, xAxisName, yAxisName, f"MC isolation efficiency",
                             f"{eff_isonotrig.GetName()}", plotLabel="ForceTitle", outdir=outdir,
                             smoothPlot=False, drawProfileX=False, scaleToUnitArea=False,
                             draw_both0_noLog1_onlyLog2=1, passCanvas=canvas,
                             nContours=args.nContours, palette=args.palette, invertePalette=args.invertPalette)
 
         eff_isoantitrig_boost2D,eff_isoantitrig = getEtaPtEff(n_isoantitrig_pass, n_isoantitrig_tot, getRoot=True, rootName=f"{d}_MC_eff_isoantitrig", rootTitle="P(iso | ID+IP & fail trig)")
-        drawCorrelationPlot(eff_isoantitrig, xAxisName, xAxisName, f"MC isolation efficiency",
+        drawCorrelationPlot(eff_isoantitrig, xAxisName, yAxisName, f"MC isolation efficiency",
                             f"{eff_isoantitrig.GetName()}", plotLabel="ForceTitle", outdir=outdir,
                             smoothPlot=False, drawProfileX=False, scaleToUnitArea=False,
                             draw_both0_noLog1_onlyLog2=1, passCanvas=canvas,
                             nContours=args.nContours, palette=args.palette, invertePalette=args.invertPalette)
 
         eff_triggerplus_boost2D,eff_triggerplus = getEtaPtEff(n_triggerplus_pass, n_triggerplus_tot, getRoot=True, rootName=f"{d}_MC_eff_triggerplus", rootTitle="P(trig | ID+IP)")
-        drawCorrelationPlot(eff_triggerplus, xAxisName, xAxisName, f"MC trigger plus efficiency",
+        drawCorrelationPlot(eff_triggerplus, xAxisName, yAxisName, f"MC trigger plus efficiency",
                             f"{eff_triggerplus.GetName()}", plotLabel="ForceTitle", outdir=outdir,
                             smoothPlot=False, drawProfileX=False, scaleToUnitArea=False,
                             draw_both0_noLog1_onlyLog2=1, passCanvas=canvas,
                             nContours=args.nContours, palette=args.palette, invertePalette=args.invertPalette)
 
         eff_triggerminus_boost2D,eff_triggerminus = getEtaPtEff(n_triggerminus_pass, n_triggerminus_tot, getRoot=True, rootName=f"{d}_MC_eff_triggerminus", rootTitle="P(trig | ID+IP)")
-        drawCorrelationPlot(eff_triggerminus, xAxisName, xAxisName, f"MC trigger minus efficiency",
+        drawCorrelationPlot(eff_triggerminus, xAxisName, yAxisName, f"MC trigger minus efficiency",
                             f"{eff_triggerminus.GetName()}", plotLabel="ForceTitle", outdir=outdir,
                             smoothPlot=False, drawProfileX=False, scaleToUnitArea=False,
                             draw_both0_noLog1_onlyLog2=1, passCanvas=canvas,
