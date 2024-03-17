@@ -1,7 +1,9 @@
 import ROOT
 from wremnants import muon_calibration
 from wremnants import theory_tools
-from utilities.common import background_MCprocs as bkgMCprocs
+from utilities import common, logging
+
+logger = logging.child_logger(__name__)
 
 def apply_met_filters(df):
     df = df.Filter("Flag_globalSuperTightHalo2016Filter && Flag_EcalDeadCellTriggerPrimitiveFilter && Flag_goodVertices && Flag_HBHENoiseIsoFilter && Flag_HBHENoiseFilter && Flag_BadPFMuonFilter")
@@ -41,26 +43,23 @@ def select_good_muons(df, ptLow, ptHigh, datasetGroup, nMuons=1, use_trackerMuon
 
     return df
 
-def define_trigger_muons(df, what_analysis=ROOT.wrem.AnalysisType.Dilepton):
-
-    if what_analysis == ROOT.wrem.AnalysisType.Dilepton:
-        # by convention define trigMuons as the positive charge, but actually both leptons could be triggering here 
-        # TODO: rename to something more meaningful, like positive/negative, or first/second
-        df = df.DefinePerSample("trigMuons_charge0", "1")
-        df = df.DefinePerSample("nonTrigMuons_charge0", "-1")
-    elif what_analysis == ROOT.wrem.AnalysisType.Wlike:
-        # mu- for even event numbers, mu+ for odd event numbers
-        df = df.Define("trigMuons_charge0", "event % 2 == 0 ? -1 : 1")
-        df = df.Define("nonTrigMuons_charge0", "-trigMuons_charge0")
+def define_trigger_muons(df, name_first="trigMuons", name_second="nonTrigMuons", dilepton=False):
+    if dilepton:
+        # by convention define first as negative charge, but actually both leptons could be triggering here 
+        logger.debug(f"Using dilepton trigger selection, the negative (positive) muon collection is named {name_first} ({name_second})")
+        df = df.DefinePerSample(f"{name_first}_charge0", "-1")
+        df = df.DefinePerSample(f"{name_second}_charge0", "1")
     else:
-        # Wmass currently doesn't call this function
-        raise NotImplementedError(f"define_trigger_muons(): no implementation for analysis {what_analysis}")
+        # mu- for even event numbers, mu+ for odd event numbers        
+        logger.debug(f"Using w-like trigger selection, the trigger (non trigger) muon collection is named {name_first} ({name_second})")
+        df = df.Define(f"{name_first}_charge0", "isEvenEvent ? -1 : 1")
+        df = df.Define(f"{name_second}_charge0", "isEvenEvent ? 1 : -1")
 
-    df = df.Define("trigMuons", "goodMuons && Muon_correctedCharge == trigMuons_charge0")
-    df = df.Define("nonTrigMuons", "goodMuons && Muon_correctedCharge == nonTrigMuons_charge0")
+    df = df.Define(name_first, f"goodMuons && Muon_correctedCharge == {name_first}_charge0")
+    df = df.Define(name_second, f"goodMuons && Muon_correctedCharge == {name_second}_charge0")
 
-    df = muon_calibration.define_corrected_reco_muon_kinematics(df, "trigMuons", ["pt", "eta", "phi"])
-    df = muon_calibration.define_corrected_reco_muon_kinematics(df, "nonTrigMuons", ["pt", "eta", "phi"])
+    df = muon_calibration.define_corrected_reco_muon_kinematics(df, name_first, ["pt", "eta", "phi"])
+    df = muon_calibration.define_corrected_reco_muon_kinematics(df, name_second, ["pt", "eta", "phi"])
 
     return df
 
@@ -84,30 +83,29 @@ def define_muon_uT_variable(df, isWorZ, smooth3dsf=False, colNamePrefix="goodMuo
         
     return df
 
-def select_z_candidate(df, mass_min=60, mass_max=120):
+def select_z_candidate(df, mass_min=60, mass_max=120, name_first="trigMuons", name_second="nonTrigMuons"):
 
-    df = df.Filter("Sum(trigMuons) == 1 && Sum(nonTrigMuons) == 1")
+    df = df.Filter(f"Sum({name_first}) == 1 && Sum({name_second}) == 1")
 
-    df = df.Define("trigMuons_mom4", "ROOT::Math::PtEtaPhiMVector(trigMuons_pt0, trigMuons_eta0, trigMuons_phi0, wrem::muon_mass)")
-    df = df.Define("nonTrigMuons_mom4", "ROOT::Math::PtEtaPhiMVector(nonTrigMuons_pt0, nonTrigMuons_eta0, nonTrigMuons_phi0, wrem::muon_mass)")
-    df = df.Define("ll_mom4", "ROOT::Math::PxPyPzEVector(trigMuons_mom4)+ROOT::Math::PxPyPzEVector(nonTrigMuons_mom4)")
+    df = df.Define(f"{name_first}_mom4", f"ROOT::Math::PtEtaPhiMVector({name_first}_pt0, {name_first}_eta0, {name_first}_phi0, wrem::muon_mass)")
+    df = df.Define(f"{name_second}_mom4", f"ROOT::Math::PtEtaPhiMVector({name_second}_pt0, {name_second}_eta0, {name_second}_phi0, wrem::muon_mass)")
+    df = df.Define("ll_mom4", f"ROOT::Math::PxPyPzEVector({name_first}_mom4)+ROOT::Math::PxPyPzEVector({name_second}_mom4)")
     df = df.Define("mll", "ll_mom4.mass()")
 
     df = df.Filter(f"mll >= {mass_min} && mll < {mass_max}")
 
     return df
 
-def apply_triggermatching_muon(df, dataset, muon_eta, muon_phi, otherMuon_eta=None, otherMuon_phi=None, era = "2016PostVFP"):
+def apply_triggermatching_muon(df, dataset, muon, otherMuon=None, era = "2016PostVFP", idx=0):
     df = df.Define("goodTrigObjs", f"wrem::goodMuonTriggerCandidate<wrem::Era::Era_{era}>(TrigObj_id,TrigObj_filterBits)")
-    if otherMuon_eta is not None:
-        # implement OR of trigger matching condition (for dilepton), also create corresponding flags
-        # FIXME: should find a better way to pass the variables' name prefix
-        df = df.Define("trigMuons_passTrigger0", f"wrem::hasTriggerMatch({muon_eta},{muon_phi},TrigObj_eta[goodTrigObjs],TrigObj_phi[goodTrigObjs])")
-        df = df.Define("nonTrigMuons_passTrigger0", f"wrem::hasTriggerMatch({otherMuon_eta},{otherMuon_phi},TrigObj_eta[goodTrigObjs],TrigObj_phi[goodTrigObjs])")
-        df = df.Filter(f"trigMuons_passTrigger0 || nonTrigMuons_passTrigger0")
+    if otherMuon is None:
+        df = df.Filter(f"wrem::hasTriggerMatch({muon}_eta{idx},{muon}_phi{idx},TrigObj_eta[goodTrigObjs],TrigObj_phi[goodTrigObjs])")
     else:
-        df = df.Filter(f"wrem::hasTriggerMatch({muon_eta},{muon_phi},TrigObj_eta[goodTrigObjs],TrigObj_phi[goodTrigObjs])")
-    
+        # implement OR of trigger matching condition (for dilepton), also create corresponding flags
+        df = df.Define(f"{muon}_passTrigger{idx}", f"wrem::hasTriggerMatch({muon}_eta{idx},{muon}_phi{idx},TrigObj_eta[goodTrigObjs],TrigObj_phi[goodTrigObjs])")
+        df = df.Define(f"{otherMuon}_passTrigger{idx}", f"wrem::hasTriggerMatch({otherMuon}_eta{idx},{otherMuon}_phi{idx},TrigObj_eta[goodTrigObjs],TrigObj_phi[goodTrigObjs])")
+        df = df.Filter(f"{muon}_passTrigger{idx} || {otherMuon}_passTrigger{idx}")
+
     return df
 
 def veto_electrons(df):
@@ -119,7 +117,7 @@ def veto_electrons(df):
 
 def select_standalone_muons(df, dataset, use_trackerMuons=False, muons="goodMuons", idx=0):
 
-    from utilities.common import muonEfficiency_standaloneNumberOfValidHits as nHitsSA
+    nHitsSA = common.muonEfficiency_standaloneNumberOfValidHits
 
     if use_trackerMuons:
         # try to use standalone variables when possible

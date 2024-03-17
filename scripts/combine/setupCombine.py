@@ -40,7 +40,8 @@ def make_parser(parser=None):
     parser.add_argument("--lumiScale", type=float, default=1.0, help="Rescale equivalent luminosity by this value (e.g. 10 means ten times more data and MC)")
     parser.add_argument("--sumChannels", action='store_true', help="Only use one channel")
     parser.add_argument("--fitXsec", action='store_true', help="Fit signal inclusive cross section")
-    parser.add_argument("--fitMassDiff", type=str, default=None, choices=["charge", "eta-sign", "eta-range"], help="Fit an additional POI for the difference in the boson mass")
+    parser.add_argument("--fitMassDiff", type=str, default=None, choices=["charge", "cosThetaStarll", "eta-sign", "eta-range"], help="Fit an additional POI for the difference in the boson mass")
+    parser.add_argument("--fitMassDecorr", type=str, default=None, help="Decorrelate POI for given axis, fit multiple POIs for the different POIs")
     parser.add_argument("--fitresult", type=str, default=None ,help="Use data and covariance matrix from fitresult (for making a theory fit)")
     parser.add_argument("--noMCStat", action='store_true', help="Do not include MC stat uncertainty in covariance for theory fit (only when using --fitresult)")
     parser.add_argument("--fakerateAxes", nargs="+", help="Axes for the fakerate binning", default=["eta","pt","charge"])
@@ -358,16 +359,35 @@ def setup(args, inputFile, fitvar, xnorm=False):
 
     if not (args.doStatOnly and constrainMass):
         if args.massVariation != 0:
-            cardTool.addSystematic(f"massWeight{label}",
-                                processes=signal_samples_forMass,
-                                group=f"massShift",
-                                noi=not constrainMass,
-                                skipEntries=massWeightNames(proc=label, exclude=args.massVariation),
-                                mirror=False,
-                                noConstraint=not constrainMass,
-                                systAxes=["massShift"],
-                                passToFakes=passSystToFakes
-            )
+            if not args.fitMassDecorr:
+                cardTool.addSystematic(f"massWeight{label}",
+                                    processes=signal_samples_forMass,
+                                    group=f"massShift",
+                                    noi=not constrainMass,
+                                    skipEntries=massWeightNames(proc=label, exclude=args.massVariation),
+                                    mirror=False,
+                                    noConstraint=not constrainMass,
+                                    systAxes=["massShift"],
+                                    passToFakes=passSystToFakes
+                )
+            else:
+                suffix = "".join([a.capitalize() for a in args.fitMassDecorr.split("-")])
+                cardTool.addSystematic(
+                    name=f"massWeight{label}",
+                    processes=signal_samples_forMass,
+                    rename=f"massDecorr{suffix}{label}",
+                    group=f"massDecorr{label}",
+                    # systNameReplace=[("Shift",f"Diff{suffix}")],
+                    skipEntries=[(x, -1) for x in massWeightNames(proc=label, exclude=args.massVariation)],
+                    noi=not constrainMass,
+                    noConstraint=not constrainMass,
+                    mirror=False,
+                    systAxes=["massShift", f"{args.fitMassDecorr}Diff"],
+                    passToFakes=passSystToFakes,
+                    actionRequiresNomi=True,
+                    action=syst_tools.decorrelateByAxis, 
+                    actionArgs=dict(axisToDecorrName=args.fitMassDecorr, decorrEdges=[], newDecorrAxisName=f"{args.fitMassDecorr}Diff")
+                )
 
         if args.fitMassDiff:
             suffix = "".join([a.capitalize() for a in args.fitMassDiff.split("-")])
@@ -394,11 +414,17 @@ def setup(args, inputFile, fitvar, xnorm=False):
                                             hh.swap_histogram_bins(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "charge", 0)) 
                                         for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members},
                 )
-            elif args.fitMassDiff == "eta-sign":
+            elif args.fitMassDiff == "cosThetaStarll":
                 cardTool.addSystematic(**mass_diff_args, 
                                     preOpMap={m.name: (lambda h: 
-                                            hh.swap_histogram_bins(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "eta", hist.tag.Slicer()[0:complex(0,0):]))
+                                            hh.swap_histogram_bins(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "cosThetaStarll", hist.tag.Slicer()[0:complex(0,0):]))
                                         for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members},
+                )
+            elif args.fitMassDiff == "eta-sign":
+                cardTool.addSystematic(**mass_diff_args, 
+                                preOpMap={m.name: (lambda h: 
+                                        hh.swap_histogram_bins(h, "massShift", f"massShift{label}50MeVUp", f"massShift{label}50MeVDown", "eta", hist.tag.Slicer()[0:complex(0,0):]))
+                                    for g in cardTool.procGroups[signal_samples_forMass[0]] for m in cardTool.datagroups.groups[g].members},
                 )
             elif args.fitMassDiff == "eta-range":
                 cardTool.addSystematic(**mass_diff_args, 

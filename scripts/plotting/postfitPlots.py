@@ -27,7 +27,8 @@ parser.add_argument("--yscale", type=float, help="Scale the upper y axis by this
 parser.add_argument("--noRatio", action='store_true', help="Don't make the ratio in the plot")
 parser.add_argument("--noData", action='store_true', help="Don't plot the data")
 parser.add_argument("--prefit", action='store_true', help="Make prefit plot, else postfit")
-parser.add_argument("--selectionAxes", type=str, default=["charge", "passIso", "passMT"], help="List of axes where for each bin a seperate plot is created")
+parser.add_argument("--selectionAxes", type=str, default=["charge", "passIso", "passMT", "cosThetaStarll"], 
+    help="List of axes where for each bin a seperate plot is created")
 parser.add_argument("--axlim", type=float, nargs='*', help="min and max for axes (2 values per axis)")
 
 args = parser.parse_args()
@@ -248,7 +249,10 @@ else:
     analysis = filename_parts[-2].split("_")[0]
     if analysis=="ZMassDilepton":
         all_axes = {
-            "mll": hist.axis.Regular(60, 60., 120., name = "mll", overflow=False, underflow=False),
+            # "mll": hist.axis.Regular(60, 60., 120., name = "mll", overflow=False, underflow=False),
+            "mll": hist.axis.Variable([60,70,75,78,80,82,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,100,102,105,110,120], name = "mll", overflow=False, underflow=False),
+            "etaAbsEta": hist.axis.Variable([-2.4, -2.0, -1.6, -1.4, -1.2, -1.0, -0.6, 0.0, 0.6, 1.0, 1.2, 1.4, 1.6, 2.0, 2.4], name = "etaAbsEta", overflow=False, underflow=False),
+            "cosThetaStarll": hist.axis.Regular(2, -1., 1., name = "cosThetaStarll", underflow=False, overflow=False),
             "yll": hist.axis.Regular(20, -2.5, 2.5, name = "yll", overflow=False, underflow=False),
             "ptll": hist.axis.Variable([0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 20, 23, 27, 32, 40, 54, 100], name = "ptll", underflow=False, overflow=False),
         }

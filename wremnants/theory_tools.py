@@ -263,7 +263,7 @@ def define_dressed_vars(df, mode, flavor="mu"):
 
     return df
 
-def define_prefsr_vars(df):
+def define_prefsr_vars(df, mode=None):
     if "prefsrLeps" in df.GetColumnNames():
         logger.debug("PreFSR leptons are already defined, do nothing here.")
         return df
@@ -284,9 +284,9 @@ def define_prefsr_vars(df):
     df = df.Define("csSineCosThetaPhi", "wrem::csSineCosThetaPhi(genlanti, genl)")
 
     # define gen lepton in wlike case for ew corrections
-    df = df.Define("ptgen", "event % 2 == 0 ? genl.pt() : genlanti.pt()")
-    df = df.Define("etagen", "event % 2 == 0 ? genlanti.eta() : genl.eta()")
-    df = df.Define("qgen", "event % 2 == 0 ? -1 : 1")
+    df = df.Define("ptgen", "isEvenEvent ? genl.pt() : genlanti.pt()")
+    df = df.Define("etagen", "isEvenEvent ? genl.eta() : genlanti.eta()")
+    df = df.Define("qgen", "isEvenEvent ? -1 : 1")
 
     return df
 
@@ -316,16 +316,16 @@ def define_postfsr_vars(df, mode=None):
             df = df.Define("postfsrLep_idx",     "ROOT::VecOps::ArgMax(GenPart_pt[postfsrLep])")
             df = df.Define("postfsrAntiLep_idx", "ROOT::VecOps::ArgMax(GenPart_pt[postfsrAntiLep])")
 
-            df = df.Define("postfsrLep_pt",     "event % 2 == 0 ? static_cast<double>(GenPart_pt[postfsrLep][postfsrLep_idx]) : static_cast<double>(GenPart_pt[postfsrAntiLep][postfsrAntiLep_idx])")
-            df = df.Define("postfsrLep_eta",    "event % 2 == 0 ? GenPart_eta[postfsrLep][postfsrLep_idx] : GenPart_eta[postfsrAntiLep][postfsrAntiLep_idx]")
-            df = df.Define("postfsrLep_phi",    "event % 2 == 0 ? GenPart_phi[postfsrLep][postfsrLep_idx] : GenPart_phi[postfsrAntiLep][postfsrAntiLep_idx]")
-            df = df.Define("postfsrLep_mass",   "event % 2 == 0 ? wrem::get_pdgid_mass(GenPart_pdgId[postfsrLep][postfsrLep_idx]) : wrem::get_pdgid_mass(GenPart_pdgId[postfsrAntiLep][postfsrAntiLep_idx])")
-            df = df.Define("postfsrLep_charge", "event % 2 == 0 ? -1 : 1")
+            df = df.Define("postfsrLep_pt",     "isEvenEvent ? static_cast<double>(GenPart_pt[postfsrLep][postfsrLep_idx]) : static_cast<double>(GenPart_pt[postfsrAntiLep][postfsrAntiLep_idx])")
+            df = df.Define("postfsrLep_eta",    "isEvenEvent ? GenPart_eta[postfsrLep][postfsrLep_idx] : GenPart_eta[postfsrAntiLep][postfsrAntiLep_idx]")
+            df = df.Define("postfsrLep_phi",    "isEvenEvent ? GenPart_phi[postfsrLep][postfsrLep_idx] : GenPart_phi[postfsrAntiLep][postfsrAntiLep_idx]")
+            df = df.Define("postfsrLep_mass",   "isEvenEvent ? wrem::get_pdgid_mass(GenPart_pdgId[postfsrLep][postfsrLep_idx]) : wrem::get_pdgid_mass(GenPart_pdgId[postfsrAntiLep][postfsrAntiLep_idx])")
+            df = df.Define("postfsrLep_charge", "isEvenEvent ? 1 : -1")
 
-            df = df.Define("postfsrOtherLep_pt",   "event % 2 == 0 ? GenPart_pt[postfsrAntiLep][postfsrAntiLep_idx] : GenPart_pt[postfsrLep][postfsrLep_idx]")
-            df = df.Define("postfsrOtherLep_eta",  "event % 2 == 0 ? GenPart_eta[postfsrAntiLep][postfsrAntiLep_idx] : GenPart_eta[postfsrLep][postfsrLep_idx]")
-            df = df.Define("postfsrOtherLep_phi",  "event % 2 == 0 ? GenPart_phi[postfsrAntiLep][postfsrAntiLep_idx] : GenPart_phi[postfsrLep][postfsrLep_idx]")
-            df = df.Define("postfsrOtherLep_mass", "event % 2 == 0 ? wrem::get_pdgid_mass(GenPart_pdgId[postfsrLep][postfsrLep_idx]) : wrem::get_pdgid_mass(GenPart_pdgId[postfsrAntiLep][postfsrAntiLep_idx])")
+            df = df.Define("postfsrOtherLep_pt",   "isEvenEvent ? GenPart_pt[postfsrAntiLep][postfsrAntiLep_idx] : GenPart_pt[postfsrLep][postfsrLep_idx]")
+            df = df.Define("postfsrOtherLep_eta",  "isEvenEvent ? GenPart_eta[postfsrAntiLep][postfsrAntiLep_idx] : GenPart_eta[postfsrLep][postfsrLep_idx]")
+            df = df.Define("postfsrOtherLep_phi",  "isEvenEvent ? GenPart_phi[postfsrAntiLep][postfsrAntiLep_idx] : GenPart_phi[postfsrLep][postfsrLep_idx]")
+            df = df.Define("postfsrOtherLep_mass", "isEvenEvent ? wrem::get_pdgid_mass(GenPart_pdgId[postfsrLep][postfsrLep_idx]) : wrem::get_pdgid_mass(GenPart_pdgId[postfsrAntiLep][postfsrAntiLep_idx])")
         
             df = df.Define("postfsrOtherLep_absEta", "static_cast<double>(std::fabs(postfsrOtherLep_eta))")
         else:

@@ -34,7 +34,6 @@ logger = logging.setup_logger(__file__, args.verbose, args.noColorLogger)
 
 thisAnalysis = ROOT.wrem.AnalysisType.Dilepton if args.useDileptonTriggerSelection else ROOT.wrem.AnalysisType.Wlike
 era = args.era
-
 datasets = getDatasets(maxFiles=args.maxFiles,
                        filt=args.filterProcs,
                        excl=args.excludeProcs, 
@@ -51,15 +50,17 @@ ewMassBins = theory_tools.make_ew_binning(mass = 91.1535, width = 2.4932, initia
 dilepton_ptV_binning = [0, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 13, 15, 17, 20, 23, 27, 32, 40, 54, 100] if not args.finePtBinning else range(60)
 # available axes for dilepton validation plots
 all_axes = {
-    "mll": hist.axis.Regular(60, 60., 120., name = "mll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
-    # "mll": hist.axis.Variable([60,70,75,78,80,81,82,83,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,100,102,105,110,120], name = "mll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
-    "yll": hist.axis.Regular(20, -2.5, 2.5, name = "yll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
+    # "mll": hist.axis.Regular(60, 60., 120., name = "mll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
+    "mll": hist.axis.Variable([60,70,75,78,80,82,84,85,86,87,88,89,90,91,92,93,94,95,96,97,98,100,102,105,110,120], name = "mll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),    "yll": hist.axis.Regular(20, -2.5, 2.5, name = "yll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
     "absYll": hist.axis.Regular(10, 0., 2.5, name = "absYll", underflow=False, overflow=not args.excludeFlow),
     "ptll": hist.axis.Variable(dilepton_ptV_binning, name = "ptll", underflow=False, overflow=not args.excludeFlow),
     "etaPlus": hist.axis.Variable([-2.4,-1.2,-0.3,0.3,1.2,2.4], name = "etaPlus"),
     "etaMinus": hist.axis.Variable([-2.4,-1.2,-0.3,0.3,1.2,2.4], name = "etaMinus"),
+    "etaRegionSign": hist.axis.Regular(3, 0, 3, name = "etaRegionSign"),
+    "etaRegionRange": hist.axis.Regular(3, 0, 3, name = "etaRegionRange"),
     "absEtaPlus": hist.axis.Regular(8, 0, 2.4, name = "absEtaPlus"),
     "absEtaMinus": hist.axis.Regular(8, 0, 2.4, name = "absEtaMinus"),
+    "etaAbsEta": hist.axis.Variable([-2.4, -2.0, -1.6, -1.4, -1.2, -1.0, -0.6, 0.0, 0.6, 1.0, 1.2, 1.4, 1.6, 2.0, 2.4], name = "etaAbsEta"),
     "etaSum": hist.axis.Regular(12, -4.8, 4.8, name = "etaSum"),
     "etaDiff": hist.axis.Variable([-4.8, -1.0, -0.6, -0.2, 0.2, 0.6, 1.0, 4.8], name = "etaDiff"),
     "ptPlus": hist.axis.Regular(int(args.pt[0]), args.pt[1], args.pt[2], name = "ptPlus"),
@@ -162,6 +163,8 @@ def build_graph(df, dataset):
     else:
         df = df.Define("weight", "std::copysign(1.0, genWeight)")
 
+    df = df.Define("isEvenEvent", "event % 2 == 0")
+
     weightsum = df.SumAndCount("weight")
 
     axes = nominal_axes
@@ -203,8 +206,7 @@ def build_graph(df, dataset):
     df = muon_selections.select_veto_muons(df, nMuons=2)
     df = muon_selections.select_good_muons(df, args.pt[1], args.pt[2], dataset.group, nMuons=2, use_trackerMuons=args.trackerMuons, use_isolation=True, isoDefinition=args.isolationDefinition)
 
-    # for dilepton analysis we will call trigMuons (nonTrigMuons) those with charge plus (minus). In fact both might be triggering, naming scheme might be improved
-    df = muon_selections.define_trigger_muons(df, what_analysis=thisAnalysis)
+    df = muon_selections.define_trigger_muons(df, dilepton=args.useDileptonTriggerSelection)
 
     df = muon_selections.select_z_candidate(df, mass_min, mass_max)
 
@@ -212,29 +214,44 @@ def build_graph(df, dataset):
     df = muon_selections.select_standalone_muons(df, dataset, args.trackerMuons, "nonTrigMuons")
 
     if args.useDileptonTriggerSelection:
-        df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0", "nonTrigMuons_eta0", "nonTrigMuons_phi0", era=era)
+        df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons", "nonTrigMuons", era=era)
+        df = df.Alias("muonsMinus_pt0", "trigMuons_pt0")
+        df = df.Alias("muonsPlus_pt0", "nonTrigMuons_pt0")
+        df = df.Alias("muonsMinus_eta0", "trigMuons_eta0")
+        df = df.Alias("muonsPlus_eta0", "nonTrigMuons_eta0")
+        df = df.Alias("muonsMinus_mon4", "trigMuons_mom4")
+        df = df.Alias("muonsPlus_mon4", "nonTrigMuons_mom4")
     else:
-        df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons_eta0", "trigMuons_phi0", era=era)
-
+        df = muon_selections.apply_triggermatching_muon(df, dataset, "trigMuons", era=era)
+        df = df.Define("trigMuon_isNegative",  "trigMuons_charge0 == -1")
+        df = df.Define("muonsMinus_pt0",  "trigMuon_isNegative ? trigMuons_pt0 : nonTrigMuons_pt0")
+        df = df.Define("muonsPlus_pt0",   "trigMuon_isNegative ? nonTrigMuons_pt0 : trigMuons_pt0")
+        df = df.Define("muonsMinus_eta0", "trigMuon_isNegative ? trigMuons_eta0 : nonTrigMuons_eta0")
+        df = df.Define("muonsPlus_eta0",  "trigMuon_isNegative ? nonTrigMuons_eta0 : trigMuons_eta0")
+        df = df.Define("muonsMinus_mon4", "trigMuon_isNegative ? trigMuons_mom4 : nonTrigMuons_mom4")
+        df = df.Define("muonsPlus_mon4",  "trigMuon_isNegative ? nonTrigMuons_mom4 : trigMuons_mom4")
+    
     df = df.Define("ptll", "ll_mom4.pt()")
     df = df.Define("yll", "ll_mom4.Rapidity()")
     df = df.Define("absYll", "std::fabs(yll)")
     # "renaming" to write out corresponding axis
-    df = df.Define("etaPlus", "trigMuons_eta0")
-    df = df.Define("etaMinus", "nonTrigMuons_eta0")
-    df = df.Define("absEtaPlus", "std::fabs(trigMuons_eta0)")
-    df = df.Define("absEtaMinus", "std::fabs(nonTrigMuons_eta0)")
-    df = df.Define("ptPlus", "trigMuons_pt0")
-    df = df.Define("ptMinus", "nonTrigMuons_pt0")
+    df = df.Alias("ptMinus", "muonsMinus_pt0")
+    df = df.Alias("ptPlus", "muonsPlus_pt0")
+    df = df.Alias("etaMinus", "muonsMinus_eta0")
+    df = df.Alias("etaPlus", "muonsPlus_eta0")
+    df = df.Define("absEtaMinus", "std::fabs(etaMinus)")
+    df = df.Define("absEtaPlus", "std::fabs(etaPlus)")
+    df = df.Define("etaAbsEta", "absEtaMinus > absEtaPlus ? etaMinus : etaPlus")
 
-    df = df.Define("etaSum", "nonTrigMuons_eta0 + trigMuons_eta0") 
-    df = df.Define("etaDiff", "trigMuons_eta0-nonTrigMuons_eta0") # plus - minus 
+    df = df.Define("etaRegionRange", "(std::abs(muonsPlus_eta0) > 0.9) + (std::abs(muonsMinus_eta0) > 0.9)") # eta region: 0: barrel-barrel, 1: endcap-barrel, 2: endcap-endcap
+    df = df.Define("etaRegionSign", "(muonsPlus_eta0 > 0) + (muonsMinus_eta0 > 0)") # eta region: 0: both muons in negative eta, 1: one muon in negative eta, 2: both muons in positive eta
 
-    if args.csVarsHist:
-        df = df.Define("csSineCosThetaPhill", "wrem::csSineCosThetaPhi(nonTrigMuons_mom4, trigMuons_mom4)")
-    
-        df = df.Define("cosThetaStarll", "csSineCosThetaPhill.costheta")
-        df = df.Define("phiStarll", "std::atan2(csSineCosThetaPhill.sinphi, csSineCosThetaPhill.cosphi)")
+    df = df.Define("etaSum", "muonsPlus_eta0 + muonsMinus_eta0") 
+    df = df.Define("etaDiff", "muonsPlus_eta0 - muonsMinus_eta0") # plus - minus 
+
+    df = df.Define("csSineCosThetaPhill", "wrem::csSineCosThetaPhi(muonsPlus_mon4, muonsMinus_mon4)")
+    df = df.Define("cosThetaStarll", "csSineCosThetaPhill.costheta")
+    df = df.Define("phiStarll", "std::atan2(csSineCosThetaPhill.sinphi, csSineCosThetaPhill.cosphi)")
 
     # TODO might need to add an explicit cut on trigMuons_pt0 in case nominal pt range
     # extends below 26 GeV e.g. for calibration test purposes
@@ -253,7 +270,6 @@ def build_graph(df, dataset):
             weight_expr = "weight_pu*weight_newMuonPrefiringSF*L1PreFiringWeight_ECAL_Nom"
         else:
             weight_expr = "weight_pu*L1PreFiringWeight_Muon_Nom*L1PreFiringWeight_ECAL_Nom"
-
 
         if not args.noVertexWeight:
             weight_expr += "*weight_vtx"            
@@ -287,7 +303,7 @@ def build_graph(df, dataset):
         logger.debug(f"Creating special histogram '{noiAsPoiHistName}' for unfolding to treat POIs as NOIs")
         results.append(df.HistoBoost(noiAsPoiHistName, [*nominal_axes, *unfolding_axes], [*nominal_cols, *unfolding_cols, "nominal_weight"]))       
 
-    for obs in ["ptll", "mll", "yll", "etaPlus", "etaMinus", "ptPlus", "ptMinus"]:
+    for obs in ["ptll", "mll", "yll", "cosThetaStarll", "phiStarll", "etaPlus", "etaMinus", "ptPlus", "ptMinus"]:
         if dataset.is_data:
             results.append(df.HistoBoost(f"nominal_{obs}", [all_axes[obs]], [obs]))
         else:

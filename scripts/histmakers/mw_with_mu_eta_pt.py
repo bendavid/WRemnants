@@ -271,6 +271,8 @@ def build_graph(df, dataset):
     else:
         df = df.Define("weight", "std::copysign(1.0, genWeight)")
 
+    df = df.Define("isEvenEvent", "event % 2 == 0")
+
     weightsum = df.SumAndCount("weight")
 
     axes = nominal_axes
@@ -337,7 +339,7 @@ def build_graph(df, dataset):
         hltString = muon_selections.hlt_string(era)
         df = df.Define("passTrigger", f"{hltString} && wrem::hasTriggerMatch(goodMuons_eta0,goodMuons_phi0,TrigObj_eta[GoodTrigObjs],TrigObj_phi[GoodTrigObjs])")
     elif not args.noTrigger:
-        df = muon_selections.apply_triggermatching_muon(df, dataset, "goodMuons_eta0", "goodMuons_phi0", era=era)
+        df = muon_selections.apply_triggermatching_muon(df, dataset, "goodMuons", era=era)
 
     if isWorZ:
         df = muon_validation.define_cvh_reco_muon_kinematics(df)
