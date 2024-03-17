@@ -57,16 +57,25 @@ calib_filepaths = {
     },
     'data_corrfile': {
         'massfit': f"{calib_dir}/calibrationJDATA_ideal.root",
-        'lbl_massfit': f"{calib_dir}/calibrationJDATA_rewtgr_3dmap_LBL_MCstat.root"
+        'lbl_massfit': f"{calib_dir}/calibrationJDATA_MCstat_inclusive_binsel.root"
+        # 'lbl_massfit': f"{calib_dir}/calibrationJZ_DATA_MCstat_binsel.root"
     },
     'mc_resofile': f"{calib_dir}/sigmaMC_LBL_JYZ.root",
     'data_resofile': f"{calib_dir}/sigmaDATA_LBL_JYZ.root",
     'tflite_file': f"{calib_dir}/muon_response.tflite"
+    # 'tflite_file': f"{calib_dir}/muon_response_nosmearing.tflite"
 }
 closure_filepaths = {
-    'parametrized': f"{closure_dir}/calibrationAlignmentZ_after_LBL_v721.root",
+    'parametrized': f"{closure_dir}/parametrizedClosureZ_ORkinweight_binsel_newres_MCstat_new.root",
+    # 'parametrized': f"{closure_dir}/parametrizedClosureZ_ORkinweight_binsel_MCstat_simul.root",
     'binned': f"{closure_dir}/closureZ_LBL_smeared_v721.root"
 }
+
+# some constants for momentum scale uncertainties
+correlated_variation_base_size = {
+    "A" : 1e-5,
+    "M" : 1e-6,
+    }
 
 ## 5% quantiles from aMC@NLO used in SMP-18-012
 #ptV_5quantiles_binning = [0.0, 1.971, 2.949, 3.838, 4.733, 5.674, 6.684, 7.781, 8.979, 10.303, 11.777, 13.435, 15.332, 17.525, 20.115, 23.245, 27.173, 32.414, 40.151, 53.858, 13000.0]
@@ -180,9 +189,12 @@ def common_parser(for_reco_highPU=False):
     parser.add_argument("-o", "--outfolder", type=str, default="", help="Output folder")
     parser.add_argument("--appendOutputFile", type=str, default="", help="Append analysis output to specified output file")
     parser.add_argument("-e", "--era", type=str, choices=["2016PreVFP","2016PostVFP", "2017", "2018"], help="Data set to process", default="2016PostVFP")
-    parser.add_argument("--nonClosureScheme", type=str, default = "A-only", choices=["none", "A-M-separated", "A-M-combined", "binned", "binned-plus-M", "A-only", "M-only"], help = "source of the Z non-closure nuisances")
+    parser.add_argument("--scale_A", default=1.0, type=float, help="scaling of the uncertainty on the b-field scale parameter A")
+    parser.add_argument("--scale_e", default=1.0, type=float, help="scaling of the uncertainty on the material scale parameter e")
+    parser.add_argument("--scale_M", default=1.0, type=float, help="scaling of the uncertainty on the alignment scale parameter M")
+    parser.add_argument("--nonClosureScheme", type=str, default = "A-M-combined", choices=["none", "A-M-separated", "A-M-combined", "binned", "binned-plus-M", "A-only", "M-only"], help = "source of the Z non-closure nuisances")
     parser.add_argument("--correlatedNonClosureNP", action="store_false", help="disable the de-correlation of Z non-closure nuisance parameters after the jpsi massfit")
-    parser.add_argument("--dummyNonClosureA", action="store_false", help="read values for the magnetic part of the Z non-closure from a file")
+    parser.add_argument("--dummyNonClosureA", action="store_true", help="read values for the magnetic part of the Z non-closure from a file")
     parser.add_argument("--dummyNonClosureAMag", default=6.8e-5, type=float, help="magnitude of the dummy value for the magnetic part of the Z non-closure")
     parser.add_argument("--dummyNonClosureM", action="store_true", help="use a dummy value for the alignment part of the Z non-closure")
     parser.add_argument("--dummyNonClosureMMag", default=0., type=float, help="magnitude of the dummy value for the alignment part of the Z non-closure")

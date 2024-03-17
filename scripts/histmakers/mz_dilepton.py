@@ -71,6 +71,10 @@ all_axes = {
     "ewMll": hist.axis.Variable(ewMassBins, name = "ewMll", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
     "ewMlly": hist.axis.Variable(ewMassBins, name = "ewMlly", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
     "ewLogDeltaM": hist.axis.Regular(100, -10, 4, name = "ewLogDeltaM", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
+    "trigMuons_abseta0" : hist.axis.Regular(3, 0., 2.4, name = "trigMuons_abseta0", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
+    "nonTrigMuons_eta0" : hist.axis.Regular(24, -2.4, 2.4, name = "nonTrigMuons_eta0", overflow=not args.excludeFlow, underflow=not args.excludeFlow),
+    "nonTrigMuons_pt0" : hist.axis.Regular(int(args.pt[0]), args.pt[1], args.pt[2], name = "nonTrigMuons_pt0"),
+    "nonTrigMuons_charge0" : hist.axis.Regular(2, -2., 2., underflow=False, overflow=False, name = "nonTrigMuons_charge0"),
 }
 
 auxiliary_gen_axes = ["massVgen", # preFSR variables
@@ -132,6 +136,10 @@ mc_jpsi_crctn_helper, data_jpsi_crctn_helper, mc_jpsi_crctn_unc_helper, data_jps
 z_non_closure_parametrized_helper, z_non_closure_binned_helper = muon_calibration.make_Z_non_closure_helpers(args, calib_filepaths, closure_filepaths)
 
 mc_calibration_helper, data_calibration_helper, calibration_uncertainty_helper = muon_calibration.make_muon_calibration_helpers(args)
+
+closure_unc_helper = wremnants.muon_calibration.make_closure_uncertainty_helper(common.closure_filepaths["parametrized"])
+closure_unc_helper_A = wremnants.muon_calibration.make_uniform_closure_uncertainty_helper(0, common.correlated_variation_base_size["A"])
+closure_unc_helper_M = wremnants.muon_calibration.make_uniform_closure_uncertainty_helper(2, common.correlated_variation_base_size["M"])
 
 smearing_helper, smearing_uncertainty_helper = (None, None) if args.noSmearing else muon_calibration.make_muon_smearing_helpers()
 
@@ -227,6 +235,10 @@ def build_graph(df, dataset):
     
         df = df.Define("cosThetaStarll", "csSineCosThetaPhill.costheta")
         df = df.Define("phiStarll", "std::atan2(csSineCosThetaPhill.sinphi, csSineCosThetaPhill.cosphi)")
+
+    # TODO might need to add an explicit cut on trigMuons_pt0 in case nominal pt range
+    # extends below 26 GeV e.g. for calibration test purposes
+    df = df.Define("trigMuons_abseta0", "std::fabs(trigMuons_eta0)")
 
     logger.debug(f"Define weights and store nominal histograms")
 
@@ -386,6 +398,61 @@ def build_graph(df, dataset):
                         storage=hist.storage.Double()
                     )
                     results.append(hist_Z_non_closure_parametrized_M)
+
+                if args.nonClosureScheme == "A-M-combined":
+                    df = df.DefinePerSample("AMFlag", "0x01 | 0x04")
+                    df = df.Define("Z_non_closure_parametrized", z_non_closure_parametrized_helper,
+                        [
+                            *input_kinematics,
+                            "nominal_weight",
+                            "AMFlag"
+                        ]
+                    )
+                    hist_Z_non_closure_parametrized = df.HistoBoost(
+                        "Z_non_closure_parametrized_gaus" if args.muonScaleVariation == 'smearingWeightsGaus' else "nominal_Z_non_closure_parametrized",
+                        axes,
+                        [*cols, "Z_non_closure_parametrized"],
+                        tensor_axes = z_non_closure_parametrized_helper.tensor_axes,
+                        storage=hist.storage.Double()
+                    )
+                    results.append(hist_Z_non_closure_parametrized)
+
+                # extra uncertainties from non-closure stats
+                df = df.Define("muonScaleClosSyst_responseWeights_tensor_splines", closure_unc_helper,
+                    [*input_kinematics, "nominal_weight"]
+                )
+                nominal_muonScaleClosSyst_responseWeights = df.HistoBoost(
+                    "nominal_muonScaleClosSyst_responseWeights", axes,
+                    [*cols, "muonScaleClosSyst_responseWeights_tensor_splines"],
+                    tensor_axes = closure_unc_helper.tensor_axes,
+                    storage = hist.storage.Double()
+                )
+                results.append(nominal_muonScaleClosSyst_responseWeights)
+
+                # extra uncertainties for A (fully correlated)
+                df = df.Define("muonScaleClosASyst_responseWeights_tensor_splines", closure_unc_helper_A,
+                    [*input_kinematics, "nominal_weight"]
+                )
+                nominal_muonScaleClosASyst_responseWeights = df.HistoBoost(
+                    "nominal_muonScaleClosASyst_responseWeights", axes,
+                    [*cols, "muonScaleClosASyst_responseWeights_tensor_splines"],
+                    tensor_axes = closure_unc_helper_A.tensor_axes,
+                    storage = hist.storage.Double()
+                )
+                results.append(nominal_muonScaleClosASyst_responseWeights)
+
+                # extra uncertainties for M (fully correlated)
+                df = df.Define("muonScaleClosMSyst_responseWeights_tensor_splines", closure_unc_helper_M,
+                    [*input_kinematics, "nominal_weight"]
+                )
+                nominal_muonScaleClosMSyst_responseWeights = df.HistoBoost(
+                    "nominal_muonScaleClosMSyst_responseWeights", axes,
+                    [*cols, "muonScaleClosMSyst_responseWeights_tensor_splines"],
+                    tensor_axes = closure_unc_helper_M.tensor_axes,
+                    storage = hist.storage.Double()
+                )
+                results.append(nominal_muonScaleClosMSyst_responseWeights)
+
             ####################################################
 
             # Don't think it makes sense to apply the mass weights to scale leptons from tau decays
