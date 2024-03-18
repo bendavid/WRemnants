@@ -1157,7 +1157,8 @@ public:
             const float eta = etas[i];
             const double dweightdsigmasq = weights[i].second;
 
-            const double k = 1./pt;
+            const double p = pt*std::cosh(eta);
+            const double qopsq = 1./p/p;
 
             auto const &resolution_parms = narf::get_value(base_t::hist(), eta).data();
 
@@ -1181,8 +1182,8 @@ public:
                 const double sigmasqvar =  avar + cvar*pt*pt + bvar/(1. + dvar/pt/pt);
 
                 const double dsigmarelsq = sigmasqvar - sigmasqnom;
-
-                iweight(ivar) = 1. + dweightdsigmasq*dsigmarelsq*k*k;
+;
+                iweight(ivar) = 1. + dweightdsigmasq*dsigmarelsq*qopsq;
             }
 
             const out_tensor_t iweight_clamped = wrem::clip_tensor(iweight, 10.);
