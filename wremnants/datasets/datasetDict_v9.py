@@ -169,8 +169,7 @@ dataDictV9 = {
     },
     'QCDmuEnrichPt15PostVFP' : { 
         'filepaths' : 
-        ["{BASE_PATH}/QCD_Pt-20_MuEnrichedPt15_TuneCP5_13TeV-pythia8/NanoV9MCPostVFP_{NANO_PROD_TAG}",
-         "{BASE_PATH}/QCD_Pt-20_MuEnrichedPt15_TuneCP5_13TeV-pythia8_ext1/NanoV9MCPostVFP_{NANO_PROD_TAG}"],
+        ["{BASE_PATH}/QCD_Pt-20_MuEnrichedPt15_TuneCP5_13TeV-pythia8/NanoV9MCPostVFP_{NANO_PROD_TAG}"],
         'xsec' : 238800,
         'group' : "QCD",
     },
