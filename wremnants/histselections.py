@@ -7,9 +7,12 @@ from scipy.optimize import nnls
 from scipy.special import comb
 import pdb
 
+import scipy
 from scipy.optimize import curve_fit
 import uncertainties as unc
 from uncertainties import unumpy as unp
+
+from concurrent.futures import ProcessPoolExecutor
 
 logger = logging.child_logger(__name__)
 
@@ -248,14 +251,740 @@ def divide_arrays(num, den, cutoff=1):
     r[abs(den) < cutoff] = 0 # if denumerator is close to 0 set ratio to zero to avoid large negative/positive values
     return r
 
-class HistselectorABCD(object):
-    def __init__(self, h, name_x=None, name_y=None,
-        fakerate_axes=["eta","pt","charge"], 
-        smoothing_axis_name="pt", 
+def do_smoothing(xvals, yvals, w, lamslice):
+    spline = scipy.interpolate.make_smoothing_spline(xvals, yvals, w=w, lam=lamslice)
+    return spline(xvals)
+
+class Histselector(object):
+    def __init__(self, h,
+        smoothing_axis_name="pt",
         rebin_smoothing_axis=None, # can be a list of bin edges, "automatic", or None
+        smoothing_variations=False,
+    ):
+        self.smoothing_axis_name = smoothing_axis_name
+        # edges = h.axes[smoothing_axis_name].edges
+        # if rebin_smoothing_axis == "automatic":
+        #     self.rebin_smoothing_axis = get_rebinning(edges, self.smoothing_axis_name)
+        # else:
+        #     self.rebin_smoothing_axis = rebin_smoothing_axis
+        #
+        # edges = edges if self.rebin_smoothing_axis is None else self.rebin_smoothing_axis
+        # edges = extend_edges(h.axes[self.smoothing_axis_name].traits, edges)
+        # self.smoothing_axis_min = edges[0]
+        # self.smoothing_axis_max = edges[-1]
+
+        self.smoothing_variations = smoothing_variations
+
+        self.nominal_hists = {}
+        self.nominal_hists_smooth = {}
+        self.knots = {}
+        self.lam = {}
+
+        self.pool = ProcessPoolExecutor(max_workers=64)
+
+    def smooth_nominal_reg(self, h):
+
+        smoothing_axis = h.axes[self.smoothing_axis_name]
+        smoothidx = h.axes.name.index(self.smoothing_axis_name)
+
+        smoothstart = 1 if smoothing_axis.traits.underflow else 0
+        smoothstop = -1 if smoothing_axis.traits.overflow else None
+        smoothslice = slice(smoothstart, smoothstop)
+
+        # get array without smoothing axis for iteration purposes
+        itarr = h[{self.smoothing_axis_name : 0}].values(flow=True)
+
+        hsmooth = h.copy()
+
+        lam = {}
+        nx = smoothing_axis.size
+        xvals = smoothing_axis.centers
+        xwidths = smoothing_axis.widths
+
+        # iterate through the array and select slices along the smoothing axis,
+        # excluding underflow and overflow since we will leave them unmodified
+        it = np.nditer(itarr, flags=['multi_index'])
+        for _ in it:
+            print("multi_index", it.multi_index)
+
+
+            multi_slice = list(it.multi_index)
+            multi_slice.insert(smoothidx, smoothslice)
+
+            yvals = h.values(flow=True)[*multi_slice]/xwidths
+            yvars = h.variances(flow=True)[*multi_slice]/xwidths**2
+
+            # yvars *= 2.
+
+            # yvars = np.where(yvals > 0., yvars/yvals**2, 1.)
+            # yvals = np.where(yvals > 0., np.log(yvals), 0.)
+
+
+            # w = np.where(yvars > 0., 1./np.sqrt(yvars), 0.)
+            # w = np.where(yvars > 0., 1./yvars, 0.)
+            w = np.where(yvars > 0., 1./yvars, 1.)
+
+            if np.count_nonzero(yvars>0.) < 5:
+                # no smoothing with less than 4 points since cubic spline doesn't make sense
+                lam[it.multi_index] = None
+                continue
+
+            nparmseff = 0.
+
+            def testlam(lamslice):
+                spline = scipy.interpolate.make_smoothing_spline(xvals, yvals, w=w, lam=lamslice)
+                ytest = spline(xvals)
+                chisq = np.sum(w*(ytest - yvals)**2)
+                print("lamslice, chisq", lamslice, chisq)
+                return chisq - (nx - nparmseff)
+
+
+            if testlam(1.) <= 0.:
+                lamslice = 1.
+            else:
+                # spline = scipy.interpolate.make_smoothing_spline(xvals, yvals, w=w)
+                res = scipy.optimize.root_scalar(testlam, x0=1., bracket=[0., 1.])
+                lamslice = res.root
+
+            print("optimal lam", lamslice)
+
+
+
+            spline = scipy.interpolate.make_smoothing_spline(xvals, yvals, w=w, lam=lamslice)
+
+            yout = spline(xvals)*xwidths
+            # yout = np.exp(spline(xvals))*xwidths
+            yout = np.maximum(yout, 0.)
+            if np.any(np.isnan(yout)):
+                lam[it.multi_index] = None
+            else:
+                lam[it.multi_index] = lamslice
+                hsmooth.values(flow=True)[*multi_slice] = yout
+
+                if self.smoothing_variations:
+                    # zero bin-by-bin uncertainties if smoothing variations are computed
+                    hsmooth.variances(flow=True)[*multi_slice] = 0.
+
+
+                    # hinslice = hist.Hist(smoothing_axis)
+                    # hinslice.values()[...] = h.values(flow=True)[*multi_slice]
+                    #
+                    # houtslice = hist.Hist(smoothing_axis)
+                    # houtslice.values()[...] = yout
+                    #
+                    # print(hinslice)
+                    # print(houtslice)
+
+
+        if np.any(np.logical_not(np.isfinite(hsmooth.values(flow=True)))):
+            raise ValueError("inf or nan in smoothed histogram")
+
+        # nparmstotal = 0
+        # for k in knots.values():
+        #     if k is not None:
+        #         nparmstotal += len(k) + 2
+        #
+        # print("nparmstotal", nparmstotal)
+
+        return hsmooth, lam
+
+
+    def smooth_nominal(self, h):
+
+        smoothing_axis = h.axes[self.smoothing_axis_name]
+        smoothidx = h.axes.name.index(self.smoothing_axis_name)
+
+        smoothstart = 1 if smoothing_axis.traits.underflow else 0
+        smoothstop = -1 if smoothing_axis.traits.overflow else None
+        smoothslice = slice(smoothstart, smoothstop)
+
+        # get array without smoothing axis for iteration purposes
+        itarr = h[{self.smoothing_axis_name : 0}].values(flow=True)
+
+        hsmooth = h.copy()
+
+        # store knots for later use in statistical and systematic variations
+        knots = {}
+        nx = smoothing_axis.size
+        xvals = smoothing_axis.centers
+        xwidths = smoothing_axis.widths
+
+        # iterate through the array and select slices along the smoothing axis,
+        # excluding underflow and overflow since we will leave them unmodified
+        it = np.nditer(itarr, flags=['multi_index'])
+        for _ in it:
+            print("multi_index", it.multi_index)
+
+
+            multi_slice = list(it.multi_index)
+            multi_slice.insert(smoothidx, smoothslice)
+
+            yvals = h.values(flow=True)[*multi_slice]/xwidths
+            yvars = h.variances(flow=True)[*multi_slice]/xwidths**2
+
+            # yvars *= 2.
+
+            weightfallback = 1e-6
+
+            # yvars = np.where(yvals > 0., yvars/yvals**2, 1./weightfallback**2)
+            # yvals = np.where(yvals > 0., np.log(yvals), 0.)
+
+            # w = np.where(yvars > 0., 1./np.sqrt(yvars), 0.)
+            # w = np.where(yvars > 0., 1./np.sqrt(yvars), 1e-6)
+            w = np.where(yvars > 0., 1./np.sqrt(yvars), weightfallback)
+
+            if np.count_nonzero(w) < 4:
+                # no smoothing with less than 4 points since cubic spline doesn't make sense
+                knots[it.multi_index] = None
+                continue
+
+
+            aicpenalty = 1.
+
+            # def testaic(s):
+            #     # print("testaic", s)
+            #     splinetest = scipy.interpolate.UnivariateSpline(xvals, yvals, w=w, s=s)
+            #     knotstest = splinetest.get_knots()
+            #     splinetest = scipy.interpolate.LSQUnivariateSpline(xvals, yvals, t=knotstest[1:-1], w=w)
+            #
+            #     chisq = splinetest.get_residual()
+            #     nparms = len(knotstest) + 2
+            #
+            #     aic = aicpenalty*nparms + chisq
+            #
+            #     print("s, nparms, chisq, aic", s, nparms, chisq, aic)
+            #
+            #     return aic
+
+
+            # res = scipy.optimize.minimize_scalar(testaic, bounds=[0., 2*nx])
+            # res = scipy.optimize.minimize_scalar(testaic, bracket=[0., nx, 2*nx])
+            # s = res.x
+
+            # print("optimal s", s)
+
+            # # spline = scipy.interpolate.UnivariateSpline(xvals, yvals, w=w, s=s)
+            # spline = scipy.interpolate.LSQUnivariateSpline(xvals, yvals, t=spline.get_knots()[1:-1], w=w)
+            # nparms = len(spline.get_knots()) + 2
+
+            # find the optimal value of s by minimizing AIC
+            s = 0
+            aic = aicpenalty*(nx + 2)
+            spline = None
+
+            # spline = scipy.interpolate.UnivariateSpline(xvals, yvals, w=w, s=0.5*nx)
+            # spline = scipy.interpolate.LSQUnivariateSpline(xvals, yvals, t=spline.get_knots()[1:-1], w=w)
+            # nparms = len(spline.get_knots()) + 2
+            # print("chisq", spline.get_residual())
+            # print("knots", spline.get_knots())
+
+            while True:
+            # if False:
+                # the first spline is used only to get the knots
+                splinetest = scipy.interpolate.UnivariateSpline(xvals, yvals, w=w, s=s)
+                knotstest = splinetest.get_knots()
+                splinetest = scipy.interpolate.LSQUnivariateSpline(xvals, yvals, t=knotstest[1:-1], w=w)
+                ytest = splinetest(xvals)
+
+                chisq = splinetest.get_residual()
+                nparmstest = len(knotstest) + 2
+                ndof = nx - nparmstest
+
+                aicnew = aicpenalty*nparmstest + chisq
+
+                # if ndof > 0:
+                #     rchisq = chisq/ndof
+                # else:
+                #     rchisq = 0.
+
+                # if not np.all(np.isfinite(ytest)):
+                #     print(xvals)
+                #     print(yvals)
+                #     print(yvars)
+                #     print(w)
+                #     print(knotstest)
+                #     print(ytest)
+                #     raise ValueError("nan in smoothed hist")
+
+
+                if aicnew > aic or (aicnew == aic and nparmstest==4) or np.any(np.isnan(ytest)):
+                # if rchisq > 1. or (aicnew == aic and nparmstest==4) or np.any(np.isnan(ytest)):
+                    break
+
+                s += 1.
+                aic = aicnew
+                spline = splinetest
+                nparms = nparmstest
+
+
+            print("smoothslice", smoothslice, "s", s, "nparms", nparms)
+
+
+            if spline is None:
+                knots[it.multi_index] = None
+            else:
+                yout = spline(xvals)*xwidths
+                # yout = np.exp(spline(xvals))*xwidths
+                yout = np.maximum(yout, 0.)
+                if not np.all(np.isfinite(yout)):
+                    # no smoothing for this slice
+                    knots[it.multi_index] = None
+                else:
+                    knots[it.multi_index] = spline.get_knots()
+                    hsmooth.values(flow=True)[*multi_slice] = yout
+
+                    if self.smoothing_variations:
+                        # zero bin-by-bin uncertainties if smoothing variations are computed
+                        hsmooth.variances(flow=True)[*multi_slice] = 0.
+
+
+                # hinslice = hist.Hist(smoothing_axis)
+                # hinslice.values()[...] = h.values(flow=True)[*multi_slice]
+                #
+                # houtslice = hist.Hist(smoothing_axis)
+                # houtslice.values()[...] = yout
+                #
+                # print(hinslice)
+                # print(houtslice)
+
+
+        if not np.all(np.isfinite(hsmooth.values(flow=True))):
+            raise ValueError("inf or nan in smoothed histogram")
+
+        nparmstotal = 0
+        for k in knots.values():
+            if k is not None:
+                nparmstotal += len(k) + 2
+
+        print("nparmstotal", nparmstotal)
+
+        return hsmooth, knots
+
+
+
+    def smooth_alternate_reg(self, h, hnom, lam):
+        print("smooth_alternate")
+        print("h", h)
+        print("hnom", hnom)
+
+        smoothing_axis = h.axes[self.smoothing_axis_name]
+        smoothidx = h.axes.name.index(self.smoothing_axis_name)
+
+        smoothstart = 1 if smoothing_axis.traits.underflow else 0
+        smoothstop = -1 if smoothing_axis.traits.overflow else None
+        smoothslice = slice(smoothstart, smoothstop)
+
+        # get array without smoothing axis for iteration purposes
+        itarr = h[{self.smoothing_axis_name : 0}].values(flow=True)
+
+
+        hsmooth = hh.transfer_variances(h, hnom)
+
+        print("hsmooth pre", hsmooth)
+
+        nax_nominal = len(hnom.axes)
+        nx = smoothing_axis.size
+        xvals = smoothing_axis.centers
+        xwidths = smoothing_axis.widths
+
+        ress = {}
+
+        # iterate through the array and select slices along the smoothing axis,
+        # excluding underflow and overflow since we will leave them unmodified
+        it = np.nditer(itarr, flags=['multi_index'])
+        for _ in it:
+            multi_slice = list(it.multi_index)
+            multi_slice.insert(smoothidx, smoothslice)
+
+            multi_slice_nominal = multi_slice[:nax_nominal]
+
+            yvals = hsmooth.values(flow=True)[*multi_slice]/xwidths
+            yvars = hsmooth.variances(flow=True)[*multi_slice]/xwidths**2
+
+
+            # yvars *= 2.
+
+            # yvars = np.where(yvals > 0., yvars/yvals**2, 1.)
+            # yvals = np.where(yvals > 0., np.log(yvals), 0.)
+
+            # w = np.where(yvars > 0., 1./np.sqrt(yvars), 0.)
+            w = np.where(yvars > 0., 1./yvars, 1.)
+
+            if np.count_nonzero(yvars>0.) < 5:
+                # no smoothing with less than 4 points since cubic spline doesn't make sense
+                continue
+
+            # spline = scipy.interpolate.make_smoothing_spline(xvals, yvals, w=w)
+
+            # retrieve knots used to smooth the nominal histogram for this slice of pt
+            multi_index_nominal = it.multi_index[:nax_nominal - 1]
+            lamslice = lam[multi_index_nominal]
+            if lamslice is None:
+                # no smoothing for this slice
+                continue
+
+
+            ress[it.multi_index] = self.pool.submit(do_smoothing, xvals, yvals, w, lamslice)
+            #
+            # yout = spline(xvals)*xwidths
+            # yout = np.maximum(yout, 0.)
+            #
+            # if not np.any(np.isnan(yout)):
+            #     hsmooth.values(flow=True)[*multi_slice] = yout
+                # no meaningful variance for smoothed alternate histograms
+                # hsmooth.variances(flow=True)[*multi_slice] = 0.
+
+
+                # hinslice = hist.Hist(smoothing_axis)
+                # hinslice.values()[...] = h.values(flow=True)[*multi_slice]
+                #
+                # houtslice = hist.Hist(smoothing_axis)
+                # houtslice.values()[...] = yout
+                #
+                # print(hinslice)
+                # print(houtslice)
+
+        for multi_index, res in ress.items():
+            multi_slice = list(multi_index)
+            multi_slice.insert(smoothidx, smoothslice)
+            yout = res.result()
+            yout = yout*xwidths
+            # yout = np.exp(yout)*xwidths
+            yout = np.maximum(yout, 0.)
+            if not np.any(np.isnan(yout)):
+                hsmooth.values(flow=True)[*multi_slice] = yout
+
+
+        if np.any(np.logical_not(np.isfinite(hsmooth.values(flow=True)))):
+            raise ValueError("inf or nan in smoothed histogram")
+
+        print("hsmooth", hsmooth)
+
+        return hsmooth
+
+    def smooth_alternate_reg_ratio(self, h, hnom, hnomsmooth):
+        print("smooth_alternate")
+        print("h", h)
+        print("hnom", hnom)
+        print("hnomsmooth", hnomsmooth)
+
+        smoothing_axis = h.axes[self.smoothing_axis_name]
+        smoothidx = h.axes.name.index(self.smoothing_axis_name)
+
+        smoothstart = 1 if smoothing_axis.traits.underflow else 0
+        smoothstop = -1 if smoothing_axis.traits.overflow else None
+        smoothslice = slice(smoothstart, smoothstop)
+
+        # get array without smoothing axis for iteration purposes
+        itarr = h[{self.smoothing_axis_name : 0}].values(flow=True)
+
+
+        # hsmooth = hh.transfer_variances(h, hnom)
+
+        # hsmooth = hh.divideHists(h, hnom)
+        hsmooth = h.copy()
+        # print("mean ratio", np.mean(hsmooth.values()))
+        # vals = hsmooth.values(flow=True)
+        # hsmooth.values(flow=True)[...] = np.where(vals > 0., np.log(vals), 0.)
+
+        print("hsmooth pre", hsmooth)
+
+        nax_nominal = len(hnom.axes)
+        nx = smoothing_axis.size
+        xvals = smoothing_axis.centers
+        xwidths = smoothing_axis.widths
+
+        ress = {}
+
+        # iterate through the array and select slices along the smoothing axis,
+        # excluding underflow and overflow since we will leave them unmodified
+        it = np.nditer(itarr, flags=['multi_index'])
+        for _ in it:
+            multi_slice = list(it.multi_index)
+            multi_slice.insert(smoothidx, smoothslice)
+
+            multi_slice_nominal = multi_slice[:nax_nominal]
+
+            yvals = hsmooth.values(flow=True)[*multi_slice]
+            yvalsnom = hnom.values(flow=True)[*multi_slice_nominal]
+
+            # yvals = np.where(np.logical_and(yvalsnom > 0., yvals > 0.), np.log(yvals/yvalsnom), 0.)
+
+            yvals = np.where(yvalsnom > 0., yvals/yvalsnom, 1.)
+
+            # w = 1./1e-3**2*np.ones_like(yvals)
+
+            # yvars = hsmooth.variances(flow=True)[*multi_slice]/xwidths**2
+
+            # w = np.where(yvars > 0., 1./np.sqrt(yvars), 0.)
+            # w = np.where(yvars > 0., 1./yvars, 1.)
+
+            # if np.count_nonzero(yvars>0.) < 5:
+                # no smoothing with less than 4 points since cubic spline doesn't make sense
+                # continue
+
+            # spline = scipy.interpolate.make_smoothing_spline(xvals, yvals, w=w)
+
+            ress[it.multi_index] = self.pool.submit(do_smoothing, xvals, yvals, None)
+            #
+            # yout = spline(xvals)*xwidths
+            # yout = np.maximum(yout, 0.)
+            #
+            # if not np.any(np.isnan(yout)):
+            #     hsmooth.values(flow=True)[*multi_slice] = yout
+                # no meaningful variance for smoothed alternate histograms
+                # hsmooth.variances(flow=True)[*multi_slice] = 0.
+
+
+
+
+        for multi_index, res in ress.items():
+            multi_slice = list(multi_index)
+            multi_slice.insert(smoothidx, smoothslice)
+            multi_slice_nominal = multi_slice[:nax_nominal]
+            # yvalsnom = hnomsmooth.values(flow=True)[*multi_slice_nominal]
+            yvalsnom = hnom.values(flow=True)[*multi_slice_nominal]
+            yout = res.result()
+            # yout = np.exp(yout)*yvalsnom
+            # yout = yout*yvalsnom
+            if not np.any(np.isnan(yout)):
+                hsmooth.values(flow=True)[*multi_slice] = yout
+
+
+                yvals = h.values(flow=True)[*multi_slice]
+                yvals = np.where(yvalsnom > 0., yvals/yvalsnom, 1.)
+
+                hinslice = hist.Hist(smoothing_axis)
+                hinslice.values()[...] = yvals
+
+                houtslice = hist.Hist(smoothing_axis)
+                houtslice.values()[...] = yout
+
+                print("hinslice", hinslice)
+                print("houtslice", houtslice)
+
+        # hsmooth.values(flow=True)[...] = np.exp(hsmooth.values(flow=True))
+        # hsmooth = hh.multiplyHists(hsmooth, hnomsmooth)
+
+        if np.any(np.logical_not(np.isfinite(hsmooth.values(flow=True)))):
+            raise ValueError("inf or nan in smoothed histogram")
+
+        print("hsmooth", hsmooth)
+
+        quit()
+
+        return hsmooth
+
+
+    def smooth_alternate(self, h, hnom, knots):
+        print("smooth_alternate")
+        print("h", h)
+        print("hnom", hnom)
+
+        smoothing_axis = h.axes[self.smoothing_axis_name]
+        smoothidx = h.axes.name.index(self.smoothing_axis_name)
+
+        smoothstart = 1 if smoothing_axis.traits.underflow else 0
+        smoothstop = -1 if smoothing_axis.traits.overflow else None
+        smoothslice = slice(smoothstart, smoothstop)
+
+        # get array without smoothing axis for iteration purposes
+        itarr = h[{self.smoothing_axis_name : 0}].values(flow=True)
+
+
+        hsmooth = hh.transfer_variances(h, hnom)
+        # hsmooth.variances(flow=True)[...] = hsmooth.values(flow=True)
+
+        print("hsmooth pre", hsmooth)
+
+        nax_nominal = len(hnom.axes)
+        nx = smoothing_axis.size
+        xvals = smoothing_axis.centers
+        xwidths = smoothing_axis.widths
+
+        # iterate through the array and select slices along the smoothing axis,
+        # excluding underflow and overflow since we will leave them unmodified
+        it = np.nditer(itarr, flags=['multi_index'])
+        for _ in it:
+            multi_slice = list(it.multi_index)
+            multi_slice.insert(smoothidx, smoothslice)
+
+            yvals = hsmooth.values(flow=True)[*multi_slice]/xwidths
+            yvars = hsmooth.variances(flow=True)[*multi_slice]/xwidths**2
+
+            # yvars *= 2.
+
+            weightfallback = 1e-6
+
+            # yvars = np.where(yvals > 0., yvars/yvals**2, 1./weightfallback**2)
+            # yvals = np.where(yvals > 0., np.log(yvals), 0.)
+
+            # w = np.where(yvars > 0., 1./np.sqrt(yvars), 0.)
+            # w = np.where(yvars > 0., 1./np.sqrt(yvars), 1e-6)
+            w = np.where(yvars > 0., 1./np.sqrt(yvars), weightfallback)
+
+            if np.count_nonzero(w) < 4:
+                # no smoothing with less than 4 points since cubic spline doesn't make sense
+                continue
+
+            # retrieve knots used to smooth the nominal histogram for this slice of pt
+            multi_index_nominal = it.multi_index[:nax_nominal - 1]
+            knotsslice = knots[multi_index_nominal]
+            if knotsslice is None:
+                # no smoothing for this slice
+                continue
+
+            spline = scipy.interpolate.LSQUnivariateSpline(xvals, yvals, t=knotsslice[1:-1], w=w)
+            # spline = scipy.interpolate.UnivariateSpline(xvals, yvals, w=w, s=None)
+
+
+            yout = spline(xvals)*xwidths
+            # yout = np.exp(spline(xvals))*xwidths
+            yout = np.maximum(yout, 0.)
+
+            if np.all(np.isfinite(yout)):
+                hsmooth.values(flow=True)[*multi_slice] = yout
+                # no meaningful variance for smoothed alternate histograms
+                # hsmooth.variances(flow=True)[*multi_slice] = 0.
+
+
+                # hinslice = hist.Hist(smoothing_axis)
+                # hinslice.values()[...] = h.values(flow=True)[*multi_slice]
+                #
+                # houtslice = hist.Hist(smoothing_axis)
+                # houtslice.values()[...] = yout
+                #
+                # print(hinslice)
+                # print(houtslice)
+
+
+        if np.any(np.logical_not(np.isfinite(hsmooth.values(flow=True)))):
+            raise ValueError("inf or nan in smoothed histogram")
+
+        print("hsmooth", hsmooth)
+
+        return hsmooth
+
+
+    def get_hist(self, h, baseName, syst=None):
+        # return h
+        print("get_hist", baseName, syst)
+        if self.smoothing_axis_name is not None and self.smoothing_axis_name in h.axes.name:
+            hnom = self.nominal_hists.get(baseName)
+            if not syst:
+                if hnom is not None and h == hnom:
+                    return self.nominal_hists_smooth[baseName]
+                else:
+                    self.nominal_hists[baseName] = h.copy()
+                    hsmooth, knots = self.smooth_nominal(h)
+                    self.nominal_hists_smooth[baseName] = hsmooth.copy()
+                    self.knots[baseName] = knots
+                    h = hsmooth
+                    # h, lam = self.smooth_nominal_reg(h)
+                    # self.lam[baseName] = lam
+                    # self.nominal_hists_smooth[baseName] = h.copy()
+            else:
+                hnom = self.nominal_hists[baseName]
+                # hnomsmooth = self.nominal_hists_smooth[baseName]
+                knots = self.knots[baseName]
+                h = self.smooth_alternate(h, hnom, knots)
+                # lam = self.lam[baseName]
+                # h = self.smooth_alternate_reg(h, hnom, lam)
+                # h = self.smooth_alternate_reg_ratio(h, hnom, hnomsmooth)
+
+        return h
+
+    def get_smoothing_variations(self, h, baseName):
+        hnom = self.nominal_hists[baseName]
+        if h != hnom:
+            raise RuntimeError("Inconsistent histograms passed to Histselector for smoothing variations.")
+
+        hsmooth = self.nominal_hists_smooth[baseName]
+        knots = self.knots[baseName]
+
+        smoothing_axis = h.axes[self.smoothing_axis_name]
+        smoothidx = h.axes.name.index(self.smoothing_axis_name)
+
+        smoothstart = 1 if smoothing_axis.traits.underflow else 0
+        smoothstop = -1 if smoothing_axis.traits.overflow else None
+        smoothslice = slice(smoothstart, smoothstop)
+
+        # get array without smoothing axis for iteration purposes
+        itarr = h[{self.smoothing_axis_name : 0}].values(flow=True)
+
+        # store knots for later use in statistical and systematic variations
+        nx = smoothing_axis.size
+        xvals = smoothing_axis.centers
+        xwidths = smoothing_axis.widths
+
+        yvals_smooth_variations = []
+
+        # iterate through the array and select slices along the smoothing axis,
+        # excluding underflow and overflow since we will leave them unmodified
+        it = np.nditer(itarr, flags=['multi_index'])
+        for _ in it:
+            print("multi_index", it.multi_index)
+
+
+            multi_slice = list(it.multi_index)
+            multi_slice.insert(smoothidx, smoothslice)
+
+            yvals = h.values(flow=True)[*multi_slice]/xwidths
+            yvars = h.variances(flow=True)[*multi_slice]/xwidths**2
+
+            w = np.where(yvars > 0., 1./np.sqrt(yvars), 0.)
+
+            knotsslice = knots[it.multi_index]
+
+
+            nparms = len(knotsslice) + 2
+            yvals_smooth0 = hsmooth.values(flow=True)[multi_slice]
+
+            cov = np.zeros((nx,nx), dtype=np.float64)
+
+            for ibin in range(nx):
+                yvals_mod = yvals.copy()
+                yvals_mod[ibin] += np.sqrt(yvars[ibin])
+
+                spline = scipy.interpolate.LSQUnivariateSpline(xvals, yvals_mod, t=knotsslice[1:-1], w=w)
+
+                yvals_smooth_mod = spline(xvals)
+
+
+                dy = yvals_smooth_mod - yvals_smooth0
+                dy = dy[:, None]
+                cov += dy @ dy.T
+
+            e, v = np.linalg.eigh(cov)
+            e = e[nx-nparms:]
+            v = v[:, nx-nparms:]
+
+            yvals_eigvars = np.sqrt(e[None, :])*v
+
+            for ieig in range(nparms):
+                yvals_smooth_var = yvals_smooth0 + yvals_eigvars[:, ieig]
+
+                yvals_full_alt = hsmooth.values(flow=True).copy()
+                yvals_full_alt[multi_slice] = yvals_smooth_var
+                yvals_smooth_variations.append(yvals_full_alt)
+
+        nvar = len(yvals_smooth_variations)
+
+        axis_var = hist.axis.Integer(0, nvar, underflow=False, overflow=False)
+        hvar = hist.Hist(*h.axes, axis_var)
+        hvar.values(flow=True)[...] = np.stack(yvals_smooth_variations, axis = -1)
+
+        return hvar
+
+class HistselectorABCD(Histselector):
+    def __init__(self, h, *args, name_x=None, name_y=None,
+        fakerate_axes=["eta","pt","charge"], 
         upper_bound_y=None, # using an upper bound on the abcd y-axis (e.g. isolation)
-        integrate_x=True, # integrate the abcd x-axis in final histogram (allows simplified procedure e.g. for extrapolation method)   
-    ):           
+        integrate_x=True, # integrate the abcd x-axis in final histogram (allows simplified procedure e.g. for extrapolation method)
+        **kwargs
+    ):
+        super().__init__(h, *args, **kwargs)
+
         self.upper_bound_y=upper_bound_y
         self.integrate_x = integrate_x
 
@@ -278,18 +1007,6 @@ class HistselectorABCD(object):
             self.fakerate_axes = fakerate_axes
             self.fakerate_integration_axes = [n for n in h.axes.name if n not in [self.name_x, self.name_y, *fakerate_axes]]
             logger.debug(f"Setting fakerate integration axes to {self.fakerate_integration_axes}")
-
-        self.smoothing_axis_name = smoothing_axis_name
-        edges = h.axes[smoothing_axis_name].edges
-        if rebin_smoothing_axis == "automatic":
-            self.rebin_smoothing_axis = get_rebinning(edges, self.smoothing_axis_name)
-        else:
-            self.rebin_smoothing_axis = rebin_smoothing_axis
-
-        edges = edges if self.rebin_smoothing_axis is None else self.rebin_smoothing_axis
-        edges = extend_edges(h.axes[self.smoothing_axis_name].traits, edges)
-        self.smoothing_axis_min = edges[0]
-        self.smoothing_axis_max = edges[-1]
 
     # A
     def get_hist_failX_failY(self, h):
@@ -351,8 +1068,11 @@ class SignalSelectorABCD(HistselectorABCD):
         super().__init__(h, *args, **kwargs)
 
     # signal region selection
-    def get_hist(self, h, is_nominal=False):
-        return self.get_hist_passX_passY(h)
+    def get_hist(self, h, *args, **kwargs):
+        hsig = self.get_hist_passX_passY(h)
+        # pass through the base class method e.g. for smoothing
+        return super().get_hist(hsig, *args, **kwargs)
+
 
 class FakeSelectorSimpleABCD(HistselectorABCD):
     # simple ABCD method

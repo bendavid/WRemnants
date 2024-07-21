@@ -201,7 +201,8 @@ class Datagroups(object):
         logger.info(f"Set histselector")
         if self.mode[0] != "w":
             return # histselectors only implemented for single lepton (with fakes)
-        auxiliary_info={"rebin_smoothing_axis": "automatic" if smoothen else None}
+        # auxiliary_info={"rebin_smoothing_axis": "automatic" if smoothen else None}
+        auxiliary_info = {}
         signalselector = sel.SignalSelectorABCD
         scale = 1
         if mode == "extended1D":
@@ -224,15 +225,19 @@ class Datagroups(object):
             scale = forceGlobalScaleFakes
         fake_processes = [self.fakeName] if fake_processes is None else fake_processes
         for i, g in enumerate(group_names):
+            smoothing_axis_name = None if g == self.dataName else "pt"
             members = self.groups[g].members[:]
             if len(members) == 0:
                 raise RuntimeError(f"No member found for group {g}")
             base_member = members[0].name
             h = self.results[base_member]["output"][histToRead].get()
             if g in fake_processes:
-                self.groups[g].histselector = fakeselector(h[{"charge": hist.sum}], global_scalefactor=scale, fakerate_axes=self.fakerate_axes, smooth_fakerate=smoothen, smoothing_order_fakerate=smoothingOrderFakerate, **auxiliary_info, **kwargs)
+                selector = fakeselector(h[{"charge": hist.sum}], global_scalefactor=scale, fakerate_axes=self.fakerate_axes, smoothing_axis_name=smoothing_axis_name, smooth_fakerate=smoothen, smoothing_order_fakerate=smoothingOrderFakerate, **auxiliary_info, **kwargs)
             else:
-                self.groups[g].histselector = signalselector(h[{"charge": hist.sum}], fakerate_axes=self.fakerate_axes, **kwargs)
+                selector = signalselector(h[{"charge": hist.sum}], smoothing_axis_name=smoothing_axis_name, fakerate_axes=self.fakerate_axes, **kwargs)
+            # pass the nominal histogram to ensure it is cached
+            selector.get_hist(h, baseName = histToRead)
+            self.groups[g].histselector = selector
 
     def setGlobalAction(self, action):
         # To be used for applying a selection, rebinning, etc.
@@ -440,7 +445,7 @@ class Datagroups(object):
                 if not applySelection:
                     logger.warning(f"Selection requested for process {procName} but applySelection=False, thus it will be ignored")
                 elif label in group.hists.keys() and group.hists[label] is not None:
-                    group.hists[label] = group.histselector.get_hist(group.hists[label], is_nominal=(label==self.nominalName))
+                    group.hists[label] = group.histselector.get_hist(group.hists[label], baseName=baseName, syst=syst)
                 else:
                     raise RuntimeError("Failed to apply selection")
 
