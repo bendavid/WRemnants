@@ -78,7 +78,7 @@ out1 = f"{args.outputFile}_NPs.txt"
 
 # format used by ATLAS for now
 with open(out0, 'w', encoding="utf-8") as f:
-    f.write(f"Nominal {mass_idx_out} {mass_uncertainty_implicit}\n")
+    f.write(f"Nominal {mass_nominal} {mass_uncertainty_implicit}\n")
     for parm, val, impact in zip(parms_out, x, impacts):
         if parm != mass_name_out:
             f.write(f"{parm} {impact} {-impact}\n")
