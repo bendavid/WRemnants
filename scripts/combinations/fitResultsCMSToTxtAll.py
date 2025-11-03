@@ -36,16 +36,15 @@ tags = ["pdf", "pdf_infl1"]
 for tag in tags:
     for pdf in args.pdfs:
         infile = f"{args.inputDir}/{tag}/{pdf}/WMass_eta_pt_charge/fitresults_123456789_unblind.hdf5"
-        asyms = [False, True] if pdf in ["ct18", "ct18z", "msht20", "msht20an3lo"] else [False]
-        for asym in asyms:
-            tagname = "unscaled" if tag=="pdf_infl1" else f"scale_{smap[pdf]}"
-            outfile = f"{nmap[pdf]}_{tagname}"
-            if asym:
-                outfile += "_asymquad"
-            outfile += "_CMS_Preliminary_2024"
+        asym = True if pdf in ["ct18", "ct18z", "msht20", "msht20an3lo"] else False
 
-            print("in", infile)
-            print("out", outfile)
+        tagname = "unscaled" if tag=="pdf_infl1" else f"scale_{smap[pdf]}"
+        outfile = f"{nmap[pdf]}_{tagname}"
 
-            makeTxtresults(inputFile=infile, outputFile=outfile, asym=asym)
+        outfile += "_CMS_Preliminary_2024"
+
+        print("in", infile)
+        print("out", outfile)
+
+        makeTxtresults(inputFile=infile, outputFile=outfile, asym=asym)
 
