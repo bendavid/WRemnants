@@ -51,6 +51,8 @@ axis_nvalidpixel = hist.axis.Integer(0, 10, name="nvalidpixel")
 
 response_axes = [axis_genPt, axis_genEta, axis_genCharge, axis_qopr]
 
+axis_globalparms = hist.axis.Integer(0, int(109e3), name="globalparms")
+
 pileup_helper = pileup.make_pileup_helper(era=era)
 vertex_helper = vertex.make_vertex_helper(era=era)
 
@@ -90,8 +92,12 @@ if args.testHelpers:
         sigmarel, ROOT.ROOT.GetThreadPoolSize()
     )
     smearing_helper_simple_weights = ROOT.wrem.SmearingHelperSimpleWeight(sigmarel)
+    smearing_helper_simple_gaussian_weights = ROOT.wrem.SmearingHelperSimpleGaussianWeight(sigmarel)
     smearing_helper_simple_transform = ROOT.wrem.SmearingHelperSimpleTransform(sigmarel)
     scale_helper_simple_weights = ROOT.wrem.ScaleHelperSimpleWeight(scalerel)
+    scale_helper_simple_gaussian_weights = ROOT.wrem.ScaleHelperSimpleGaussianWeight(scalerel)
+    gaussian_weight_helper = ROOT.wrem.GaussianWeightHelper()
+    module_weight_helper = ROOT.wrem.ModuleWeightHelper()
 
 
 def build_graph(df, dataset):
@@ -142,6 +148,12 @@ def build_graph(df, dataset):
 
     if not dataset.is_data:
         df = df.Define(
+            "Muon_cvhidealMomCov",
+            "wrem::splitCovariance<3>(Muon_cvhidealMomCov_Vals, Muon_cvhidealMomCov_Counts)",
+        )
+
+
+        df = df.Define(
             "genMatchedMuons", "Muon_genPartFlav == 1 || Muon_genPartFlav==15"
         )
         df = df.Define("selMuons", "vetoMuonsPre && genMatchedMuons")
@@ -173,6 +185,8 @@ def build_graph(df, dataset):
             "selMuons_genCharge*1.0/(selMuons_genPt*cosh(selMuons_genEta))",
         )
         df = df.Define("selMuons_qopr", "selMuons_qop/selMuons_genQop")
+
+        df = df.Define("selMuons_cvhidealMomCov", "Muon_cvhidealMomCov[selMuons]")
 
         df = df.Define("selGoodMuons_correctedPt", "Muon_correctedPt[selGoodMuons]")
         df = df.Define("selGoodMuons_correctedEta", "Muon_correctedEta[selGoodMuons]")
@@ -398,6 +412,21 @@ def build_graph(df, dataset):
                 ],
             )
 
+            df = df.Define(
+                "weight_smear_gaussian",
+                smearing_helper_simple_gaussian_weights,
+                [
+                    "selMuons_correctedPt",
+                    "selMuons_correctedEta",
+                    "selMuons_correctedCharge",
+                    "selMuons_genPt",
+                    "selMuons_genEta",
+                    "selMuons_genCharge",
+                    "selMuons_cvhidealMomCov",
+                    "nominal_weight",
+                ],
+            )
+
             df = df.DefineSlot(
                 "selMuons_smearedPt",
                 smearing_helper_simple,
@@ -447,6 +476,58 @@ def build_graph(df, dataset):
                 ],
             )
 
+            df = df.Define(
+                "weight_scale_gaussian",
+                scale_helper_simple_gaussian_weights,
+                [
+                    "selMuons_correctedPt",
+                    "selMuons_correctedEta",
+                    "selMuons_correctedCharge",
+                    "selMuons_genPt",
+                    "selMuons_genEta",
+                    "selMuons_genCharge",
+                    "selMuons_cvhidealMomCov",
+                    "nominal_weight",
+                ],
+            )
+
+            df = df.Define(
+                "weight_grads_gaussian",
+                gaussian_weight_helper,
+                [
+                    "selMuons_correctedPt",
+                    "selMuons_correctedEta",
+                    "selMuons_correctedPhi",
+                    "selMuons_correctedCharge",
+                    "selMuons_genPt",
+                    "selMuons_genEta",
+                    "selMuons_genPhi",
+                    "selMuons_genCharge",
+                    "selMuons_cvhidealMomCov",
+                ],
+            )
+
+            df = df.Define(
+                "module_weights",
+                module_weight_helper,
+                [
+                    "Muon_cvhmergedGlobalIdxs",
+                    "Muon_cvhidealJacRef",
+                    "weight_grads_gaussian",
+                    "nominal_weight",
+                ],
+            )
+
+            df = df.Define(
+                "module_weight_idxs",
+                "module_weights.first"
+            )
+
+            df = df.Define(
+                "module_weight_vals",
+                "module_weights.second"
+            )
+
             response_cols_smeared = [
                 "selMuons_genPt",
                 "selMuons_genEta",
@@ -480,12 +561,46 @@ def build_graph(df, dataset):
             )
             results.append(hist_qopr_smeared_weight)
 
+            hist_qopr_smeared_weight_gaussian = df.HistoBoost(
+                "hist_qopr_smeared_weight_gaussian",
+                response_axes,
+                [*response_cols, "weight_smear_gaussian"],
+            )
+            results.append(hist_qopr_smeared_weight_gaussian)
+
             hist_qopr_scaled_weight = df.HistoBoost(
                 "hist_qopr_scaled_weight",
                 response_axes,
                 [*response_cols, "weight_scale"],
             )
             results.append(hist_qopr_scaled_weight)
+
+            hist_qopr_scaled_weight_gaussian = df.HistoBoost(
+                "hist_qopr_scaled_weight_gaussian",
+                response_axes,
+                [*response_cols, "weight_scale_gaussian"],
+            )
+            results.append(hist_qopr_scaled_weight_gaussian)
+
+            dfsingle = df.Filter("Sum(selGoodMuons) > 0")
+            dfsingle = dfsingle.Define("selMuons0_genPt", "selMuons_genPt[0]")
+            dfsingle = dfsingle.Define("selMuons0_genEta", "selMuons_genEta[0]")
+            dfsingle = dfsingle.Define("selMuons0_genCharge", "selMuons_genCharge[0]")
+            dfsingle = dfsingle.Define("selMuons0_qopr", "selMuons_qopr[0]")
+
+            response_cols_single = [
+                "selMuons0_genPt",
+                "selMuons0_genEta",
+                "selMuons0_genCharge",
+                "selMuons0_qopr",
+            ]
+
+            hist_qopr_global_parms = dfsingle.HistoBoost(
+                "hist_qopr_global_parms",
+                [response_axes[-1], axis_globalparms],
+                [response_cols_single[-1], "module_weight_idxs", "module_weight_vals"], storage=hist.storage.Double(),
+            )
+            results.append(hist_qopr_global_parms)
 
     return results, weightsum
 

@@ -13,7 +13,7 @@ import wums.tfutils
 mpl.rcParams["figure.dpi"] = 300
 
 
-infile = "w_z_muonresponse_scetlib_dyturboCorr_maxFiles_m1.hdf5"
+infile = "w_z_muonresponse_scetlib_dyturbo_CT18Z_N3p0LL_N2LO_Corr_maxFiles_100.hdf5"
 
 hist_response = None
 hist_response_scaled = None

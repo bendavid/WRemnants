@@ -44,6 +44,39 @@ splitNestedRVec(const ROOT::VecOps::RVec<T> &vec,
   return res;
 }
 
+template <std::size_t N = 3, typename T>
+ROOT::VecOps::RVec<Eigen::Matrix<T, N, N>>
+splitCovariance(const ROOT::VecOps::RVec<T> &vec,
+                const ROOT::VecOps::RVec<int> &counts) {
+
+  RVec<Eigen::Matrix<T, N, N>> res;
+  res.reserve(counts.size());
+
+  int total = 0;
+  for (unsigned int i = 0; i < counts.size(); ++i) {
+    const int count = counts[i];
+
+    if (count == 0) {
+      res.emplace_back(Eigen::Matrix<float, N, N>::Zero());
+    }
+    else {
+
+      if (count != N*N) {
+        std::cout << "N = " << N << " count = " << count;
+        throw std::runtime_error("Mismatched size.");
+      }
+
+      auto const map = Eigen::Map<const Eigen::Matrix<float, N, N, Eigen::RowMajor>>(vec.begin() + total);
+      res.emplace_back(map.template selfadjointView<Eigen::Upper>());
+    }
+
+    total += count;
+  }
+
+  return res;
+
+}
+
 template <std::ptrdiff_t NJac = 3, std::ptrdiff_t NReplicas = 0>
 class CVHCorrectorSingle {
 public:
@@ -1620,6 +1653,104 @@ private:
   std::shared_ptr<narf::tflite_helper> helper_;
 };
 
+class GaussianWeightHelper {
+
+public:
+  using vec_t = Eigen::Matrix<float, 3, 1>;
+  using out_t = RVec<std::pair<vec_t, vec_t>>;
+
+  out_t operator()(const RVec<float> &recPts, const RVec<float> &recEtas,
+                    const RVec<float> &recPhis, const RVec<int> &recCharges,
+                    const RVec<float> &genPts, const RVec<float> &genEtas,
+                    const RVec<float> &genPhis, const RVec<int> &genCharges,
+                    const RVec<Eigen::Matrix<float, 3, 3>> &covs) {
+
+    auto const nmuons = recPts.size();
+    out_t res;
+    res.reserve(nmuons);
+
+    for (std::size_t i = 0; i < recPts.size(); ++i) {
+      const double pt = recPts[i];
+      const double eta = recEtas[i];
+      const double charge = recCharges[i];
+
+      const double genpt = genPts[i];
+      const double geneta = genEtas[i];
+      const double gencharge = genCharges[i];
+
+      auto const &cov = covs[i];
+
+      const float qop = charge / pt / std::cosh(eta);
+      const float theta = 2.*std::atan(std::exp(-eta));
+      const float lambda = M_PI_2 - theta;
+
+      const vec_t xrec{qop, theta, lambda};
+
+      const float genqop = gencharge / genpt /std::cosh(geneta);
+      const float gentheta = 2.*std::atan(std::exp(-geneta));
+      const float genlambda = M_PI_2 - gentheta;
+
+      const vec_t xgen{genqop, gentheta, genlambda};
+
+      // FIXME add protection for non-positive-definite covariance matrix
+      auto const dweightdmu = cov.ldlt().solve(xgen-xrec);
+
+      res.emplace_back(dweightdmu, vec_t::Zero());
+
+    }
+
+    return res;
+  }
+};
+
+class ModuleWeightHelper {
+public:
+
+  using vec_t = Eigen::Matrix<float, 3, 1>;
+  using in_t = RVec<std::pair<vec_t, vec_t>>;
+  using out_t = std::pair<RVec<int>, RVec<float>>;
+
+  out_t operator()(const RVec<RVec<int>> &idxsv, const RVec<RVec<float>> &jacv, const in_t &weights,
+                   const double nominal_weight = 1.0) {
+
+    auto const nmuons = weights.size();
+    std::unordered_map<int, float> resmap;
+
+    for (unsigned int i = 0; i < nmuons; ++i) {
+      auto const &idxs = idxsv[i];
+      auto const &jac = jacv[i];
+      auto const &weight = weights[i];
+      auto const &dweightdscale = weight.first;
+
+      constexpr std::size_t NJac = 3;
+      const auto nparms = idxs.size();
+
+      const Eigen::Map<
+      const Eigen::Matrix<float, NJac, Eigen::Dynamic, Eigen::RowMajor>>
+      jacMap(jac.data(), NJac, nparms);
+
+      auto const weightscale = jacMap.transpose()*dweightdscale;
+
+      for (unsigned int j = 0; j < nparms; ++j) {
+        resmap.try_emplace(idxs[j], nominal_weight).first->second *= weightscale(j, 0);
+      }
+    }
+
+    out_t res;
+    res.first.reserve(resmap.size());
+    res.second.reserve(resmap.size());
+
+    for (auto const &elem : resmap) {
+      res.first.emplace_back(elem.first);
+      res.second.emplace_back(elem.second);
+    }
+
+    return res;
+  }
+
+
+};
+
 class SmearingHelperSimpleWeight {
 
 public:
@@ -1643,6 +1774,83 @@ public:
 
       const double dweight = dweightdsigmasq * dsigmasq;
       const double iweight = std::clamp(1. + dweight, -10., 10.);
+      res *= iweight;
+    }
+
+    return res;
+  }
+
+private:
+  double sigmarel_;
+};
+
+class SmearingHelperSimpleGaussianWeight {
+
+public:
+  SmearingHelperSimpleGaussianWeight(const double sigmarel) : sigmarel_(sigmarel) {}
+
+  double operator()(const RVec<float> &recPts, const RVec<float> &recEtas,
+                    const RVec<int> &recCharges,
+                    const RVec<float> &genPts, const RVec<float> &genEtas,
+                    const RVec<int> &genCharges,
+                    const RVec<Eigen::Matrix<float, 3, 3>> &covs,
+                    const double nominal_weight = 1.0) {
+
+    double res = nominal_weight;
+    for (std::size_t i = 0; i < recPts.size(); ++i) {
+      const double pt = recPts[i];
+      const double eta = recEtas[i];
+      const double charge = recCharges[i];
+
+      const double genpt = genPts[i];
+      const double geneta = genEtas[i];
+      const double gencharge = genCharges[i];
+
+      auto const &cov = covs[i];
+
+
+      const double qop = charge / pt / std::cosh(eta);
+      const double varqop = cov(0, 0);
+
+      if (varqop <= 0.) {
+        continue;
+      }
+
+      const double genqop = gencharge / genpt /std::cosh(geneta);
+
+      // dweightdscale = -dpdf/pdf
+      // dweightdsigmasq = 0.5*d2pdf/pdf
+
+
+      const double dweightdvar = -0.5/varqop + 0.5*std::pow((qop - genqop)/varqop, 2);
+
+
+
+
+
+
+      const double smear = sigmarel_ * std::abs(genqop);
+      const double dvar = smear*smear;
+
+      const double p0 = 1./std::sqrt(varqop*2.*M_PI)*std::exp(-0.5*pow(qop-genqop, 2)/varqop);
+      const double varqop1 = varqop + dvar;
+      const double p1 = 1./std::sqrt(varqop1*2.*M_PI)*std::exp(-0.5*pow(qop-genqop, 2)/varqop1);
+
+
+      const double weight = std::sqrt(varqop/varqop1)*std::exp(0.5*pow(qop-genqop, 2)/varqop - 0.5*pow(qop-genqop, 2)/varqop1);
+
+      // if (std::isnan(weight)) {
+      //   std::cout << varqop << " " << varqop1 << " " << p0 << " " << p1 << std::endl;
+      // }
+
+      // const double dweight = dweightdvar * dvar;
+      // const double iweight = std::clamp(1. + dweight, -10., 10.);
+      // const double iweight = 1. + dweight;
+
+      // const double weight = p1/p0;
+
+      const double iweight = std::clamp(weight, -10., 10.);
+
       res *= iweight;
     }
 
@@ -1716,14 +1924,18 @@ public:
 
       const double qop = charge / pt / std::cosh(eta);
 
-      const double dsigma = sigmarel_ * qop;
+      const double dsigma = sigmarel_ * std::abs(qop);
 
-      std::normal_distribution gaus{qop, dsigma};
+      double ptout = pt;
 
-      const double qopout = gaus(rng_[slot]);
-      const double pout = std::fabs(1. / qopout);
+      if (dsigma > 0.) {
+        std::normal_distribution gaus{qop, dsigma};
 
-      const double ptout = pout / std::cosh(eta);
+        const double qopout = gaus(rng_[slot]);
+        const double pout = std::fabs(1. / qopout);
+
+        ptout = pout / std::cosh(eta);
+      }
 
       res.emplace_back(ptout);
     }
@@ -1761,14 +1973,21 @@ public:
 
       const double qop = charge / pt / std::cosh(eta);
 
-      const double dsigma = sigmarel_ * qop;
+      const double dsigma = sigmarel_ * std::abs(qop);
 
-      std::normal_distribution gaus{qop, dsigma};
+      if (dsigma > 0) {
+        std::normal_distribution gaus{qop, dsigma};
 
-      for (std::size_t irep = 0; irep < N; ++irep) {
-        const double qopout = gaus(rng);
+        for (std::size_t irep = 0; irep < N; ++irep) {
+          const double qopout = gaus(rng);
 
-        res.emplace_back(qopout);
+          res.emplace_back(qopout);
+        }
+      }
+      else {
+        for (std::size_t irep = 0; irep < N; ++irep) {
+          res.emplace_back(qop);
+        }
       }
     }
 
@@ -1816,6 +2035,59 @@ public:
 
       const double dweight = dweightdmu * dmu;
       const double iweight = std::clamp(1. + dweight, -10., 10.);
+      res *= iweight;
+    }
+
+    return res;
+  }
+
+private:
+  double scalerel_;
+};
+
+class ScaleHelperSimpleGaussianWeight {
+
+public:
+  ScaleHelperSimpleGaussianWeight(const double scalerel) : scalerel_(scalerel) {}
+
+  double operator()(const RVec<float> &recPts, const RVec<float> &recEtas,
+                    const RVec<int> &recCharges,
+                    const RVec<float> &genPts, const RVec<float> &genEtas,
+                    const RVec<int> &genCharges,
+                    const RVec<Eigen::Matrix<float, 3, 3>> &covs,
+                    const double nominal_weight = 1.0) {
+
+    double res = nominal_weight;
+    for (std::size_t i = 0; i < recPts.size(); ++i) {
+      const double pt = recPts[i];
+      const double eta = recEtas[i];
+      const double charge = recCharges[i];
+
+      const double genpt = genPts[i];
+      const double geneta = genEtas[i];
+      const double gencharge = genCharges[i];
+
+      auto const &cov = covs[i];
+
+
+      const double qop = charge / pt / std::cosh(eta);
+      const double varqop = cov(0, 0);
+
+      const double genqop = gencharge / genpt /std::cosh(geneta);
+
+      const double dweightdmu = (qop - genqop)/varqop;
+
+      const double dmu = scalerel_ * genqop;
+
+      // const double dweight = dweightdmu * dmu;
+      // const double iweight = std::clamp(1. + dweight, -10., 10.);
+
+      const double genqop1 = genqop + dmu;
+
+      const double weight = std::exp(0.5*pow(qop-genqop, 2)/varqop - 0.5*pow(qop-genqop1, 2)/varqop);
+      const double iweight = std::clamp(weight, -10., 10.);
+
+
       res *= iweight;
     }
 
