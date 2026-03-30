@@ -1,3 +1,5 @@
+#pragma once
+
 #include <Math/GenVector/PtEtaPhiM4D.h>
 #include <ROOT/RVec.hxx>
 #include <TFile.h>
@@ -583,24 +585,24 @@ public:
   using tensor_t = typename T::storage_type::value_type::tensor_t;
 
   JpsiCorrectionsHelper(T &&corrections)
-      : correctionHist_(std::make_shared<const T>(std::move(corrections))) {}
+      : correctionHist_(std::make_shared<T>(std::move(corrections))) {}
 
   // helper for bin lookup which implements the compile-time loop over axes
   template <typename... Xs, std::size_t... Idxs>
   const tensor_t &get_tensor_impl(std::index_sequence<Idxs...>,
-                                  const Xs &...xs) {
+                                  const Xs &...xs) const {
     return correctionHist_
         ->at(correctionHist_->template axis<Idxs>().index(xs)...)
         .data();
   }
 
   // variadic templated bin lookup
-  template <typename... Xs> const tensor_t &get_tensor(const Xs &...xs) {
+  template <typename... Xs> const tensor_t &get_tensor(const Xs &...xs) const {
     return get_tensor_impl(std::index_sequence_for<Xs...>{}, xs...);
   }
 
   // for central value of pt
-  float operator()(float cvhPt, float cvhEta, int charge) {
+  float operator()(float cvhPt, float cvhEta, int charge) const {
     const auto &params = get_tensor(cvhEta);
     const double A = params(0);
     const double e = params(1);
@@ -613,8 +615,10 @@ public:
     return (1.0 / kCrctd);
   }
 
+  void set_corrections(T &&corrections) { (*correctionHist_) = std::move(corrections); }
+
 private:
-  std::shared_ptr<const T> correctionHist_;
+  std::shared_ptr<T> correctionHist_;
 };
 
 // jpsi corrections central value for multiple muons
@@ -2036,6 +2040,62 @@ public:
       const double dweight = dweightdmu * dmu;
       const double iweight = std::clamp(1. + dweight, -10., 10.);
       res *= iweight;
+    }
+
+    return res;
+  }
+
+private:
+  double scalerel_;
+};
+
+class ScaleHelperSimpleMomentWeight {
+
+public:
+  ScaleHelperSimpleMomentWeight(const double scalerel) : scalerel_(scalerel) {}
+
+  double operator()(const RVec<float> &recPts, const RVec<float> &recEtas,
+                    const RVec<int> &recCharges,
+                    const RVec<float> &genPts, const RVec<float> &genEtas,
+                    const RVec<int> &genCharges,
+                    const double nominal_weight = 1.0) {
+
+    double res = nominal_weight;
+    for (std::size_t i = 0; i < recPts.size(); ++i) {
+      const double pt = recPts[i];
+      const double eta = recEtas[i];
+      const double charge = recCharges[i];
+
+      const double genpt = genPts[i];
+      const double geneta = genEtas[i];
+      const double gencharge = genCharges[i];
+
+      const double qop = charge / pt / std::cosh(eta);
+      const double genqop = gencharge / genpt /std::cosh(geneta);
+      const double qopr = qop/genqop;
+
+
+      // const double dmu = scalerel_;
+      // const double a = 1e-2;
+      // const double xl = std::floor(qopr/a)*a;
+      // const double xc = xl + 0.5*a;
+      // const double xb = qopr - xc;
+
+      // const double dmu = scalerel_ * qop;
+      // const double a = 5e-4;
+      // const double xl = std::floor(qop/a)*a;
+      // const double xc = xl + 0.5*a;
+      // const double xb = qop - xc;
+
+      // const double dmu = -scalerel_ * pt;
+      const double dmu = -5e-4*eta*eta*pt;
+      const double a = 1.0;
+      const double xl = std::floor(pt/a)*a;
+      const double xc = xl + 0.5*a;
+      const double xb = pt - xc;
+
+
+      res *= (1. - 12.*dmu*xb/std::pow(a, 2));
     }
 
     return res;

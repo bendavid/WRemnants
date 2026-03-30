@@ -43,13 +43,15 @@ axis_genEta = hist.axis.Regular(50, -2.5, 2.5, name="genEta")
 axis_genCharge = hist.axis.Regular(
     2, -2.0, 2.0, underflow=False, overflow=False, name="genCharge"
 )
-axis_qopr = hist.axis.Regular(1001, 0.0, 2.0, name="qopr")
+# axis_qopr = hist.axis.Regular(1001, 0.0, 2.0, name="qopr")
+axis_qopr = hist.axis.Regular(100, 0.0, 100.0, name="qopr")
 
 axis_eta = hist.axis.Regular(args.eta[0], args.eta[1], args.eta[2], name="eta")
 axis_charge = binning.axis_charge
 axis_nvalidpixel = hist.axis.Integer(0, 10, name="nvalidpixel")
 
-response_axes = [axis_genPt, axis_genEta, axis_genCharge, axis_qopr]
+# response_axes = [axis_genPt, axis_genEta, axis_genCharge, axis_qopr]
+response_axes = [axis_genPt, axis_genCharge, axis_qopr]
 
 axis_globalparms = hist.axis.Integer(0, int(109e3), name="globalparms")
 
@@ -95,6 +97,7 @@ if args.testHelpers:
     smearing_helper_simple_gaussian_weights = ROOT.wrem.SmearingHelperSimpleGaussianWeight(sigmarel)
     smearing_helper_simple_transform = ROOT.wrem.SmearingHelperSimpleTransform(sigmarel)
     scale_helper_simple_weights = ROOT.wrem.ScaleHelperSimpleWeight(scalerel)
+    scale_helper_simple_moment_weights = ROOT.wrem.ScaleHelperSimpleMomentWeight(scalerel)
     scale_helper_simple_gaussian_weights = ROOT.wrem.ScaleHelperSimpleGaussianWeight(scalerel)
     gaussian_weight_helper = ROOT.wrem.GaussianWeightHelper()
     module_weight_helper = ROOT.wrem.ModuleWeightHelper()
@@ -276,9 +279,10 @@ def build_graph(df, dataset):
     if isW or isZ:
         response_cols = [
             "selMuons_genPt",
-            "selMuons_genEta",
+            # "selMuons_genEta",
             "selMuons_genCharge",
-            "selMuons_qopr",
+            # "selMuons_qopr",
+            "selMuons_correctedPt",
         ]
         hist_qopr = df.HistoBoost(
             "hist_qopr", response_axes, [*response_cols, "nominal_weight"]
@@ -286,12 +290,14 @@ def build_graph(df, dataset):
         results.append(hist_qopr)
 
         df = df.Define("selMuons_shiftedqopr", f"(1. + {scalerel})*selMuons_qopr")
+        df = df.Define("selMuons_shiftedpt", f"(1. - {scalerel}*selMuons_correctedEta*selMuons_correctedEta)*selMuons_correctedPt")
 
         response_cols_shifted = [
             "selMuons_genPt",
-            "selMuons_genEta",
+            # "selMuons_genEta",
             "selMuons_genCharge",
-            "selMuons_shiftedqopr",
+            # "selMuons_shiftedqopr",
+            "selMuons_shiftedpt",
         ]
         hist_qopr_shifted = df.HistoBoost(
             "hist_qopr_shifted",
@@ -477,6 +483,20 @@ def build_graph(df, dataset):
             )
 
             df = df.Define(
+                "weight_scale_moment",
+                scale_helper_simple_moment_weights,
+                [
+                    "selMuons_correctedPt",
+                    "selMuons_correctedEta",
+                    "selMuons_correctedCharge",
+                    "selMuons_genPt",
+                    "selMuons_genEta",
+                    "selMuons_genCharge",
+                    "nominal_weight",
+                ],
+            )
+
+            df = df.Define(
                 "weight_scale_gaussian",
                 scale_helper_simple_gaussian_weights,
                 [
@@ -574,6 +594,21 @@ def build_graph(df, dataset):
                 [*response_cols, "weight_scale"],
             )
             results.append(hist_qopr_scaled_weight)
+
+            # hist_qopr_scaled_weight_moment = df.HistoBoost(
+            #     "hist_qopr_scaled_weight_moment",
+            #     response_axes,
+            #     [*response_cols, "weight_scale_moment"],
+            # )
+            hist_qopr_scaled_weight_moment = narf.histutils.shifted_hist(
+                df,
+                "hist_qopr_scaled_weight_moment",
+                response_axes,
+                response_cols,
+                response_cols_shifted,
+                "nominal_weight"
+            )
+            results.append(hist_qopr_scaled_weight_moment)
 
             hist_qopr_scaled_weight_gaussian = df.HistoBoost(
                 "hist_qopr_scaled_weight_gaussian",
