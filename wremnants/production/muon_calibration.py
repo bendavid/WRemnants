@@ -18,6 +18,7 @@ from wums import logging
 logger = logging.child_logger(__name__)
 
 narf.clingutils.Declare('#include "muon_calibration.hpp"')
+narf.clingutils.Declare('#include "module_corrections.hpp"')
 narf.clingutils.Declare('#include "lowpu_utils.hpp"')
 
 data_dir = common.data_dir
