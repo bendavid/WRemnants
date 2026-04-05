@@ -1613,9 +1613,10 @@ def define_lbl_corrections_jpsi_calibration_ntuples(df, helper):
     df = df.DefinePerSample("Muplus_charge", "1")
     df = df.DefinePerSample("Muminus_charge", "-1")
 
-    df = df.Define("globalidxvint", "ROOT::VecOps::RVec<int>(globalidxv)")
+    # df = df.Define("globalidxvint", "ROOT::VecOps::RVec<int>(globalidxv)")
 
-    df = df.Define(
+    df = narf.rdfutils.flexible_define(
+        df,
         "Mupluscor_Mom4Charge",
         helper,
         [
@@ -1623,7 +1624,7 @@ def define_lbl_corrections_jpsi_calibration_ntuples(df, helper):
             "Muplus_eta",
             "Muplus_phi",
             "Muplus_charge",
-            "globalidxvint",
+            "globalidxv",
             "Muplus_jacRef",
         ],
     )
@@ -1632,7 +1633,8 @@ def define_lbl_corrections_jpsi_calibration_ntuples(df, helper):
     df = df.Define("Mupluscor_eta", "Mupluscor_Mom4Charge.first.Eta()")
     df = df.Define("Mupluscor_phi", "Mupluscor_Mom4Charge.first.Phi()")
 
-    df = df.Define(
+    df = narf.rdfutils.flexible_define(
+        df,
         "Muminuscor_Mom4Charge",
         helper,
         [
@@ -1640,7 +1642,7 @@ def define_lbl_corrections_jpsi_calibration_ntuples(df, helper):
             "Muminus_eta",
             "Muminus_phi",
             "Muminus_charge",
-            "globalidxvint",
+            "globalidxv",
             "Muminus_jacRef",
         ],
     )

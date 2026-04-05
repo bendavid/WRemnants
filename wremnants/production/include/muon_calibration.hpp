@@ -44,6 +44,79 @@ splitNestedRVec(const ROOT::VecOps::RVec<T> &vec,
   return res;
 }
 
+// class to propagate variations on the module level parameters
+// FIXME refactor to share more code with CVHCorrectorSingle
+template <std::ptrdiff_t NJac = 5> class CVHCorrectorUncertainty {
+public:
+  using V = ROOT::Math::PtEtaPhiMVector;
+  using pair_t = std::pair<V, int>;
+  // use a larger static storage here since the number of parameters can be
+  // large
+  using result_t = ROOT::VecOps::RVecN<pair_t, 200>;
+
+  result_t operator()(float pt, float eta, float phi, int charge,
+                      const RVec<int> &idxs, const RVec<float> &jac) const {
+
+    const Eigen::Matrix<double, 3, 1> curvmom = CurvMom(pt, eta, phi, charge);
+
+    const auto nparms = idxs.size();
+
+    const Eigen::Map<
+        const Eigen::Matrix<float, NJac, Eigen::Dynamic, Eigen::RowMajor>>
+        jacMap(jac.data(), NJac, nparms);
+
+    // using auto avoid materializing the results to minimize the amount
+    // of dynamic allocations
+
+    // effectively the step size for an implicit finite difference gradient on
+    // the kinematics
+    constexpr double dparm = 1e-3;
+
+    // 3x1
+    auto const curvmomcor =
+        (curvmom + dparm * jacMap.template topRows<3>().template cast<double>())
+            .array();
+
+    auto const qopcor = curvmomcor.row(0);
+    auto const lamcor = curvmomcor.row(1).max(-M_PI_2).min(M_PI_2);
+    auto const phicor = curvmomcor.row(2);
+
+    auto const pcor = qopcor.inverse().abs();
+    auto const ispos = (qopcor > 0).template cast<int>();
+    auto const qcor = 2 * ispos - 1;
+
+    auto const ptcor = pcor * lamcor.cos();
+    auto const thetacor = (M_PI_2 - lamcor).max(-M_PI_2).min(M_PI_2);
+    auto const etacor = -log(tan(0.5 * thetacor));
+
+    ROOT::VecOps::RVec<std::pair<V, int>> res;
+    for (std::size_t iparm = 0; iparm < nparms; ++iparm) {
+      if (curvmomcor.col(iparm).isNaN().any() ||
+          curvmomcor.col(iparm).isInf().any()) {
+        // if variation is ill-formed, return nominal
+        res.emplace_back(V(pt, eta, phi, wrem::muon_mass), charge);
+      } else {
+        res.emplace_back(
+            V(ptcor(iparm), etacor(iparm), phicor(iparm), wrem::muon_mass),
+            qcor(iparm));
+      }
+    }
+
+    return res;
+  }
+
+private:
+  Eigen::Matrix<double, 3, 1> CurvMom(float pt, float eta, float phi,
+                                      int charge) const {
+    const double theta = 2. * std::atan(std::exp(-double(eta)));
+    const double lam = M_PI_2 - theta;
+    const double p = double(pt) / std::sin(theta);
+    const double qop = double(charge) / p;
+
+    return Eigen::Matrix<double, 3, 1>(qop, lam, phi);
+  }
+};
+
 template <std::ptrdiff_t NJac = 3, std::ptrdiff_t NReplicas = 0>
 class CVHCorrectorSingle {
 public:
