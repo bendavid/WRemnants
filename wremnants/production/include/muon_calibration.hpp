@@ -48,16 +48,20 @@ splitNestedRVec(const ROOT::VecOps::RVec<T> &vec,
 // FIXME refactor to share more code with CVHCorrectorSingle
 template <std::ptrdiff_t NJac = 5> class CVHCorrectorUncertainty {
 public:
-  using V = ROOT::Math::PtEtaPhiMVector;
-  using pair_t = std::pair<V, int>;
+  using V = ROOT::Math::PxPyPzEVector;
+  // using pair_t = std::pair<V, int>;
   // use a larger static storage here since the number of parameters can be
   // large
-  using result_t = ROOT::VecOps::RVecN<pair_t, 200>;
+  // using result_t = ROOT::VecOps::RVecN<V, 200>;
+  using result_t = ROOT::VecOps::RVec<V>;
 
   result_t operator()(float pt, float eta, float phi, int charge,
                       const RVec<int> &idxs, const RVec<float> &jac) const {
 
-    const Eigen::Matrix<double, 3, 1> curvmom = CurvMom(pt, eta, phi, charge);
+    const double theta = 2. * std::atan(std::exp(-double(eta)));
+    const double lam = M_PI_2 - theta;
+    const double p = double(pt) / std::sin(theta);
+    const double qop = double(charge) / p;
 
     const auto nparms = idxs.size();
 
@@ -72,48 +76,61 @@ public:
     // the kinematics
     constexpr double dparm = 1e-3;
 
-    // 3x1
-    auto const curvmomcor =
-        (curvmom + dparm * jacMap.template topRows<3>().template cast<double>())
-            .array();
+    // 3 x nparms
+    auto const curvjac =
+        dparm * jacMap.template topRows<3>().array().template cast<double>();
 
-    auto const qopcor = curvmomcor.row(0);
-    auto const lamcor = curvmomcor.row(1).max(-M_PI_2).min(M_PI_2);
-    auto const phicor = curvmomcor.row(2);
+    auto const dpt = -qop * cos(lam) / abs(pow(qop, 3)) * curvjac.row(0) -
+                     sin(lam) / abs(qop) * curvjac.row(1);
+    auto const deta = 1. / cos(lam) * curvjac.row(1);
+    auto const dphi = curvjac.row(2);
 
-    auto const pcor = qopcor.inverse().abs();
-    auto const ispos = (qopcor > 0).template cast<int>();
-    auto const qcor = 2 * ispos - 1;
+    auto const ptcor = pt + dpt;
+    auto const etacor = eta + deta;
+    auto const phicor = phi + dphi;
 
-    auto const ptcor = pcor * lamcor.cos();
-    auto const thetacor = (M_PI_2 - lamcor).max(-M_PI_2).min(M_PI_2);
-    auto const etacor = -log(tan(0.5 * thetacor));
-
-    ROOT::VecOps::RVec<std::pair<V, int>> res;
+    // result is a cartesian four vector so that they can be more easily added
+    result_t res;
+    res.reserve(nparms);
     for (std::size_t iparm = 0; iparm < nparms; ++iparm) {
-      if (curvmomcor.col(iparm).isNaN().any() ||
-          curvmomcor.col(iparm).isInf().any()) {
-        // if variation is ill-formed, return nominal
-        res.emplace_back(V(pt, eta, phi, wrem::muon_mass), charge);
-      } else {
-        res.emplace_back(
-            V(ptcor(iparm), etacor(iparm), phicor(iparm), wrem::muon_mass),
-            qcor(iparm));
-      }
+      const ROOT::Math::PtEtaPhiMVector mom4(ptcor(iparm), etacor(iparm),
+                                             phicor(iparm), wrem::muon_mass);
+      res.emplace_back(mom4);
     }
+    return res;
+
+    // // 3x1
+    // auto const curvmomcor =
+    //     (curvmom + dparm * jacMap.template topRows<3>().template
+    //     cast<double>())
+    //         .array();
+
+    // auto const qopcor = curvmomcor.row(0);
+    // auto const lamcor = curvmomcor.row(1).max(-M_PI_2).min(M_PI_2);
+    // auto const phicor = curvmomcor.row(2);
+
+    // auto const pcor = qopcor.inverse().abs();
+    // auto const ispos = (qopcor > 0).template cast<int>();
+    // auto const qcor = 2 * ispos - 1;
+
+    // auto const ptcor = pcor * lamcor.cos();
+    // auto const thetacor = (M_PI_2 - lamcor).max(-M_PI_2).min(M_PI_2);
+    // auto const etacor = -log(tan(0.5 * thetacor));
+
+    // ROOT::VecOps::RVec<std::pair<V, int>> res;
+    // for (std::size_t iparm = 0; iparm < nparms; ++iparm) {
+    //   if (curvmomcor.col(iparm).isNaN().any() ||
+    //       curvmomcor.col(iparm).isInf().any()) {
+    //     // if variation is ill-formed, return nominal
+    //     res.emplace_back(V(pt, eta, phi, wrem::muon_mass), charge);
+    //   } else {
+    //     res.emplace_back(
+    //         V(ptcor(iparm), etacor(iparm), phicor(iparm), wrem::muon_mass),
+    //         qcor(iparm));
+    //   }
+    // }
 
     return res;
-  }
-
-private:
-  Eigen::Matrix<double, 3, 1> CurvMom(float pt, float eta, float phi,
-                                      int charge) const {
-    const double theta = 2. * std::atan(std::exp(-double(eta)));
-    const double lam = M_PI_2 - theta;
-    const double p = double(pt) / std::sin(theta);
-    const double qop = double(charge) / p;
-
-    return Eigen::Matrix<double, 3, 1>(qop, lam, phi);
   }
 };
 
