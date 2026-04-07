@@ -85,17 +85,25 @@ def book_hess_helper(df, nparms, cols):
     return _wrap_lazy_result(res, to_numpy)
 
 
-def book_hess_helper_sparse(df, nparms, cols):
+def book_hess_helper_sparse(df, nparms, cols, fill_fraction=0.1):
     """Book a wrem::HessHelperSparse on ``df`` and return a result whose value
     is a scipy CSR array of shape ``(nparms, nparms)``.
 
     The underlying ``SparseMatrixAtomic`` only stores the upper triangle of a
     symmetric matrix; off-diagonal entries are mirrored to the lower triangle
     in the returned CSR.
+
+    Parameters
+    ----------
+    fill_fraction : float
+        Estimated fraction of the ``nparms * nparms`` matrix entries that
+        will be populated. Used to size the underlying concurrent_flat_map
+        so that most fills hit the initial allocation rather than triggering
+        on-the-fly expansion. Defaults to 0.1.
     """
     import scipy.sparse
 
-    helper = ROOT.wrem.HessHelperSparse(int(nparms))
+    helper = ROOT.wrem.HessHelperSparse(int(nparms), float(fill_fraction))
     res = df.Book(helper, list(cols))
     n = int(nparms)
 

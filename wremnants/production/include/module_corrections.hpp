@@ -129,7 +129,8 @@ public:
 
   using Result_t = SparseMatrixAtomic;
 
-  HessHelperSparse(unsigned int nparms) : grad_(std::make_shared<SparseMatrixAtomic>(nparms, nparms)) {}
+  HessHelperSparse(unsigned int nparms, double fill_fraction = 0.1)
+    : grad_(std::make_shared<SparseMatrixAtomic>(nparms, nparms, fill_fraction)) {}
 
   std::shared_ptr<Result_t> GetResultPtr() const { return grad_; }
 
