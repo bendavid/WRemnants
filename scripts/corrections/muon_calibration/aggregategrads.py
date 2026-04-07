@@ -3,6 +3,11 @@ import os
 import ROOT
 
 import narf.matrix_utils
+import wremnants.production
+from wremnants.production.module_corrections import (
+    book_grad_helper,
+    book_hess_helper_sparse,
+)
 
 # os.environ["XRD_PARALLELEVTLOOP"] = "24"
 # os.environ["ROOT_TTREE_CACHE_PREFETCH"] = "1"
@@ -280,12 +285,12 @@ maxgradient = dj.Max("gradmax")
 print("nparms", nparms)
 # quit()
 
-gradhelperj = ROOT.wrem.GradHelper(nparms)
-hesshelperj = ROOT.wrem.HessHelper(nparms)
-# hesshelperj = ROOT.HessHelperSparse(nparms)
-
-grad = dj.Book(gradhelperj, ["gradv", "globalidxv", "massweightval"])
-hess = dj.Book(hesshelperj, ["hesspackedv", "globalidxv", "massweightval"])
+grad_res = book_grad_helper(
+    dj, nparms, ["gradv", "globalidxv", "massweightval"]
+)
+hess_res = book_hess_helper_sparse(
+    dj, nparms, ["hesspackedv", "globalidxv", "massweightval"]
+)
 
 
 # gradval = grad.GetResult()
@@ -301,45 +306,11 @@ print("maxgradient", maxgradient.GetValue())
 
 # fout = h5py.File("combinedgrads.hdf5", "w", rdcc_nbytes = nparms*8*chunksize*4, rdcc_nslots = nparms//chunksize*10)
 
-fout = h5py.File("combinedgrads.hdf5", "w")
+grad = grad_res.GetValue()  # numpy 1-D array, length nparms
+hess = hess_res.GetValue()  # scipy CSR (nparms, nparms), symmetric
 
-# gradout = fout.create_dataset("grad", (nparms,), dtype=np.float64, compression="lzf")
-# hessout = fout.create_dataset("hess", (nparms, nparms), dtype=np.float64, compression="lzf", chunks=(1, nparms))
+import wums.ioutils
 
-gradout = fout.create_dataset("grad", (nparms,), dtype=np.float64, **hdf5plugin.LZ4())
-# gradout.write_direct(np.asarray(grad.data()))
-gradout[...] = grad
-
-# hessout_idxs0 = fout.create_dataset("hess_idxs0", [hess.size()], dtype=np.int64, **hdf5plugin.LZ4())
-# hessout_idxs0.write_direct(np.asarray(hess.idxs0().data()))
-#
-# hessout_idxs0 = fout.create_dataset("hess_idxs1", [hess.size()], dtype=np.int64, **hdf5plugin.LZ4())
-# hessout_idxs0.write_direct(np.asarray(hess.idxs1().data()))
-#
-# hessout_idxs0 = fout.create_dataset("hess_vals", [hess.size()], dtype=np.float64, **hdf5plugin.LZ4())
-# hessout_idxs0.write_direct(np.asarray(hess.vals().data()))
-
-
-hessout = fout.create_dataset(
-    "hess", (nparms, nparms), dtype=np.float64, **hdf5plugin.LZ4(), chunks=(1, nparms)
-)
-
-
-# assert(0)
-
-hessrow = np.zeros((nparms,), dtype=np.float64)
-
-for i in range(nparms):
-    if i % 1000 == 0:
-        print(i)
-    # if i>61200:
-    # print(i)
-    hess.fill_row(i, hessrow)
-    hessout[i] = hessrow
-    # hess.fill_row(i, hessout[i])
-    # if i < 10:
-    # print(hessout[i])
-
-# hess.fill_row(0, hessrow.data)
-
-# print(hessrow)
+with h5py.File("combinedgrads.hdf5", "w") as fout:
+    wums.ioutils.pickle_dump_h5py("grad", grad, fout)
+    wums.ioutils.pickle_dump_h5py("hess", hess, fout)
