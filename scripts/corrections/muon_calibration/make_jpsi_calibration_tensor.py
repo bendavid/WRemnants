@@ -31,7 +31,6 @@ import time
 import h5py
 import hist
 import numpy as np
-import scipy.sparse
 
 import wums.ioutils
 from rabbit import tensorwriter
@@ -118,41 +117,6 @@ def make_uniform_bkg(template_hist, total):
     h.values()[...] = per_bin
     h.variances()[...] = 0.0
     return h
-
-
-def filter_nan_sparsehist(sh):
-    """Drop non-finite entries from a SparseHist, returning a new SparseHist.
-
-    The source corparm histograms produced by the histmaker contain a small
-    fraction of NaN values from rare numerical edge cases in the per-event
-    reweighting. The TensorWriter checks for finite values during logk
-    computation, so we strip them up-front here.
-    """
-    csr = sh.to_flat_csr(np.float64, flow=True)
-    flat_idx = np.asarray(csr.indices, dtype=np.int64)
-    values = np.asarray(csr.data, dtype=np.float64)
-
-    finite = np.isfinite(values)
-    n_bad = int((~finite).sum())
-    if n_bad == 0:
-        return sh
-
-    print(
-        f"  dropping {n_bad}/{len(values)} non-finite entries from SparseHist"
-    )
-    flat_idx = flat_idx[finite]
-    values = values[finite]
-
-    size = int(np.prod([a.extent for a in sh.axes]))
-    new_csr = scipy.sparse.csr_array(
-        (
-            values.astype(np.float64),
-            flat_idx.astype(np.int64),
-            np.array([0, len(values)], dtype=np.int64),
-        ),
-        shape=(1, size),
-    )
-    return SparseHist(new_csr, list(sh.axes))
 
 
 def add_external_grad_hess(writer, grad_np, hess_csr, param_names):
@@ -275,10 +239,6 @@ def main():
     # nparms nuisances appear in the fit parameter list and can be constrained
     # by the external term. The same name is used in both channels which makes
     # the resulting nuisances fully correlated.
-    print("Filtering NaN entries from per-corparm SparseHists")
-    syst_plus = filter_nan_sparsehist(syst_plus)
-    syst_minus = filter_nan_sparsehist(syst_minus)
-
     print("Booking corparm systematics for ch_plus")
     t0 = time.time()
     writer.add_systematic(
