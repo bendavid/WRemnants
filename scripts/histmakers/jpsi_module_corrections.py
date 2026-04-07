@@ -1,6 +1,6 @@
 import os
 
-os.environ["XRD_NETWORKSTACK"] = "IPv4"
+# os.environ["XRD_NETWORKSTACK"] = "IPv4"
 # os.environ["XRD_PARALLELEVTLOOP"] = "24"
 
 
@@ -25,8 +25,8 @@ parser, initargs = parsing.common_parser(analysis_label)
 args = parser.parse_args()
 
 
-# ROOT.ROOT.EnableImplicitMT()
-ROOT.ROOT.EnableImplicitMT(64)
+ROOT.ROOT.EnableImplicitMT()
+# ROOT.ROOT.EnableImplicitMT(64)
 
 
 # hlt_paths_weights = ['HLT_Dimuon20_Jpsi','HLT_DoubleMu4_JpsiTrk_Displaced','HLT_Dimuon0er16_Jpsi_NoOS_NoVertexing','HLT_Mu7p5_Track2_Jpsi','HLT_Mu7p5_Track3p5_Jpsi','HLT_Dimuon0_Jpsi_Muon','HLT_Dimuon0er16_Jpsi_NoVertexing','HLT_Dimuon10_Jpsi_Barrel','HLT_Dimuon16_Jpsi','HLT_DoubleMu4_3_Jpsi_Displaced','HLT_Mu7p5_Track7_Jpsi']
@@ -44,7 +44,8 @@ axis_phi = hist.axis.Regular(nphibins, 0.0, 2.0 * np.pi, circular=True, name="ph
 
 mmin = 2.92
 mmax = 3.28
-muptmin = 4.0
+# muptmin = 4.0
+muptmin = 6.2
 
 axis_mass = hist.axis.Regular(20, mmin, mmax, name="mass")
 
@@ -118,6 +119,8 @@ def build_graph_base(df, dataset, max_events=-1):
 
     weightsum = df.SumAndCount("weight")
 
+    df = df.Filter("||".join(hlt_paths))
+
     if dataset.is_data:
         df = df.DefinePerSample("nominal_weight", "weight")
     else:
@@ -140,8 +143,10 @@ def build_graph_base(df, dataset, max_events=-1):
 
     df = df.Filter("std::fabs(Mupluscor_eta) < 2.4 && std::fabs(Muminuscor_eta) < 2.4")
 
-    df = df.Filter(f"Mupluscor_pt > {muptmin}")
-    df = df.Filter(f"Muminuscor_pt > {muptmin}")
+    # df = df.Filter(f"Mupluscor_pt > {muptmin}")
+    # df = df.Filter(f"Muminuscor_pt > {muptmin}")
+    df = df.Filter("max(Mupluscor_pt, Muminuscor_pt) > 13.2")
+    df = df.Filter(f"min(Mupluscor_pt, Muminuscor_pt) > {muptmin}")
     df = df.Filter("Jpsicor_pt > 8.2")
 
     df = df.Filter(f"Jpsicor_mass > {mmin} && Jpsicor_mass < {mmax}")
@@ -152,11 +157,13 @@ def build_graph_base(df, dataset, max_events=-1):
 doquantiles = False
 
 if doquantiles:
-    chainideal = ROOT.TChain("tree")
-    dfideal = ROOT.ROOT.RDataFrame(chainideal)
+    # chainideal = ROOT.TChain("tree")
+    # for fname in fideal[:100]:
+    #     chainideal.Add(fname)
+    dfideal = ROOT.ROOT.RDataFrame("tree", fideal[:100])
     ROOT.ROOT.RDF.Experimental.AddProgressBar(dfideal)
+    dfideal, weightsum = build_graph_base(dfideal, dataset_ideal)
 
-    dfideal, weightsum = build_graph_base(dfideal, dataset_ideal, max_events=int(10e6))
 
     axis_pt_quant = hist.axis.Regular(
         5, 0.0, 1.0, underflow=False, overflow=False, name="pt_quant"
@@ -183,7 +190,10 @@ if doquantiles:
     print(ptquants)
 else:
     # [  4.58014965   5.2434926    6.22155809   8.08470631 451.72012329]
-    ptquants = [muptmin, 4.58014965, 5.2434926, 6.22155809, 8.08470631, np.inf]
+    # ptquants = [muptmin, 4.58014965, 5.2434926, 6.22155809, 8.08470631, np.inf]
+
+    #[  8.27470329  12.2907579   14.97298069  18.65261783 234.37707476]
+    ptquants = [6.2, 8.3, 13.2, 15., 19., np.inf]
 
 
 axis_pt = hist.axis.Variable(ptquants, underflow=True, overflow=False, name="pt")
@@ -296,10 +306,12 @@ def build_graph(df, dataset):
             nominal_weight_col="nominal_weight",
         )
 
+        df = df.Define("Muplus_shift_weight_delta", "Muplus_shift_weight - nominal_weight")
+
         hmuplus_corparms = df.HistoBoost(
             "hmuplus_corparms",
             axes=nominal_axes + [axis_corparms],
-            cols=nominal_cols_plus + ["globalidxv", "Muplus_shift_weight"],
+            cols=nominal_cols_plus + ["globalidxv", "Muplus_shift_weight_delta"],
             storage=hist.storage.Double(),
         )
         results.append(hmuplus_corparms)
@@ -318,10 +330,12 @@ def build_graph(df, dataset):
             nominal_weight_col="nominal_weight",
         )
 
+        df = df.Define("Muminus_shift_weight_delta", "Muminus_shift_weight - nominal_weight")
+
         hmuminus_corparms = df.HistoBoost(
             "hmuminus_corparms",
             axes=nominal_axes + [axis_corparms],
-            cols=nominal_cols_minus + ["globalidxv", "Muminus_shift_weight"],
+            cols=nominal_cols_minus + ["globalidxv", "Muminus_shift_weight_delta"],
             storage=hist.storage.Double(),
         )
         results.append(hmuminus_corparms)
@@ -330,8 +344,6 @@ def build_graph(df, dataset):
 
 
 resultdict = narf.build_and_run(datasets, build_graph, event_tree="tree")
-
-print(resultdict)
 
 fout = f"{os.path.basename(__file__).replace('py', 'hdf5')}"
 write_analysis_output(resultdict, fout, args)
