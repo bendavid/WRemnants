@@ -312,7 +312,8 @@ def build_graph(df, dataset):
             "hmuplus_corparms",
             axes=nominal_axes + [axis_corparms],
             cols=nominal_cols_plus + ["globalidxv", "Muplus_shift_weight_delta"],
-            storage=hist.storage.Double(),
+            # storage=hist.storage.Double(),
+            storage = narf.histutils.SparseStorage(0.02),
         )
         results.append(hmuplus_corparms)
 
@@ -336,7 +337,8 @@ def build_graph(df, dataset):
             "hmuminus_corparms",
             axes=nominal_axes + [axis_corparms],
             cols=nominal_cols_minus + ["globalidxv", "Muminus_shift_weight_delta"],
-            storage=hist.storage.Double(),
+            # storage=hist.storage.Double(),
+            storage = narf.histutils.SparseStorage(0.02),
         )
         results.append(hmuminus_corparms)
 
