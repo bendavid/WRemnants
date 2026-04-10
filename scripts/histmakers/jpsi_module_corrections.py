@@ -47,7 +47,17 @@ mmax = 3.28
 # muptmin = 4.0
 muptmin = 6.2
 
-axis_mass = hist.axis.Regular(20, mmin, mmax, name="mass")
+# Continuous quantile-transformed pt and mass axes: the quantile helpers
+# built below map the original pt / mass values to CDF-style values in
+# [0, 1], so the nominal histogram axes are Regular over [0, 1].
+npt_quant = 5
+nmass_quant = 20
+axis_pt_quant = hist.axis.Regular(
+    npt_quant, 0.0, 1.0, underflow=False, overflow=False, name="pt_quant"
+)
+axis_mass_quant = hist.axis.Regular(
+    nmass_quant, 0.0, 1.0, underflow=False, overflow=False, name="mass_quant"
+)
 
 
 def paths_to_filenames(paths):
@@ -154,58 +164,47 @@ def build_graph_base(df, dataset, max_events=-1):
     return df, weightsum
 
 
-doquantiles = False
+# Pre-pass over a subset of the ideal sample to build continuous quantile
+# helpers for pt and mass. The helpers map raw pt / mass values to CDF-style
+# values in [0, 1] via linear interpolation between the learned quantile
+# edges, and are then applied (inside build_graph) to both the nominal muon
+# columns and the shifted-variation RVecs.
+dfideal_quant = ROOT.ROOT.RDataFrame("tree", fideal[:100])
+ROOT.ROOT.RDF.Experimental.AddProgressBar(dfideal_quant)
+dfideal_quant, _ = build_graph_base(dfideal_quant, dataset_ideal)
 
-if doquantiles:
-    # chainideal = ROOT.TChain("tree")
-    # for fname in fideal[:100]:
-    #     chainideal.Add(fname)
-    dfideal = ROOT.ROOT.RDataFrame("tree", fideal[:100])
-    ROOT.ROOT.RDF.Experimental.AddProgressBar(dfideal)
-    dfideal, weightsum = build_graph_base(dfideal, dataset_ideal)
-
-
-    axis_pt_quant = hist.axis.Regular(
-        5, 0.0, 1.0, underflow=False, overflow=False, name="pt_quant"
+quantile_hists_pt, pt_centers_hist, pt_volume_hist = (
+    narf.histutils.build_quantile_hists(
+        dfideal_quant,
+        cols=["Mupluscor_pt"],
+        condaxes=[],
+        quantaxes=[axis_pt_quant],
+        continuous=True,
     )
+)
 
-    count = dfideal.Count()
-    # TODO the dynamic quantile binning can work in principle, but to be compatible with continuous shifts
-    # would need to be modified to return continous quantiles instead of just integers
-    # use simple quantiles for now instead
-    # quantile_hists = narf.histutils.build_quantile_hists(dfideal,
-    #                                               cols = ["Muplus_eta", "Muplus_phi", "Muplus_pt"],
-    #                                               condaxes = [axis_eta, axis_phi],
-    #                                               quantaxes = [axis_pt_quant]
-    # )
-    quantile_hists = narf.histutils.build_quantile_hists(
-        dfideal, cols=["Mupluscor_pt"], condaxes=[], quantaxes=[axis_pt_quant]
+quantile_hists_mass, mass_centers_hist, mass_volume_hist = (
+    narf.histutils.build_quantile_hists(
+        dfideal_quant,
+        cols=["Jpsicor_mass"],
+        condaxes=[],
+        quantaxes=[axis_mass_quant],
+        continuous=True,
     )
+)
 
-    print("neventspost", count.GetValue())
-    print(quantile_hists)
-    ptquants = quantile_hists[0].values()
-    print(ptquants)
-    ptquants = [muptmin, *ptquants[:-1], np.inf]
-    print(ptquants)
-else:
-    # [  4.58014965   5.2434926    6.22155809   8.08470631 451.72012329]
-    # ptquants = [muptmin, 4.58014965, 5.2434926, 6.22155809, 8.08470631, np.inf]
-
-    #[  8.27470329  12.2907579   14.97298069  18.65261783 234.37707476]
-    ptquants = [6.2, 8.3, 13.2, 15., 19., np.inf]
-
-
-axis_pt = hist.axis.Variable(ptquants, underflow=True, overflow=False, name="pt")
-print(axis_pt)
-
-nominal_axes = [axis_eta, axis_phi, axis_pt, axis_mass]
-nominal_cols_plus = ["Mupluscor_eta", "Mupluscor_phi", "Mupluscor_pt", "Jpsicor_mass"]
+nominal_axes = [axis_eta, axis_phi, axis_pt_quant, axis_mass_quant]
+nominal_cols_plus = [
+    "Mupluscor_eta",
+    "Mupluscor_phi",
+    "Mupluscor_pt_quant",
+    "Jpsicor_mass_quant",
+]
 nominal_cols_minus = [
     "Muminuscor_eta",
     "Muminuscor_phi",
-    "Muminuscor_pt",
-    "Jpsicor_mass",
+    "Muminuscor_pt_quant",
+    "Jpsicor_mass_quant",
 ]
 
 
@@ -215,6 +214,18 @@ def build_graph(df, dataset):
     # df = build_graph_base(df, dataset, max_events=int(10e6))
 
     df, weightsum = build_graph_base(df, dataset)
+
+    # Apply the continuous quantile transform to the nominal pt / mass columns
+    # used as axis inputs.
+    df, _, _ = narf.histutils.define_quantile_ints(
+        df, cols=["Mupluscor_pt"], quantile_hists=quantile_hists_pt
+    )
+    df, _, _ = narf.histutils.define_quantile_ints(
+        df, cols=["Muminuscor_pt"], quantile_hists=quantile_hists_pt
+    )
+    df, _, _ = narf.histutils.define_quantile_ints(
+        df, cols=["Jpsicor_mass"], quantile_hists=quantile_hists_mass
+    )
 
     results = []
 
@@ -292,6 +303,18 @@ def build_graph(df, dataset):
             "return ROOT::VecOps::Map(mom4var_jpsi, [](auto const &x){ return x.M(); })",
         )
 
+        # Apply the continuous quantile transform element-wise to the shifted
+        # pt / mass variation RVecs (MapWrapper broadcasts over containers).
+        df, _, _ = narf.histutils.define_quantile_ints(
+            df, cols=["Muplus_pt_var"], quantile_hists=quantile_hists_pt
+        )
+        df, _, _ = narf.histutils.define_quantile_ints(
+            df, cols=["Muminus_pt_var"], quantile_hists=quantile_hists_pt
+        )
+        df, _, _ = narf.histutils.define_quantile_ints(
+            df, cols=["Jpsi_mass_var"], quantile_hists=quantile_hists_mass
+        )
+
         df = narf.histutils.shifted_smeared_hist_weight(
             df,
             "Muplus_shift_weight",
@@ -300,8 +323,8 @@ def build_graph(df, dataset):
             shifted_cols=[
                 "Muplus_eta_var",
                 "Muplus_phi_var",
-                "Muplus_pt_var",
-                "Jpsi_mass_var",
+                "Muplus_pt_var_quant",
+                "Jpsi_mass_var_quant",
             ],
             nominal_weight_col="nominal_weight",
         )
@@ -325,8 +348,8 @@ def build_graph(df, dataset):
             shifted_cols=[
                 "Muminus_eta_var",
                 "Muminus_phi_var",
-                "Muminus_pt_var",
-                "Jpsi_mass_var",
+                "Muminus_pt_var_quant",
+                "Jpsi_mass_var_quant",
             ],
             nominal_weight_col="nominal_weight",
         )
@@ -346,6 +369,13 @@ def build_graph(df, dataset):
 
 
 resultdict = narf.build_and_run(datasets, build_graph, event_tree="tree")
+
+# Also persist the quantile-transform bin centers and volumes so downstream
+# analysis can map the [0, 1] quantile axes back to the original pt / mass.
+resultdict["quantile_pt_centers"] = pt_centers_hist
+resultdict["quantile_pt_volume"] = pt_volume_hist
+resultdict["quantile_mass_centers"] = mass_centers_hist
+resultdict["quantile_mass_volume"] = mass_volume_hist
 
 fout = f"{os.path.basename(__file__).replace('py', 'hdf5')}"
 write_analysis_output(resultdict, fout, args)
