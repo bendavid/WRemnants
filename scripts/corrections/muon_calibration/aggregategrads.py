@@ -32,24 +32,29 @@ import narf.lumitools
 
 # hlt_paths = ['HLT_Dimuon20_Jpsi','HLT_DoubleMu4_JpsiTrk_Displaced','HLT_Dimuon0er16_Jpsi_NoOS_NoVertexing','HLT_Mu7p5_Track2_Jpsi','HLT_Mu7p5_Track3p5_Jpsi','HLT_Dimuon0_Jpsi_Muon','HLT_Dimuon0er16_Jpsi_NoVertexing','HLT_Dimuon10_Jpsi_Barrel','HLT_Dimuon16_Jpsi','HLT_DoubleMu4_3_Jpsi_Displaced','HLT_Mu7p5_Track7_Jpsi']
 
+# hlt_paths = [
+#     "HLT_Dimuon20_Jpsi",
+#     "HLT_DoubleMu4_JpsiTrk_Displaced",
+#     "HLT_Dimuon0er16_Jpsi_NoOS_NoVertexing",
+#     "HLT_Mu7p5_Track2_Jpsi",
+#     "HLT_Mu7p5_Track3p5_Jpsi",
+#     "HLT_Dimuon0er16_Jpsi_NoVertexing",
+#     "HLT_Dimuon10_Jpsi_Barrel",
+#     "HLT_Dimuon16_Jpsi",
+#     "HLT_DoubleMu4_3_Jpsi_Displaced",
+#     "HLT_Mu7p5_Track7_Jpsi",
+# ]
+
 hlt_paths = [
     "HLT_Dimuon20_Jpsi",
-    "HLT_DoubleMu4_JpsiTrk_Displaced",
-    "HLT_Dimuon0er16_Jpsi_NoOS_NoVertexing",
-    "HLT_Mu7p5_Track2_Jpsi",
-    "HLT_Mu7p5_Track3p5_Jpsi",
-    "HLT_Dimuon0er16_Jpsi_NoVertexing",
-    "HLT_Dimuon10_Jpsi_Barrel",
-    "HLT_Dimuon16_Jpsi",
-    "HLT_DoubleMu4_3_Jpsi_Displaced",
-    "HLT_Mu7p5_Track7_Jpsi",
 ]
 
 
 chainjpsi = ROOT.TChain("tree")
-chainjpsi.Add(
-    "/scratch/submit/cms/wmass/muoncal2/MuonGunUL2016_v719_RecJpsiPythiaPhotosPt8toInf_quality_novtx_noconstraint_grads/230112_043259/0000/*.root"
-)
+# chainjpsi.Add(
+#     "/scratch/submit/cms/wmass/muoncal2/MuonGunUL2016_v719_RecJpsiPythiaPhotosPt8toInf_quality_novtx_noconstraint_grads/230112_043259/0000/*.root"
+# )
+chainjpsi.Add("root://eoscms.cern.ch//store/group/phys_smp/ec/bendavid/muoncal/JPsiToMuMu_Pt8toInf-pythia8/MuonGunUL2016_v719_RecJpsiPythiaPhotosPt8toInf_quality_novtx_noconstraint_grads/230112_043259/0000/*.root")
 
 wremdir = os.environ["WREM_BASE"]
 
@@ -83,7 +88,7 @@ ROOT.RDF.Experimental.AddProgressBar(dj)
 
 dj = dj.Filter(jsonhelper, ["run", "lumi"], "jsonfilter")
 
-# dj = dj.Filter(" || ".join(hlt_paths))
+dj = dj.Filter(" || ".join(hlt_paths))
 
 
 # dj = dj.Filter("Mupluscons_pt > 1.1 && Muminuscons_pt > 1.1 && Muplus_nvalid > 3 && Muplus_nvalidpixel>0 && Muminus_nvalid > 3 && Muminus_nvalidpixel > 0 && Jpsi_mass>2.8 && Jpsi_mass<3.4");
@@ -155,7 +160,9 @@ dj = dj.Filter(jsonhelper, ["run", "lumi"], "jsonfilter")
 
 dj = dj.Filter("Jpsi_pt > 8.2")
 
-dj = dj.Filter("Muplus_pt > 4.0 && Muminus_pt > 4.0")
+# dj = dj.Filter("Muplus_pt > 4.0 && Muminus_pt > 4.0")
+dj = dj.Filter("max(Muplus_pt, Muminus_pt) > 13.2")
+dj = dj.Filter("min(Muplus_pt, Muminus_pt) > 6.2")
 
 dj = dj.Filter(
     "Muplus_nvalid > 5 && Muplus_nvalidpixel>0 && Muminus_nvalid > 5 && Muminus_nvalidpixel > 0 && Jpsi_mass > 2.92 && Jpsi_mass < 3.28"
@@ -308,6 +315,11 @@ print("maxgradient", maxgradient.GetValue())
 
 grad = grad_res.GetValue()  # numpy 1-D array, length nparms
 hess = hess_res.GetValue()  # scipy CSR (nparms, nparms), symmetric
+
+dx = 1e-3
+
+grad *= dx
+hess *= dx*dx
 
 import wums.ioutils
 
