@@ -192,7 +192,7 @@ def main():
     # corparm deltas can be applied with as_difference=True.
     writer = tensorwriter.TensorWriter(
         sparse=True,
-        systematic_type="normal",
+        systematic_type="log_normal",
     )
 
     # Channels: positive and negative muon kinematics
@@ -248,7 +248,7 @@ def main():
         "ch_plus",
         mirror=True,
         as_difference=True,
-        constrained=False,
+        constrained=True,
         groups=["corparms"],
     )
     print(f"  done in {time.time() - t0:.1f}s")
@@ -262,7 +262,7 @@ def main():
         "ch_minus",
         mirror=True,
         as_difference=True,
-        constrained=False,
+        constrained=True,
         groups=["corparms"],
     )
     print(f"  done in {time.time() - t0:.1f}s")
