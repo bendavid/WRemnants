@@ -670,6 +670,38 @@ def make_jpsi_crctn_unc_helper(
     return helper
 
 
+def make_parameterized_scale_shift_helper(
+    dA=1e-4,
+    de=1e-3,
+    dM=1e-5,
+    eta_axis=None,
+):
+    """Create a ParameterizedScaleShiftHelper for simple A, e, M scale shifts.
+
+    Returns shifted PxPyPzEVector 4-vectors for each (eta_bin, param)
+    combination.  Output tensor shape: (NEtaBins, 3) where dim 1 is [A, e, M].
+    Only the "up" variation is stored.  Input signature: (pt, eta, phi, charge).
+    """
+    if eta_axis is None:
+        eta_axis = hist.axis.Regular(
+            24, -2.4, 2.4, name="eta", underflow=False, overflow=False
+        )
+
+    neta = eta_axis.size
+    eta_axis_cpp = narf.histutils.convert_axis(eta_axis)
+
+    helper = ROOT.wrem.make_parameterized_scale_shift_helper[neta](
+        dA, de, dM, ROOT.std.move(eta_axis_cpp)
+    )
+
+    axis_AeM = hist.axis.StrCategory(
+        ["A", "e", "M"], name="param", overflow=False,
+        metadata={"dA": dA, "de": de, "dM": dM},
+    )
+    helper.tensor_axes = (eta_axis, axis_AeM)
+    return helper
+
+
 def make_dummy_closure_uncertainty_helper(neta=24, etalow=-2.4, etahigh=2.4):
 
     n_scale_params = 3

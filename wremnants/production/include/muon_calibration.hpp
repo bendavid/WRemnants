@@ -17,6 +17,7 @@
 
 // from narf
 #include "histutils.hpp"
+#include "rdfutils.hpp"
 #include "tfliteutils.hpp"
 #include "traits.hpp"
 
@@ -55,6 +56,16 @@ public:
   // using result_t = ROOT::VecOps::RVecN<V, 200>;
   using result_t = ROOT::VecOps::RVec<V>;
 
+  // dparm is the step size for the implicit finite-difference gradient on
+  // the kinematics. The default of 1e-3 matches the previously hardcoded
+  // value; downstream code that histograms the resulting variations should
+  // scale by this same value when interpreting the variations as
+  // derivatives.
+  CVHCorrectorUncertainty() = default;
+  explicit CVHCorrectorUncertainty(double dparm) : dparm_(dparm) {}
+
+  double dparm() const { return dparm_; }
+
   result_t operator()(float pt, float eta, float phi, int charge,
                       const RVec<int> &idxs, const RVec<float> &jac) const {
 
@@ -72,13 +83,9 @@ public:
     // using auto avoid materializing the results to minimize the amount
     // of dynamic allocations
 
-    // effectively the step size for an implicit finite difference gradient on
-    // the kinematics
-    constexpr double dparm = 1e-3;
-
     // 3 x nparms
     auto const curvjac =
-        dparm * jacMap.template topRows<3>().array().template cast<double>();
+        -dparm_ * jacMap.template topRows<3>().array().template cast<double>();
 
     auto const dpt = -qop * cos(lam) / abs(pow(qop, 3)) * curvjac.row(0) -
                      sin(lam) / abs(qop) * curvjac.row(1);
@@ -132,6 +139,9 @@ public:
 
     return res;
   }
+
+private:
+  double dparm_ = 1e-3;
 };
 
 template <std::ptrdiff_t NJac = 3, std::ptrdiff_t NReplicas = 0>
@@ -2183,5 +2193,67 @@ public:
 private:
   std::shared_ptr<const HIST> hist_;
 };
+
+template <std::size_t NEtaBins, typename EtaAxis>
+class ParameterizedScaleShiftHelperImpl {
+
+public:
+  using vec_t = ROOT::Math::PxPyPzEVector;
+  using out_tensor_t =
+      Eigen::TensorFixedSize<vec_t, Eigen::Sizes<NEtaBins, 3>>;
+
+  ParameterizedScaleShiftHelperImpl(double dA, double de, double dM,
+                                    EtaAxis &&eta_axis)
+      : dA_(dA), de_(de), dM_(dM),
+        eta_axis_(std::make_shared<const EtaAxis>(std::move(eta_axis))) {}
+
+  // Returns shifted 4-vectors for each (eta_bin, param) combination.
+  // Dim 0: eta bin, Dim 1: 0 = A, 1 = e, 2 = M
+  // Only the "up" variation (parameter shifted by +d{A,e,M}).
+  // Entries where the muon is not in the corresponding eta bin equal the
+  // nominal 4-vector.
+  out_tensor_t operator()(double pt, float eta, float phi, int charge) const {
+    auto make_vec = [eta, phi](double pt_val) -> vec_t {
+      return vec_t(ROOT::Math::PtEtaPhiMVector(pt_val, eta, phi, muon_mass));
+    };
+
+    out_tensor_t res;
+    res.setConstant(make_vec(pt));
+
+    const int ieta_raw = eta_axis_->index(eta);
+    if (ieta_raw < 0 || ieta_raw >= static_cast<int>(NEtaBins)) {
+      return res;
+    }
+    const std::size_t ieta = ieta_raw;
+    const double recoK = 1.0 / pt;
+
+    // A variation: recoKUnc = dA * recoK
+    res(ieta, 0) = make_vec(1.0 / (recoK + dA_ * recoK));
+
+    // e variation: recoKUnc = -de * recoK^2
+    res(ieta, 1) = make_vec(1.0 / (recoK + (-de_ * recoK * recoK)));
+
+    // M variation: recoKUnc = charge * dM
+    res(ieta, 2) = make_vec(1.0 / (recoK + charge * dM_));
+
+    return res;
+  }
+
+private:
+  double dA_, de_, dM_;
+  std::shared_ptr<const EtaAxis> eta_axis_;
+};
+
+template <std::size_t NEtaBins, typename EtaAxis>
+using ParameterizedScaleShiftHelper =
+    narf::MapWrapper<ParameterizedScaleShiftHelperImpl<NEtaBins, EtaAxis>>;
+
+template <std::size_t NEtaBins, typename EtaAxis>
+ParameterizedScaleShiftHelper<NEtaBins, std::decay_t<EtaAxis>>
+make_parameterized_scale_shift_helper(double dA, double de, double dM,
+                                      EtaAxis &&eta_axis) {
+  return ParameterizedScaleShiftHelper<NEtaBins, std::decay_t<EtaAxis>>(
+      dA, de, dM, std::forward<EtaAxis>(eta_axis));
+}
 
 } // namespace wrem
