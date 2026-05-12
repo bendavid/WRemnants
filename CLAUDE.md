@@ -14,18 +14,14 @@ If not inside the container, prefix commands with `scripts/ci/run_with_singulari
 scripts/ci/run_with_singularity.sh bash -c "source setup.sh && <command>"
 ```
 
-If already inside the container, source `setup.sh` before running any commands:
-
-```bash
-source setup.sh
-```
+If already inside the container, then commands can be run directly.
 
 ## Verification
 
 To verify the environment is correctly set up, run:
 
 ```bash
-source setup.sh && python scripts/tests/testenv.py
+python scripts/tests/testenv.py
 ```
 
 Expected output ends with:
