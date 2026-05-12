@@ -316,10 +316,10 @@ print("maxgradient", maxgradient.GetValue())
 grad = grad_res.GetValue()  # numpy 1-D array, length nparms
 hess = hess_res.GetValue()  # scipy CSR (nparms, nparms), symmetric
 
-dx = 1e-3
+# underlying gradients correspond to a chi^2, so multiply by 0.5 for the Gaussian negative log likelihood
 
-grad *= dx
-hess *= dx*dx
+grad *= 0.5
+hess *= 0.5
 
 import wums.ioutils
 
