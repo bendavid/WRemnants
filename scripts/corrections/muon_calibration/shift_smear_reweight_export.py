@@ -471,8 +471,15 @@ def _build_wrapper(checkpoint_path):
     )
     if arch != "polyhead":
         raise SystemExit(
-            f"--checkpoint arch={arch!r}; only 'polyhead' is supported. "
-            "For --arch mlp, use train_shift_reweight_mlp_export.py."
+            f"--checkpoint arch={arch!r}; only 'polyhead' is supported "
+            "by this exporter. For 'mlp' / 'mlp-factored' arches use "
+            "the combined-MLP exporter "
+            "(scripts/corrections/muon_calibration/"
+            "train_shift_reweight_mlp_export.py for legacy shift-only "
+            "MLP; or the bench_mlp_combined_export.py pattern adapted "
+            "to whichever head class the checkpoint carries — "
+            "ReweightMLP_B for 'mlp' or ReweightMLPFactored for "
+            "'mlp-factored')."
         )
     if stats is None:
         # Fall back to preproc.json next to the checkpoint.

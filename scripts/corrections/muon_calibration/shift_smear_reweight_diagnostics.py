@@ -63,12 +63,28 @@ from train_shift_smear_reweight import (  # noqa: E402
     _sigma_pack_indices,
     GaussBaseline,
     ReweightMLP_B,
+    ReweightMLPFactored,
     ReweightPolyhead,
     gauss_baseline_log_r,
 )
 
 
 TARGET_NAMES = ["r_kappa", "dlambda", "dphi"]
+
+
+# Default mapping from snapshot ``source_id`` integers to display labels.
+# The snapshot script assigns:
+#   J/ψ:  base = 0  (Pt8toInf), base+1 = 1 (Pt0to8)
+#   W/Z:  base = 100, then incremented by getDatasets() ordering.
+# Z→μμ is conventionally the first W/Z entry, hence source_id = 100.
+# Anything else falls back to ``source <id>``; the user can override or
+# extend via ``--cmp-source-labels``.
+DEFAULT_SOURCE_LABELS = {
+    0: r"J/$\psi$ (p$_T$>8 GeV)",
+    1: r"J/$\psi$ (p$_T$<8 GeV)",
+    100: r"Z$\to\mu\mu$",
+}
+ZMUMU_SOURCE_ID = 100
 
 
 def _tic():
@@ -205,6 +221,64 @@ def parse_args():
         help="Number of events to use for the optional "
         "polyhead_pred_vs_flow plot. Smaller = faster.",
     )
+    # ------------------------------------------------------------------
+    # Per-source target-distribution comparison window.
+    # Datasets with different kinematics can't be compared at the
+    # marginal level, so restrict the comparison to a phase-space cell
+    # in (pt_gen, eta_gen, charge_gen); phi_gen is integrated.
+    # ------------------------------------------------------------------
+    p.add_argument(
+        "--cmp-pt-min", type=float, default=25.0,
+        help="Lower gen-pT (GeV) edge of the (deliberately narrow) "
+        "phase-space window used for the per-source target-distribution "
+        "comparison plot.",
+    )
+    p.add_argument(
+        "--cmp-pt-max", type=float, default=30.0,
+        help="Upper gen-pT (GeV) edge of the cmp window.",
+    )
+    p.add_argument(
+        "--cmp-eta-min", type=float, default=0.0,
+        help="Lower gen-η edge of the cmp window.",
+    )
+    p.add_argument(
+        "--cmp-eta-max", type=float, default=0.4,
+        help="Upper gen-η edge of the cmp window.",
+    )
+    p.add_argument(
+        "--cmp-charge", choices=["pos", "neg", "both", "each"],
+        default="each",
+        help="Charge selection in the cmp window. ``each`` (default) "
+        "produces a separate plot for q>0 and q<0; ``both`` integrates "
+        "over charge; ``pos`` / ``neg`` produce one plot for the chosen "
+        "charge only.",
+    )
+    p.add_argument(
+        "--cmp-source-labels", nargs="+", default=None,
+        help="Optional per-source labels of the form ``id:label`` "
+        "(e.g. ``0:J/psi 100:Zmumu``). Sources without a mapping use "
+        "their integer id.",
+    )
+    p.add_argument(
+        "--cmp-ref-source", type=int, default=ZMUMU_SOURCE_ID,
+        help="Reference source_id for the ratio panel of the per-source "
+        "comparison plot. Defaults to the Z→μμ convention (100); falls "
+        "back to the smallest source_id present if absent in the window.",
+    )
+    p.add_argument(
+        "--cmp-max-events", type=int, default=-1,
+        help="Cap on raw muon rows *read* for the per-source target-"
+        "distribution plots only. -1 (default) = all available rows. "
+        "These plots stream shards in parallel and apply the (pt, eta) "
+        "window per-shard, so peak memory is bounded by the kept-row "
+        "count, not the full dataset — typically far smaller than the "
+        "inference-side caps (--n-events / --max-events).",
+    )
+    p.add_argument(
+        "--cmp-workers", type=int, default=8,
+        help="Parallel shard readers (thread pool) for the per-source "
+        "comparison loader.",
+    )
     return p.parse_args()
 
 
@@ -253,6 +327,30 @@ def load_model_from_checkpoint(checkpoint_path: str, device):
             head_layers=int(cfg.get("head_layers", 2)),
             activation=activation_cls,
             shift_only=shift_only,
+            gauss_baseline=gauss_baseline,
+        )
+    elif arch == "mlp-factored":
+        # Structurally factored MLP head. ``detach_pure_{shift,smear}_in_joint``
+        # affect the factorisation form (whether A depends on σ_pack,
+        # whether B depends on u, whether a separate cross head C
+        # exists), so they must be threaded through at construction so
+        # the state_dict shapes match.
+        model = ReweightMLPFactored(
+            n_features=int(cfg["n_features"]),
+            n_cond=int(cfg["n_cond"]),
+            d_emb=int(cfg.get("d_emb", 32)),
+            trunk_hidden=int(cfg.get("trunk_hidden", 64)),
+            trunk_layers=int(cfg.get("trunk_layers", 2)),
+            head_hidden=int(cfg.get("head_hidden", 32)),
+            head_layers=int(cfg.get("head_layers", 2)),
+            activation=activation_cls,
+            shift_only=bool(cfg.get("shift_only", False)),
+            detach_pure_shift_in_joint=bool(
+                cfg.get("detach_pure_shift_in_joint", False)
+            ),
+            detach_pure_smear_in_joint=bool(
+                cfg.get("detach_pure_smear_in_joint", False)
+            ),
             gauss_baseline=gauss_baseline,
         )
     elif arch == "polyhead":
@@ -333,7 +431,7 @@ def predict_log_r_axis(
     u_buf[:, tcol] = float(u_axis_value)
     sigma_vec_buf[:, tcol] = float(sigma_axis_value)
 
-    if arch == "mlp":
+    if arch in ("mlp", "mlp-factored"):
         # Σ_pack for u-axis-aligned σ is zero except for the (tcol,tcol)
         # entry = sigma_axis_value². Compute via the standard helper so
         # the indexing matches the model's expectations.
@@ -354,7 +452,7 @@ def predict_log_r_axis(
         u = u_buf[:bsz]
         sigma_vec = sigma_vec_buf[:bsz]
 
-        if arch == "mlp":
+        if arch in ("mlp", "mlp-factored"):
             sigma_pack = sigma_pack_buf[:bsz]
             u_zero = torch.zeros_like(u)
             sp_zero = torch.zeros_like(sigma_pack)
@@ -405,7 +503,7 @@ def predict_log_r_perevent(
     n_features = y_dev.shape[1]
     out = np.empty(N, dtype=np.float32)
 
-    if arch == "mlp":
+    if arch in ("mlp", "mlp-factored"):
         # Build Σ_pack from per-event σ_vec via the standard outer-
         # product packing. Done per-batch to bound memory.
         n_sigma_pack = sigma_pack_iu.shape[0]
@@ -418,7 +516,7 @@ def predict_log_r_perevent(
         u = u_dev[s:e]
         sigma_vec = sigma_dev[s:e]
 
-        if arch == "mlp":
+        if arch in ("mlp", "mlp-factored"):
             sigma_pack = torch.zeros(
                 bsz, n_sigma_pack, device=device, dtype=y.dtype,
             )
@@ -1477,6 +1575,462 @@ def plot_polyhead_axis_logw_error_vs_flow(
 
 
 # ============================================================================
+# Per-source target-distribution comparison
+# ============================================================================
+
+def _parse_source_labels(spec):
+    """Parse ``["0:Jpsi", "100:Zmumu"]`` into ``{0: "Jpsi", 100: "Zmumu"}``."""
+    if spec is None:
+        return {}
+    out = {}
+    for entry in spec:
+        if ":" not in entry:
+            raise ValueError(
+                f"--cmp-source-labels entry {entry!r} missing ':' "
+                "separator; expected ``id:label``"
+            )
+        sid_str, lbl = entry.split(":", 1)
+        out[int(sid_str)] = lbl
+    return out
+
+
+def _read_manifest_source_labels(paths):
+    """Locate the shard ``manifest.json`` reachable from ``paths`` and
+    return its ``source_labels`` map as ``{int: str}``.
+
+    Recognises three forms of input path:
+      * a directory containing ``manifest.json`` (the standard shard dir);
+      * an explicit ``manifest.json`` file;
+      * a shard file -- in which case the sibling ``manifest.json`` in
+        the containing directory is used.
+
+    Last-write-wins across multiple inputs; missing files are skipped
+    silently so older shards without the labels block still work.
+    """
+    labels: dict[int, str] = {}
+    seen: set[str] = set()
+    for p in paths:
+        mfp = None
+        if os.path.isdir(p):
+            cand = os.path.join(p, "manifest.json")
+            if os.path.exists(cand):
+                mfp = cand
+        elif os.path.isfile(p):
+            if os.path.basename(p) == "manifest.json":
+                mfp = p
+            else:
+                cand = os.path.join(
+                    os.path.dirname(os.path.abspath(p)), "manifest.json",
+                )
+                if os.path.exists(cand):
+                    mfp = cand
+        if mfp is None or mfp in seen:
+            continue
+        seen.add(mfp)
+        try:
+            with open(mfp) as f:
+                manifest = json.load(f)
+        except (OSError, json.JSONDecodeError) as exc:
+            print(f"  warning: failed to read {mfp}: {exc!r}")
+            continue
+        for k, v in (manifest.get("source_labels") or {}).items():
+            try:
+                labels[int(k)] = str(v)
+            except (ValueError, TypeError):
+                continue
+    return labels
+
+
+def _load_per_source_window(
+    paths, *, pt_min, pt_max, eta_min, eta_max,
+    max_events=-1, n_workers=8,
+):
+    """Parallel streaming loader specialised for the per-source target-
+    distribution plots.
+
+    Reads Arrow IPC shards via a thread pool (pyarrow IO and numpy
+    vector ops release the GIL during the heavy work), applies the
+    ``(pt_gen, eta_gen)`` window per shard, and computes the three
+    target columns inline. Peak memory is bounded by the *kept* rows
+    across all shards, not the full dataset — so a narrow window over
+    the full statistics is cheap. Charge is not filtered here: the
+    caller may split by charge in the rendering pass without reloading.
+
+    Returns ``(data, rows_read, rows_kept)`` where ``data`` is either
+    ``None`` (no kept rows) or a 5-tuple of arrays
+    ``(target [N,3], weight [N], source_id [N], kappa_gen [N],
+    eta_gen [N])``. ``rows_read`` is the total raw rows pulled off
+    disk (after any ``max_events`` truncation); ``rows_kept`` counts
+    those that passed the (pt, eta, finite, w>0) mask.
+    """
+    from concurrent.futures import ThreadPoolExecutor, as_completed
+    import pyarrow as pa
+    import pyarrow.ipc as ipc
+
+    # Reuse the shard-directory expansion already used by load_ntuples.
+    from train_muon_response_flow import _expand_input_paths
+
+    paths = _expand_input_paths(paths)
+    if not paths:
+        raise ValueError(
+            "_load_per_source_window: no input paths after expansion"
+        )
+    if not all(p.endswith(".arrow") for p in paths):
+        raise ValueError(
+            "_load_per_source_window: only Arrow IPC shards (.arrow) "
+            "or a shard directory with manifest.json are supported"
+        )
+
+    _MAGIC = b"ARROW1"
+
+    def _read_one(p):
+        with pa.memory_map(p, "r") as f:
+            head = f.read(len(_MAGIC))
+            f.seek(0)
+            if head == _MAGIC:
+                t = ipc.open_file(f).read_all()
+            else:
+                t = ipc.open_stream(f).read_all()
+        eta_r = t["eta_reco"].to_numpy().astype(np.float64)
+        phi_r = t["phi_reco"].to_numpy().astype(np.float64)
+        eta_g = t["eta_gen"].to_numpy().astype(np.float64)
+        phi_g = t["phi_gen"].to_numpy().astype(np.float64)
+        kappa_r = t["kappa_reco"].to_numpy().astype(np.float64)
+        kappa_g = t["kappa_gen"].to_numpy().astype(np.float64)
+        w_raw = t["nominal_weight"].to_numpy().astype(np.float64)
+        sid = t["source_id"].to_numpy().astype(np.int32, copy=False)
+        n_block = eta_r.shape[0]
+
+        abs_k = np.fabs(kappa_g)
+        safe_k = np.where(abs_k > 0, abs_k, np.nan)
+        pt_g = 1.0 / (safe_k * np.cosh(eta_g))
+        mask = (
+            np.isfinite(pt_g)
+            & (pt_g >= pt_min) & (pt_g <= pt_max)
+            & (eta_g >= eta_min) & (eta_g <= eta_max)
+            & np.isfinite(kappa_r) & np.isfinite(kappa_g)
+            & (w_raw > 0.0)
+        )
+        if not mask.any():
+            return None, n_block
+        eta_r = eta_r[mask]; phi_r = phi_r[mask]
+        eta_g = eta_g[mask]; phi_g = phi_g[mask]
+        kappa_r = kappa_r[mask]; kappa_g = kappa_g[mask]
+        w = w_raw[mask]; sid = sid[mask]
+
+        # Inline target columns from compute_targets_and_conditioning,
+        # restricted to the masked rows so we never form full-shard
+        # target arrays.
+        lam_r = np.arctan(np.sinh(eta_r))
+        lam_g = np.arctan(np.sinh(eta_g))
+        r_kappa = kappa_r / kappa_g - 1.0
+        dphi = np.arctan2(
+            np.sin(phi_r - phi_g), np.cos(phi_r - phi_g),
+        )
+        dlambda = lam_r - lam_g
+        target = np.stack([r_kappa, dlambda, dphi], axis=1)
+
+        return (
+            (target, w.astype(np.float32), sid, kappa_g, eta_g),
+            n_block,
+        )
+
+    blocks = []
+    rows_read = 0
+    rows_kept = 0
+    with ThreadPoolExecutor(max_workers=max(1, int(n_workers))) as ex:
+        futures = {ex.submit(_read_one, p): p for p in paths}
+        for fut in as_completed(futures):
+            try:
+                res, n_block = fut.result()
+            except Exception as exc:  # noqa: BLE001
+                print(
+                    f"[per-source loader] shard {futures[fut]} failed: "
+                    f"{exc!r}"
+                )
+                continue
+            rows_read += n_block
+            if res is not None:
+                blocks.append(res)
+                rows_kept += res[0].shape[0]
+            if max_events > 0 and rows_read >= max_events:
+                for f in futures:
+                    f.cancel()
+                break
+
+    if not blocks:
+        return None, rows_read, 0
+
+    target = np.concatenate([b[0] for b in blocks], axis=0)
+    w = np.concatenate([b[1] for b in blocks])
+    sid = np.concatenate([b[2] for b in blocks])
+    kappa_g = np.concatenate([b[3] for b in blocks])
+    eta_g = np.concatenate([b[4] for b in blocks])
+    return (target, w, sid, kappa_g, eta_g), rows_read, rows_kept
+
+
+def plot_per_source_target_distributions(
+    target, w_event, source_id, kappa_g, eta_g, args, out_dir,
+):
+    """Compare the marginal target distributions across datasets
+    (distinct ``source_id`` values) inside a phase-space window in
+    (pt_gen, eta_gen, charge_gen). phi_gen is integrated.
+
+    Per target component the top row shows weighted, area-normalised
+    histograms (one curve per source); the bottom row is the bin-wise
+    ratio to a reference source. Bin edges are taken from the
+    pooled-sample quantiles inside the window so all sources share the
+    same binning.
+    """
+    target = np.asarray(target)
+    n_features = target.shape[1]
+    target_components = list(range(min(n_features, len(TARGET_NAMES), 3)))
+
+    # Reconstruct pt_gen, charge_gen from kappa_gen + eta_gen.
+    kappa_g = np.asarray(kappa_g, dtype=np.float64)
+    eta_g = np.asarray(eta_g, dtype=np.float64)
+    abs_k = np.fabs(kappa_g)
+    safe_k = np.where(abs_k > 0, abs_k, np.nan)
+    pt_g = 1.0 / (safe_k * np.cosh(eta_g))
+    charge_g = np.sign(kappa_g).astype(np.int8)
+
+    # Phase-space window (pt, eta) — shared across charge modes.
+    pt_min = float(args.cmp_pt_min)
+    pt_max = float(args.cmp_pt_max)
+    eta_min = float(args.cmp_eta_min)
+    eta_max = float(args.cmp_eta_max)
+    base_mask = (
+        np.isfinite(pt_g)
+        & (pt_g >= pt_min) & (pt_g <= pt_max)
+        & (eta_g >= eta_min) & (eta_g <= eta_max)
+    )
+
+    # Charge modes: ``each`` runs pos and neg in separate plots.
+    if args.cmp_charge == "each":
+        charge_modes = ["pos", "neg"]
+    else:
+        charge_modes = [args.cmp_charge]
+
+    # Label precedence (lowest -> highest):
+    #   1. hard-coded DEFAULT_SOURCE_LABELS    -- last-resort fallback
+    #   2. manifest.json's ``source_labels``   -- the authoritative
+    #      id-to-sample mapping written by the snapshot/sharder pipeline
+    #   3. ``--cmp-source-labels`` CLI args    -- user override
+    label_map = dict(DEFAULT_SOURCE_LABELS)
+    label_map.update(_read_manifest_source_labels(args.input_files))
+    label_map.update(_parse_source_labels(args.cmp_source_labels))
+    def _source_label(sid):
+        return label_map.get(int(sid), f"source {int(sid)}")
+
+    w_event = np.asarray(w_event, dtype=np.float64)
+    source_id = np.asarray(source_id)
+
+    n_cols = len(target_components)
+
+    for charge_mode in charge_modes:
+        if charge_mode == "pos":
+            mask = base_mask & (charge_g > 0)
+        elif charge_mode == "neg":
+            mask = base_mask & (charge_g < 0)
+        else:
+            mask = base_mask
+
+        n_in = int(mask.sum())
+        if n_in == 0:
+            print(
+                "[per-source target distributions] window is empty "
+                f"(pt∈[{pt_min},{pt_max}], η∈[{eta_min},{eta_max}], "
+                f"charge={charge_mode}); skipping"
+            )
+            continue
+
+        target_w = target[mask]
+        w_w = w_event[mask]
+        src_w = source_id[mask]
+
+        unique_sources = np.unique(src_w).tolist()
+        if len(unique_sources) < 2:
+            print(
+                "[per-source target distributions] only "
+                f"{len(unique_sources)} source(s) in {charge_mode} window "
+                f"{unique_sources}; comparison needs ≥2 sources — skipping"
+            )
+            continue
+
+        if args.cmp_ref_source is not None:
+            ref_source = int(args.cmp_ref_source)
+            if ref_source not in unique_sources:
+                print(
+                    f"[per-source target distributions] --cmp-ref-source="
+                    f"{ref_source} not present in {charge_mode} window; "
+                    f"falling back to {unique_sources[0]}"
+                )
+                ref_source = int(unique_sources[0])
+        else:
+            ref_source = int(unique_sources[0])
+
+        print(
+            f"[per-source target distributions] window: "
+            f"pt∈[{pt_min:g},{pt_max:g}] GeV, "
+            f"η∈[{eta_min:g},{eta_max:g}], charge={charge_mode}; "
+            f"{n_in:,} muons; sources={unique_sources}; ref={ref_source}"
+        )
+
+        # Precompute per-column binned data so we can render the same
+        # plot twice (linear + log y-axis) without redoing the
+        # histogramming.
+        per_col = {}
+        for tcol in target_components:
+            y = target_w[:, tcol]
+            finite = np.isfinite(y)
+            if not finite.all():
+                y = y[finite]
+                w_col = w_w[finite]
+                s_col = src_w[finite]
+            else:
+                w_col = w_w
+                s_col = src_w
+            if y.size == 0:
+                continue
+
+            pct = float(args.range_percentile)
+            lo, hi = np.percentile(y, [pct, 100.0 - pct])
+            if not np.isfinite(lo) or not np.isfinite(hi) or hi <= lo:
+                lo, hi = float(np.min(y)), float(np.max(y))
+                if hi <= lo:
+                    hi = lo + 1.0
+            bins = np.linspace(lo, hi, args.n_bins + 1)
+            centers = 0.5 * (bins[:-1] + bins[1:])
+            bw = bins[1] - bins[0]
+
+            ref_mask = (s_col == ref_source)
+            h_ref, e_ref = _weighted_hist_err(
+                y[ref_mask], bins, w_col[ref_mask],
+            )
+            norm_ref = h_ref.sum()
+            if norm_ref <= 0:
+                print(
+                    "[per-source target distributions] ref source "
+                    f"{ref_source} has zero weight in column "
+                    f"{TARGET_NAMES[tcol]} (charge={charge_mode}); skipping"
+                )
+                continue
+            h_ref_n = h_ref / (norm_ref * bw)
+            e_ref_n = e_ref / (norm_ref * bw)
+
+            per_source = []
+            for i, sid in enumerate(unique_sources):
+                sm = (s_col == sid)
+                if sm.sum() == 0:
+                    continue
+                h, e = _weighted_hist_err(y[sm], bins, w_col[sm])
+                tot = h.sum()
+                if tot <= 0:
+                    continue
+                h_n = h / (tot * bw)
+                e_n = e / (tot * bw)
+                per_source.append({
+                    "sid": int(sid),
+                    "n": int(sm.sum()),
+                    "color": f"C{i}",
+                    "h": h_n,
+                    "e": e_n,
+                })
+
+            per_col[tcol] = {
+                "centers": centers,
+                "per_source": per_source,
+                "h_ref": h_ref_n,
+                "e_ref": e_ref_n,
+            }
+
+        if not per_col:
+            continue
+
+        ch_tag = {"pos": "q>0", "neg": "q<0", "both": "both q"}[charge_mode]
+        ch_suffix = {"pos": "_qpos", "neg": "_qneg", "both": "_qboth"}[
+            charge_mode
+        ]
+
+        for yscale, ysuffix in (("linear", ""), ("log", "_log")):
+            fig, axes = plt.subplots(
+                2, n_cols,
+                figsize=(4.5 * n_cols, 6.5),
+                sharex="col", squeeze=False,
+                gridspec_kw={"height_ratios": [3, 1], "hspace": 0.05},
+                layout="constrained",
+            )
+
+            for cidx, tcol in enumerate(target_components):
+                ax_main = axes[0][cidx]
+                ax_ratio = axes[1][cidx]
+
+                data = per_col.get(tcol)
+                if data is None:
+                    continue
+                centers = data["centers"]
+                h_ref_n = data["h_ref"]
+                e_ref_n = data["e_ref"]
+
+                for entry in data["per_source"]:
+                    sid = entry["sid"]
+                    color = entry["color"]
+                    lbl = f"{_source_label(sid)}  (N={entry['n']})"
+                    ax_main.step(
+                        centers, entry["h"], where="mid",
+                        color=color, lw=1.2, label=lbl,
+                    )
+                    _stepped_errorbar(
+                        ax_main, centers, entry["h"], entry["e"], color,
+                    )
+
+                    if sid == ref_source:
+                        ax_ratio.axhline(1.0, color=color, lw=0.8)
+                        continue
+                    ratio, e_ratio = _ratio_with_err(
+                        entry["h"], entry["e"], h_ref_n, e_ref_n,
+                    )
+                    ax_ratio.step(
+                        centers, ratio, where="mid", color=color, lw=1.0,
+                    )
+                    _stepped_errorbar(
+                        ax_ratio, centers, ratio, e_ratio, color,
+                    )
+
+                ax_main.set_yscale(yscale)
+                ax_main.set_ylabel("p.d.f. (weighted, unit area)")
+                ax_main.set_title(
+                    f"{TARGET_NAMES[tcol] if tcol < len(TARGET_NAMES) else f'target[{tcol}]'}",
+                    fontsize=10,
+                )
+                ax_main.legend(fontsize=7)
+                ax_main.axvline(0.0, color="k", lw=0.4, alpha=0.4)
+
+                ax_ratio.axhline(1.0, color="k", lw=0.4, alpha=0.4)
+                ax_ratio.set_ylabel(
+                    f"ratio /\n{_source_label(ref_source)}", fontsize=8,
+                )
+                ax_ratio.set_xlabel(
+                    TARGET_NAMES[tcol]
+                    if tcol < len(TARGET_NAMES) else f"target[{tcol}]"
+                )
+                ax_ratio.set_ylim(0.5, 1.5)
+
+            fig.suptitle(
+                f"Per-source target distributions  ·  "
+                f"pt∈[{pt_min:g},{pt_max:g}] GeV, "
+                f"η∈[{eta_min:g},{eta_max:g}], {ch_tag} (φ integrated)"
+            )
+            _save(
+                fig,
+                os.path.join(
+                    out_dir,
+                    f"per_source_target_distributions{ch_suffix}{ysuffix}.png",
+                ),
+            )
+
+
+# ============================================================================
 # main
 # ============================================================================
 
@@ -1521,7 +2075,7 @@ def main():
     print(f"loading ntuples from {len(args.input_files)} file(s)")
     t0 = _tic()
     (
-        pt_r, eta_r, phi_r, pt_g, eta_g, phi_g, q, w,
+        eta_r, phi_r, eta_g, phi_g, kappa_r, kappa_g, w, source_id,
     ) = load_ntuples(
         args.input_files, args.tree, args.max_muons,
         args.pt_min, args.pt_max, args.eta_max,
@@ -1531,23 +2085,24 @@ def main():
 
     # Subsample at raw-array stage (cheap rng.integers with sorted
     # gather, no O(N) np.random.choice permutation).
-    N_raw = pt_r.shape[0]
+    N_raw = eta_r.shape[0]
     if args.n_events > 0 and N_raw > args.n_events:
         rng = np.random.default_rng(0)
         sel = np.sort(rng.integers(0, N_raw, args.n_events))
-        pt_r, eta_r, phi_r = pt_r[sel], eta_r[sel], phi_r[sel]
-        pt_g, eta_g, phi_g = pt_g[sel], eta_g[sel], phi_g[sel]
-        q, w = q[sel], w[sel]
+        eta_r, phi_r = eta_r[sel], phi_r[sel]
+        eta_g, phi_g = eta_g[sel], phi_g[sel]
+        kappa_r, kappa_g, w = kappa_r[sel], kappa_g[sel], w[sel]
+        source_id = source_id[sel]
         print(
             f"  loaded {N_raw} muon rows; subsampled to "
-            f"{pt_r.shape[0]} for plotting"
+            f"{eta_r.shape[0]} for plotting"
         )
     else:
         print(f"  loaded {N_raw} muon rows")
     t0 = _toc("subsample raw arrays", t0)
 
     target, cond_raw = compute_targets_and_conditioning(
-        pt_r, eta_r, phi_r, pt_g, eta_g, phi_g, q,
+        eta_r, phi_r, eta_g, phi_g, kappa_r, kappa_g,
     )
     t0 = _toc("compute_targets_and_conditioning", t0)
 
@@ -1566,7 +2121,7 @@ def main():
 
     # Σ_pack indices for the MLP arch.
     sigma_pack_iu = sigma_pack_ju = None
-    if arch == "mlp":
+    if arch in ("mlp", "mlp-factored"):
         iu, ju = _sigma_pack_indices(n_features)
         sigma_pack_iu, sigma_pack_ju = iu.to(device), ju.to(device)
 
@@ -1661,6 +2216,44 @@ def main():
         positivity, args.output, sigma_pack_iu, sigma_pack_ju,
     )
     t0 = _toc("plot_log_r_scan", t0)
+
+    # Per-source comparison uses its own streaming, parallel loader so
+    # it can run over the full statistics (much larger than the
+    # subsampled in-memory arrays the inference plots use). The (pt,
+    # eta) window is applied per shard so peak memory stays bounded.
+    print(
+        "loading per-source comparison window via streaming loader: "
+        f"pt∈[{args.cmp_pt_min:g},{args.cmp_pt_max:g}] GeV, "
+        f"η∈[{args.cmp_eta_min:g},{args.cmp_eta_max:g}], "
+        f"max_events={args.cmp_max_events}, workers={args.cmp_workers}"
+    )
+    cmp_data, cmp_read, cmp_kept = _load_per_source_window(
+        args.input_files,
+        pt_min=float(args.cmp_pt_min), pt_max=float(args.cmp_pt_max),
+        eta_min=float(args.cmp_eta_min), eta_max=float(args.cmp_eta_max),
+        max_events=int(args.cmp_max_events),
+        n_workers=int(args.cmp_workers),
+    )
+    t0 = _toc("load per-source window (streaming)", t0)
+    if cmp_data is None:
+        print(
+            f"[per-source target distributions] no rows passed the "
+            f"window ({cmp_read} read); skipping plot"
+        )
+    else:
+        target_cmp, w_cmp, sid_cmp, kg_cmp, eg_cmp = cmp_data
+        # Normalise weights the same way the standard plots do (mean=1)
+        # so legend yields and ratio axes are comparable.
+        w_cmp = (w_cmp / w_cmp.mean()).astype(np.float32)
+        print(
+            f"  read {cmp_read:,} raw rows; kept {cmp_kept:,} after the "
+            f"window cut (={100 * cmp_kept / max(cmp_read, 1):.2f}%)"
+        )
+        plot_per_source_target_distributions(
+            target_cmp, w_cmp, sid_cmp, kg_cmp, eg_cmp,
+            args, args.output,
+        )
+        t0 = _toc("plot_per_source_target_distributions", t0)
 
     if args.flow_checkpoint:
         print(f"loading flow checkpoint {args.flow_checkpoint}")

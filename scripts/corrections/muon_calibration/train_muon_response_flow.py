@@ -94,9 +94,11 @@ def parse_args():
         "--input-files",
         nargs="+",
         required=True,
-        help="[required] Explicit list of ROOT snapshot files (from "
-        "flow_training_snapshot.py). Paths are passed directly to "
-        "RDataFrame — no recursive directory search.",
+        help="[required] Either (a) a shard directory containing "
+        "``manifest.json`` (expanded to its Arrow IPC shards), or "
+        "(b) explicit ``.arrow`` shard files (shell globs OK). "
+        "RVec RNTuple snapshots (``.root``) are no longer accepted "
+        "here — run flow_training_snapshot.py --shard-only first.",
     )
     p.add_argument(
         "--tree",
@@ -120,10 +122,12 @@ def parse_args():
         "--max-events",
         type=int,
         default=-1,
-        help="[default: %(default)s] Cap on the number of raw J/psi "
-        "events read from the ROOT file(s) via an ImplicitMT-compatible "
-        "Filter on ``rdfentry_``. -1 reads all events. Applies "
-        "*before* the quality cuts and ``--max-muons`` post-filter cap.",
+        help="[default: %(default)s] Cap on the number of raw muon "
+        "rows read from the Arrow shards before the pt/eta filter. "
+        "-1 reads all. Applies *before* the quality cuts and "
+        "``--max-muons`` post-filter cap. (Name retained for "
+        "back-compat; in the per-muon schema it caps rows, not "
+        "events.)",
     )
     p.add_argument(
         "--val-fraction",
@@ -509,7 +513,7 @@ def parse_args():
     )
     p.add_argument(
         "--head-arch",
-        choices=["polyhead", "mlp"],
+        choices=["polyhead", "mlp", "mlp-factored"],
         default="polyhead",
         help="[default: %(default)s] Reweight-head architecture. "
         "'polyhead' (default): trunk(y, c) → polynomial coefficients in "
@@ -517,11 +521,15 @@ def parse_args():
         "term, per-axis degree caps). 'mlp': dual-scalar-forward MLP "
         "where ``log r = positivity( head(e, u, Σ_pack) − head(e, 0, 0) "
         ")`` with ``e = trunk(y, c)`` — same construction as "
-        "train_shift_smear_reweight's ``--arch mlp``. The MLP arch is "
-        "more expressive but loses the polyhead's mode-aware Order-2 "
-        "contraction; for a 3-feature target with low-degree caps the "
-        "polyhead is usually cheaper at inference, the MLP is more "
-        "flexible.",
+        "train_shift_smear_reweight's ``--arch mlp``. 'mlp-factored': "
+        "structurally factored MLP head returning "
+        "``log r = ⟨u, A(e, ·)⟩ + ⟨σ_pack, B(e, ·)⟩"
+        " [ + ⟨u⊗σ_pack, C(e, u, σ_pack)⟩ ]`` with the structural "
+        "zeros at (u=0, σ=0) and σ-evenness built in by construction "
+        "rather than via dual-forward subtraction. The detach flags "
+        "--detach-pure-{shift,smear}-in-joint select between the "
+        "full-cross default, the partially-factored two-term form, "
+        "and the fully-factored three-term form.",
     )
     p.add_argument(
         "--trunk-hidden",
@@ -666,13 +674,36 @@ def parse_args():
     p.add_argument(
         "--detach-pure-in-joint",
         action="store_true",
-        help="[default: off] In JOINT-mode events (where both u and "
-        "σ_vec are nonzero), detach the pure-u and pure-σ "
+        help="[default: off] (polyhead / mlp) In JOINT-mode events "
+        "(both u and σ_vec nonzero) detach the pure-u and pure-σ "
         "contributions so only the cross-term path receives gradients "
         "from the JOINT loss. polyhead: zero cost (mask on pure-u/"
         "pure-σ basis-coef slots). mlp: ~2× head cost from two extra "
         "head forwards f(e, u, 0) and f(e, 0, sigma_pack) used to "
-        "decompose d_full = d_pure_u + d_pure_sigma + d_mixed.",
+        "decompose d_full = d_pure_u + d_pure_sigma + d_mixed. For "
+        "the mlp-factored arch use the structural "
+        "--detach-pure-{shift,smear}-in-joint flags instead.",
+    )
+    p.add_argument(
+        "--detach-pure-shift-in-joint",
+        action="store_true",
+        help="[default: off] (mlp-factored only) Detach the pure-"
+        "shift block A on JOINT events. Equivalent to structurally "
+        "factoring A so it depends only on (e, u) and not on σ_pack; "
+        "cross-term absorption lives in B's u-dependence. A's "
+        "gradients flow only from SHIFT-mode events.",
+    )
+    p.add_argument(
+        "--detach-pure-smear-in-joint",
+        action="store_true",
+        help="[default: off] (mlp-factored only) Detach the pure-"
+        "smear block B on JOINT events. Equivalent to structurally "
+        "factoring B so it depends only on (e, σ_pack) and not on u; "
+        "cross-term absorption lives in A's σ_pack-dependence. B's "
+        "gradients flow only from SMEAR-mode events. When combined "
+        "with --detach-pure-shift-in-joint the head becomes the full "
+        "three-block factored form with a separate cross head "
+        "C(e, u, σ_pack).",
     )
     p.add_argument(
         "--loss-fn",
@@ -778,27 +809,106 @@ def parse_args():
 # Data loading
 # -----------------------------------------------------------------------------
 
-BRANCHES_PER_MUON = {
-    "plus": {
-        "pt_reco": "Mupluscor_pt",
-        "eta_reco": "Mupluscor_eta",
-        "phi_reco": "Mupluscor_phi",
-        "pt_gen": "Muplusgen_pt",
-        "eta_gen": "Muplusgen_eta",
-        "phi_gen": "Muplusgen_phi",
-    },
-    "minus": {
-        "pt_reco": "Muminuscor_pt",
-        "eta_reco": "Muminuscor_eta",
-        "phi_reco": "Muminuscor_phi",
-        "pt_gen": "Muminusgen_pt",
-        "eta_gen": "Muminusgen_eta",
-        "phi_gen": "Muminusgen_phi",
-    },
-}
+PER_MUON_COLUMNS = [
+    "eta_reco", "phi_reco",
+    "eta_gen",  "phi_gen",
+    "kappa_reco", "kappa_gen", "nominal_weight",
+    "source_id",
+]
 
+# Columns kept as integer dtype on the read side; everything else is
+# concatenated into float64. Mirrors the int-column handling in the
+# sharder. Used by ``load_ntuples``.
+_INT_PER_MUON_COLUMNS = {"source_id"}
 
 WEIGHT_BRANCH = "nominal_weight"
+
+
+def _expand_input_paths(paths: List[str]) -> List[str]:
+    """Expand a shard-directory entry (one containing ``manifest.json``)
+    into its list of shard files. Pass-through for explicit file paths.
+    """
+    out: List[str] = []
+    for p in paths:
+        if os.path.isdir(p):
+            manifest_path = os.path.join(p, "manifest.json")
+            if os.path.exists(manifest_path):
+                import json
+                with open(manifest_path) as f:
+                    manifest = json.load(f)
+                for entry in manifest["shard_files"]:
+                    out.append(os.path.join(p, entry))
+                continue
+        out.append(p)
+    return out
+
+
+def _filter_block(
+    blocks: dict,
+    pt_min: float, pt_max: float, eta_max: float,
+    n_read: int, max_rows: int,
+):
+    eta_g = blocks["eta_gen"]
+    kappa_g = blocks["kappa_gen"]
+    kappa_r = blocks["kappa_reco"]
+    w = blocks["nominal_weight"]
+    n_in_block = eta_g.shape[0]
+    # pt = 1 / (|kappa| * cosh(eta)); reconstruct pt_gen for the
+    # original pt-range cut. ``kappa_r`` finite-ness stands in for the
+    # legacy ``pt_reco > 0`` guard (pt_reco == 0 would make kappa
+    # non-finite at snapshot time).
+    pt_g = 1.0 / (np.fabs(kappa_g) * np.cosh(eta_g))
+    mask = (
+        (pt_g > pt_min)
+        & (pt_g < pt_max)
+        & (np.fabs(eta_g) < eta_max)
+        & np.isfinite(kappa_r)
+        & np.isfinite(kappa_g)
+        & (kappa_g != 0.0)
+        & (w > 0.0)
+    )
+    if max_rows > 0 and n_read + n_in_block > max_rows:
+        n_take = max_rows - n_read
+        trim = np.zeros(n_in_block, dtype=bool)
+        trim[:n_take] = True
+        mask = mask & trim
+    return mask
+
+
+def _load_arrow_shards(
+    paths: List[str], pt_min: float, pt_max: float, eta_max: float,
+    max_rows: int,
+):
+    """Read per-muon rows from Arrow IPC shards, applying
+    pt/eta/weight filters per shard so the working set stays bounded
+    to a single shard at a time. Auto-detects file vs stream format
+    (sharder writes file format now; older stream-format shards
+    still readable).
+    """
+    import pyarrow as pa
+    import pyarrow.ipc as ipc
+
+    _MAGIC = b"ARROW1"
+    blocks_per_col = {c: [] for c in PER_MUON_COLUMNS}
+    n_read = 0
+    for p in paths:
+        with pa.memory_map(p, "r") as f:
+            head = f.read(len(_MAGIC))
+            f.seek(0)
+            if head == _MAGIC:
+                t = ipc.open_file(f).read_all()
+            else:
+                t = ipc.open_stream(f).read_all()
+        block = {c: t[c].to_numpy() for c in PER_MUON_COLUMNS}
+        mask = _filter_block(
+            block, pt_min, pt_max, eta_max, n_read, max_rows,
+        )
+        for c in PER_MUON_COLUMNS:
+            blocks_per_col[c].append(block[c][mask])
+        n_read += block["eta_reco"].shape[0]
+        if max_rows > 0 and n_read >= max_rows:
+            break
+    return blocks_per_col
 
 
 def load_ntuples(
@@ -812,103 +922,97 @@ def load_ntuples(
     max_events: int = -1,
 ) -> Tuple[np.ndarray, np.ndarray, np.ndarray, np.ndarray, np.ndarray,
             np.ndarray, np.ndarray, np.ndarray]:
-    """Return per-muon arrays of (pt_reco, eta_reco, phi_reco, pt_gen,
-    eta_gen, phi_gen, charge, weight). Pools mu+ and mu- rows; each
-    muon inherits its J/psi event's nominal_weight.
+    """Return per-muon arrays of (eta_reco, phi_reco, eta_gen,
+    phi_gen, kappa_reco, kappa_gen, weight, source_id) loaded from
+    per-muon snapshots produced by :mod:`flow_training_snapshot`.
+    ``pt`` is not stored — recover via ``pt = 1 / (|kappa| *
+    cosh(eta))``. ``source_id`` is kept int32 (dataset tag) for
+    downstream filtering / splitting.
 
-    Uses RDataFrame with ImplicitMT for multi-threaded ROOT I/O, and
-    applies the quality filter as an RDF Filter (in C++) so only
-    passing events are materialized into numpy. ``threads = 0`` lets
-    ROOT pick; ``threads = 1`` runs single-threaded; ``threads > 1``
-    uses that many threads.
+    Input formats supported (sniffed from ``paths``):
 
-    ``max_events > 0`` caps the number of *raw* J/psi events kept via
-    a ``Filter("rdfentry_ < max_events")``, which is ImplicitMT-safe
-    (unlike ``Range``). Disk I/O isn't reduced — RDataFrame still
-    scans all clusters — but the quality filter and ``AsNumpy``
-    materialization short-circuit on rejected rows, so the post-load
-    pipeline is significantly faster on large samples.
+    * Directory containing ``manifest.json`` -- treated as a shard
+      directory; expanded to its listed Arrow IPC ``shard_*.arrow``
+      files.
+    * Explicit ``.arrow`` files -- Arrow IPC streaming shards.
+
+    ``kappa = q / |p|`` is the signed inverse momentum stored
+    directly in the snapshot; charge is recovered as
+    ``sign(kappa_gen)`` for conditioning.
+    ``compute_targets_and_conditioning`` forms ``r_kappa =
+    kappa_reco / kappa_gen - 1``, which inherits the
+    charge-mismeasurement mode (~-2) when reco/gen charges differ.
+
+    Per-shard / per-file pt/eta/weight filters are applied before
+    concatenation so peak memory is bounded to one block at a time.
+    ``max_events`` is reinterpreted in the new schema as a cap on
+    *raw muon rows read* (before the pt/eta filter); ``max_muons``
+    caps post-filter row count via uniform random subsampling. The
+    legacy ``threads`` argument is unused in the new loader (no
+    ROOT/RDataFrame on the read path).
     """
-    import ROOT
+    del threads  # legacy ROOT-MT knob; new loader is pyarrow / uproot.
 
-    if not ROOT.ROOT.IsImplicitMTEnabled():
-        if threads == 0:
-            ROOT.ROOT.EnableImplicitMT()
-        elif threads > 1:
-            ROOT.ROOT.EnableImplicitMT(threads)
-
-    files_vec = ROOT.std.vector("string")()
-    for p in paths:
-        files_vec.push_back(p)
-    df = ROOT.ROOT.RDataFrame(tree_name, files_vec)
-    # Attach the progress bar to the root RDataFrame node *before* any
-    # Filter / Define — some ROOT/cppyy combinations fail to resolve
-    # the AddProgressBar overload on RInterface<RDFFilter<...>>.
-    ROOT.ROOT.RDF.Experimental.AddProgressBar(df)
-    if max_events > 0:
-        # rdfentry_ is the global entry number (works in MT mode in
-        # modern ROOT). Keeps the first max_events rows of the
-        # underlying TTree — same selection as Range(0, max_events)
-        # but ImplicitMT-compatible.
-        df = df.Filter(
-            f"rdfentry_ < {int(max_events)}",
-            "rdfentry_cap",
+    paths = _expand_input_paths(paths)
+    if not paths:
+        raise ValueError("load_ntuples: no input paths after expansion")
+    if not all(p.endswith(".arrow") for p in paths):
+        raise ValueError(
+            "load_ntuples: only Arrow IPC shards (.arrow) or a shard "
+            "directory with manifest.json are supported. Run "
+            "scripts/corrections/muon_calibration/flow_training_snapshot.py "
+            "--shard-only to convert RVec RNTuple snapshots into Arrow "
+            "shards."
         )
-
-    # Event-level quality cut, applied in C++ before materialization.
-    filt = (
-        f"Muplusgen_pt > {pt_min} && Muminusgen_pt > {pt_min} && "
-        f"Muplusgen_pt < {pt_max} && Muminusgen_pt < {pt_max} && "
-        f"std::fabs(Muplusgen_eta) < {eta_max} && "
-        f"std::fabs(Muminusgen_eta) < {eta_max} && "
-        f"Mupluscor_pt > 0. && Muminuscor_pt > 0. && "
-        f"{WEIGHT_BRANCH} > 0."
+    blocks_per_col = _load_arrow_shards(
+        paths, pt_min, pt_max, eta_max, max_events,
     )
-    df = df.Filter(filt, "quality")
+    fmt = "arrow-ipc"
 
-    all_branches = {WEIGHT_BRANCH}
-    for m in BRANCHES_PER_MUON.values():
-        all_branches.update(m.values())
-
-    arrs = df.AsNumpy(columns=list(all_branches))
-    w_event = arrs[WEIGHT_BRANCH].astype(np.float64)
-
-    per_muon_rows = []
-    for sign, charge in (("plus", +1.0), ("minus", -1.0)):
-        b = BRANCHES_PER_MUON[sign]
-        n = w_event.shape[0]
-        charge_arr = np.full(n, charge, dtype=np.float64)
-        per_muon_rows.append((
-            arrs[b["pt_reco"]].astype(np.float64),
-            arrs[b["eta_reco"]].astype(np.float64),
-            arrs[b["phi_reco"]].astype(np.float64),
-            arrs[b["pt_gen"]].astype(np.float64),
-            arrs[b["eta_gen"]].astype(np.float64),
-            arrs[b["phi_gen"]].astype(np.float64),
-            charge_arr,
-            w_event,  # each muon of a J/psi event inherits the event weight
-        ))
-
-    pt_r = np.concatenate([p[0] for p in per_muon_rows])
-    eta_r = np.concatenate([p[1] for p in per_muon_rows])
-    phi_r = np.concatenate([p[2] for p in per_muon_rows])
-    pt_g = np.concatenate([p[3] for p in per_muon_rows])
-    eta_g = np.concatenate([p[4] for p in per_muon_rows])
-    phi_g = np.concatenate([p[5] for p in per_muon_rows])
-    q = np.concatenate([p[6] for p in per_muon_rows])
-    w = np.concatenate([p[7] for p in per_muon_rows])
-
-    arrs = (pt_r, eta_r, phi_r, pt_g, eta_g, phi_g, q, w)
+    concat = {}
+    for c in PER_MUON_COLUMNS:
+        arr = np.concatenate(blocks_per_col[c])
+        if c in _INT_PER_MUON_COLUMNS:
+            concat[c] = arr.astype(np.int32, copy=False)
+        else:
+            concat[c] = arr.astype(np.float64)
+    eta_r = concat["eta_reco"]
+    phi_r = concat["phi_reco"]
+    eta_g = concat["eta_gen"]
+    phi_g = concat["phi_gen"]
+    kappa_r = concat["kappa_reco"]
+    kappa_g = concat["kappa_gen"]
+    w = concat["nominal_weight"]
+    source_id = concat["source_id"]
+    arrs = (eta_r, phi_r, eta_g, phi_g, kappa_r, kappa_g, w, source_id)
 
     n = arrs[0].shape[0]
     print(
-        f"loaded {n} muons after filters "
-        f"({pt_min} < pt_gen < {pt_max}, |eta| < {eta_max}, w > 0)"
+        f"loaded {n} muons after filters from {len(paths)} {fmt} input(s) "
+        f"({pt_min} < pt_gen < {pt_max}, |eta_gen| < {eta_max}, w > 0)"
     )
+    w_arr = arrs[6]
     print(
-        f"  weight: mean {arrs[7].mean():.4f}  std {arrs[7].std():.4f}  "
-        f"min {arrs[7].min():.4f}  max {arrs[7].max():.4f}"
+        f"  weight: mean {w_arr.mean():.4f}  std {w_arr.std():.4f}  "
+        f"min {w_arr.min():.4f}  max {w_arr.max():.4f}"
     )
+    # Diagnostic: charge-flip rate (sign(kappa_reco) != sign(kappa_gen)),
+    # the mode r_kappa absorbs.
+    n_flip = int(np.sum(np.sign(arrs[4]) != np.sign(arrs[5])))
+    if n_flip:
+        print(
+            f"  charge mismeasurement: {n_flip} / {n} rows "
+            f"({100*n_flip/n:.3f}%)"
+        )
+    # Diagnostic: per-source-id row counts (visible to downstream code
+    # for split / validation by dataset).
+    sid_arr = arrs[7]
+    unique_sids, sid_counts = np.unique(sid_arr, return_counts=True)
+    if len(unique_sids) > 1 or unique_sids[0] != 0:
+        print(
+            f"  source_id breakdown: "
+            + ", ".join(f"{int(s)}: {int(c):,}" for s, c in zip(unique_sids, sid_counts))
+        )
 
     if max_muons > 0 and n > max_muons:
         rng = np.random.default_rng(0)
@@ -920,15 +1024,20 @@ def load_ntuples(
 
 
 def compute_targets_and_conditioning(
-    pt_r, eta_r, phi_r, pt_g, eta_g, phi_g, q
+    eta_r, phi_r, eta_g, phi_g, kappa_r, kappa_g
 ):
-    """Return (target [N,3], cond_raw dict)."""
+    """Return (target [N,3], cond_raw dict).
+
+    ``kappa_reco`` and ``kappa_gen`` are stored directly in the
+    snapshot, so ``r_kappa = kappa_reco / kappa_gen - 1`` is a single
+    divide here. Charge mismeasurement (sign flip between reco and
+    gen) appears as ``r_kappa`` near ``-2``, a mode the flow learns
+    explicitly. Conditioning's ``charge`` is reconstructed as
+    ``sign(kappa_gen)``; ``log_pt_gen`` is reconstructed from
+    ``-log(|kappa_gen| * cosh(eta_gen))``.
+    """
     lam_r = np.arctan(np.sinh(eta_r))
     lam_g = np.arctan(np.sinh(eta_g))
-
-    # p = pt / cos(lambda); kappa = q / p = q * cos(lambda) / pt
-    kappa_r = q * np.cos(lam_r) / pt_r
-    kappa_g = q * np.cos(lam_g) / pt_g
 
     r_kappa = kappa_r / kappa_g - 1.0
 
@@ -944,9 +1053,11 @@ def compute_targets_and_conditioning(
     # weight computations a simple diag(1/kappa_gen, 1, 1).
     target = np.stack([r_kappa, dlambda, dphi], axis=1).astype(np.float32)
 
+    log_pt_gen = -np.log(np.fabs(kappa_g) * np.cosh(eta_g))
+
     cond_raw = {
-        "log_pt_gen": np.log(pt_g).astype(np.float32),
-        "charge": q.astype(np.float32),
+        "log_pt_gen": log_pt_gen.astype(np.float32),
+        "charge": np.sign(kappa_g).astype(np.float32),
         "lambda_gen": lam_g.astype(np.float32),
         "sin_phi_gen": np.sin(phi_g).astype(np.float32),
         "cos_phi_gen": np.cos(phi_g).astype(np.float32),
@@ -2912,6 +3023,57 @@ def _mlp_d_per_mode(
     return d_pure_u_used + d_pure_s_used + d_mixed
 
 
+def _mlp_factored_d_per_mode(
+    head: "nn.Module",
+    y_std: torch.Tensor,
+    c_std: torch.Tensor,
+    u_shift: torch.Tensor,
+    sigma_vec: torch.Tensor,
+) -> torch.Tensor:
+    """Per-event pre-positivity scalar ``d`` for the factored MLP head.
+
+    ``log W = ⟨u, A(e, ·)⟩ + ⟨σ_pack, B(e, ·)⟩ [ + ⟨u⊗σ_pack, C(e, u, σ_pack)⟩ ]``
+    is computed via :meth:`ReweightMLPFactored.head_forward_components`,
+    then per-event ``.detach()`` is applied on JOINT-mode events to the
+    pure-shift and/or pure-smear blocks per the head's
+    ``detach_pure_shift_in_joint`` / ``detach_pure_smear_in_joint``
+    flags. Mode boundaries follow the same stratified-contiguous
+    convention as :func:`_mlp_d_per_mode` and
+    :func:`_polyhead_d_per_mode`.
+    """
+    B = y_std.shape[0]
+    e = head.trunk_forward(y_std, c_std)
+    if head.n_sigma_pack > 0:
+        sigma_pack = (
+            sigma_vec[..., head.sigma_pack_iu]
+            * sigma_vec[..., head.sigma_pack_ju]
+        )
+    else:
+        sigma_pack = torch.zeros(
+            B, 0, device=y_std.device, dtype=y_std.dtype,
+        )
+    pu, ps, cr = head.head_forward_components(e, u_shift, sigma_pack)
+    if head.detach_pure_shift_in_joint or head.detach_pure_smear_in_joint:
+        # JOINT events live in the contiguous tail of the batch (same
+        # convention as ``_polyhead_d_per_mode``).
+        base = B // 3
+        extra = B - 3 * base
+        n_shift_b = base + extra
+        n_smear_b = base
+        n_joint_b = base
+        is_joint = torch.zeros(B, dtype=torch.bool, device=y_std.device)
+        if n_joint_b > 0:
+            is_joint[n_shift_b + n_smear_b:] = True
+        if head.detach_pure_shift_in_joint:
+            pu = torch.where(is_joint, pu.detach(), pu)
+        if head.detach_pure_smear_in_joint:
+            ps = torch.where(is_joint, ps.detach(), ps)
+    d = pu + ps
+    if cr is not None:
+        d = d + cr
+    return d
+
+
 def _head_d_per_mode(
     head: "nn.Module",
     y_std: torch.Tensor,
@@ -2923,15 +3085,22 @@ def _head_d_per_mode(
     """Arch-agnostic dispatch to per-event ``d`` (or ``j``).
 
     ``PolyHead`` → :func:`_polyhead_d_per_mode` (Order-2 contraction
-    on the polynomial basis); ``ReweightMLP_B`` →
-    :func:`_mlp_d_per_mode` (dual-forward on the MLP head). Both
-    return shape ``[B]``; the caller wraps with the chosen positivity
-    and computes the per-event loss against ``true_lw``.
+    on the polynomial basis); ``ReweightMLPFactored`` (marker
+    ``is_factored`` set) → :func:`_mlp_factored_d_per_mode`
+    (structural factorisation, per-mode detach via head flags);
+    ``ReweightMLP_B`` (default) → :func:`_mlp_d_per_mode`
+    (dual-forward on the MLP head). All return shape ``[B]``; the
+    caller wraps with the chosen positivity and computes the
+    per-event loss against ``true_lw``.
     """
     if isinstance(head, PolyHead):
         return _polyhead_d_per_mode(
             head, y_std, c_std, u_shift, sigma_vec,
             detach_pure_in_joint=detach_pure_in_joint,
+        )
+    if getattr(head, "is_factored", False):
+        return _mlp_factored_d_per_mode(
+            head, y_std, c_std, u_shift, sigma_vec,
         )
     return _mlp_d_per_mode(
         head, y_std, c_std, u_shift, sigma_vec,
@@ -4999,23 +5168,42 @@ def main_worker(
                 basis_scale_u=_oversample * float(args.delta_max),
                 basis_scale_sigma=_oversample * float(args.sigma_max),
             ).to(device)
-        elif args.head_arch == "mlp":
+        elif args.head_arch in ("mlp", "mlp-factored"):
             # Lazy import to avoid the train_shift_smear_reweight.py →
             # train_muon_response_flow.py module-level import cycle.
             from train_shift_smear_reweight import (
-                ReweightMLP_B, _sigma_pack_indices,
+                ReweightMLP_B, ReweightMLPFactored, _sigma_pack_indices,
             )
-            head = ReweightMLP_B(
-                n_features=flow_config["n_features"],
-                n_cond=flow_config["n_cond"],
-                d_emb=int(args.d_emb),
-                trunk_hidden=int(args.trunk_hidden),
-                trunk_layers=int(args.trunk_layers),
-                head_hidden=int(args.head_hidden),
-                head_layers=int(args.head_layers),
-                activation=activation_cls,
-                shift_only=not bool(args.include_smear),
-            ).to(device)
+            if args.head_arch == "mlp":
+                head = ReweightMLP_B(
+                    n_features=flow_config["n_features"],
+                    n_cond=flow_config["n_cond"],
+                    d_emb=int(args.d_emb),
+                    trunk_hidden=int(args.trunk_hidden),
+                    trunk_layers=int(args.trunk_layers),
+                    head_hidden=int(args.head_hidden),
+                    head_layers=int(args.head_layers),
+                    activation=activation_cls,
+                    shift_only=not bool(args.include_smear),
+                ).to(device)
+            else:
+                head = ReweightMLPFactored(
+                    n_features=flow_config["n_features"],
+                    n_cond=flow_config["n_cond"],
+                    d_emb=int(args.d_emb),
+                    trunk_hidden=int(args.trunk_hidden),
+                    trunk_layers=int(args.trunk_layers),
+                    head_hidden=int(args.head_hidden),
+                    head_layers=int(args.head_layers),
+                    activation=activation_cls,
+                    shift_only=not bool(args.include_smear),
+                    detach_pure_shift_in_joint=bool(
+                        args.detach_pure_shift_in_joint
+                    ),
+                    detach_pure_smear_in_joint=bool(
+                        args.detach_pure_smear_in_joint
+                    ),
+                ).to(device)
             # The MLP head doesn't carry the smear-quadrature config
             # natively (PolyHead does). Attach the same fields the
             # joint-loss path reads (smear_K, smear_residual,
@@ -5465,7 +5653,7 @@ def main():
 
     print(f"loading ntuples from {len(args.input_files)} file(s)")
     (
-        pt_r, eta_r, phi_r, pt_g, eta_g, phi_g, q, w,
+        eta_r, phi_r, eta_g, phi_g, kappa_r, kappa_g, w, _source_id,
     ) = load_ntuples(
         args.input_files,
         args.tree,
@@ -5478,7 +5666,7 @@ def main():
     )
 
     target, cond_raw = compute_targets_and_conditioning(
-        pt_r, eta_r, phi_r, pt_g, eta_g, phi_g, q
+        eta_r, phi_r, eta_g, phi_g, kappa_r, kappa_g,
     )
 
     # Mean-normalize weights so the weighted NLL is on the same scale

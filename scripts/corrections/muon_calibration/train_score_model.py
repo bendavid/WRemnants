@@ -455,15 +455,23 @@ def load_ntuples(
     q = np.concatenate([p[6] for p in per_muon_rows])
     w = np.concatenate([p[7] for p in per_muon_rows])
 
-    arrs = (pt_r, eta_r, phi_r, pt_g, eta_g, phi_g, q, w)
+    # Compute kappa = q / (pt * cosh(eta)) on the legacy J/psi rows so
+    # the caller signature matches the new per-muon flow schema.
+    # q_reco == q_gen for J/psi by construction. ``source_id`` is
+    # synthesised as zero (no dataset tag in the legacy TTree schema).
+    kappa_r = q / (pt_r * np.cosh(eta_r))
+    kappa_g = q / (pt_g * np.cosh(eta_g))
+    source_id = np.zeros(pt_r.shape[0], dtype=np.int32)
+
+    arrs = (eta_r, phi_r, eta_g, phi_g, kappa_r, kappa_g, w, source_id)
     n = arrs[0].shape[0]
     print(
         f"loaded {n} muons after filters "
         f"({pt_min} < pt_gen < {pt_max}, |eta| < {eta_max}, w > 0)"
     )
     print(
-        f"  weight: mean {arrs[7].mean():.4f}  std {arrs[7].std():.4f}  "
-        f"min {arrs[7].min():.4f}  max {arrs[7].max():.4f}"
+        f"  weight: mean {arrs[-1].mean():.4f}  std {arrs[-1].std():.4f}  "
+        f"min {arrs[-1].min():.4f}  max {arrs[-1].max():.4f}"
     )
 
     if max_muons > 0 and n > max_muons:
@@ -476,15 +484,18 @@ def load_ntuples(
 
 
 def compute_targets_and_conditioning(
-    pt_r, eta_r, phi_r, pt_g, eta_g, phi_g, q
+    eta_r, phi_r, eta_g, phi_g, kappa_r, kappa_g
 ):
     """Return (target [N,3], cond_raw dict). Identical to flow script
-    so the two approaches use the same pre-network representation."""
+    so the two approaches use the same pre-network representation.
+
+    ``r_kappa = kappa_reco / kappa_gen - 1`` is a single divide.
+    Charge mismeasurement maps to ``r_kappa`` near ``-2``.
+    Conditioning's ``charge`` is ``sign(kappa_gen)``; ``log_pt_gen``
+    is reconstructed from ``-log(|kappa_gen| * cosh(eta_gen))``.
+    """
     lam_r = np.arctan(np.sinh(eta_r))
     lam_g = np.arctan(np.sinh(eta_g))
-
-    kappa_r = q * np.cos(lam_r) / pt_r
-    kappa_g = q * np.cos(lam_g) / pt_g
 
     r_kappa = kappa_r / kappa_g - 1.0
 
@@ -495,9 +506,11 @@ def compute_targets_and_conditioning(
 
     target = np.stack([r_kappa, dlambda, dphi], axis=1).astype(np.float32)
 
+    log_pt_gen = -np.log(np.fabs(kappa_g) * np.cosh(eta_g))
+
     cond_raw = {
-        "log_pt_gen": np.log(pt_g).astype(np.float32),
-        "charge": q.astype(np.float32),
+        "log_pt_gen": log_pt_gen.astype(np.float32),
+        "charge": np.sign(kappa_g).astype(np.float32),
         "lambda_gen": lam_g.astype(np.float32),
         "sin_phi_gen": np.sin(phi_g).astype(np.float32),
         "cos_phi_gen": np.cos(phi_g).astype(np.float32),
@@ -1886,7 +1899,7 @@ def main():
 
     print(f"loading ntuples from {len(args.input_files)} file(s)")
     (
-        pt_r, eta_r, phi_r, pt_g, eta_g, phi_g, q, w,
+        eta_r, phi_r, eta_g, phi_g, kappa_r, kappa_g, w, _source_id,
     ) = load_ntuples(
         args.input_files,
         args.tree,
@@ -1898,7 +1911,7 @@ def main():
     )
 
     target, cond_raw = compute_targets_and_conditioning(
-        pt_r, eta_r, phi_r, pt_g, eta_g, phi_g, q
+        eta_r, phi_r, eta_g, phi_g, kappa_r, kappa_g,
     )
 
     w = (w / w.mean()).astype(np.float32)

@@ -891,7 +891,7 @@ def load_snapshot_data(
         else list(snapshot_paths)
     )
 
-    pt_r, eta_r, phi_r, pt_g, eta_g, phi_g, q, w = load_ntuples(
+    eta_r, phi_r, eta_g, phi_g, kappa_r, kappa_g, w, _source_id = load_ntuples(
         paths=paths,
         tree_name=tree,
         max_muons=max_samples,
@@ -902,7 +902,7 @@ def load_snapshot_data(
     )
 
     target, cond_raw = compute_targets_and_conditioning(
-        pt_r, eta_r, phi_r, pt_g, eta_g, phi_g, q
+        eta_r, phi_r, eta_g, phi_g, kappa_r, kappa_g,
     )
     c_cols = [cond_raw[name] for name in preproc.cond_names]
     c_raw = np.stack(c_cols, axis=1).astype(np.float32)

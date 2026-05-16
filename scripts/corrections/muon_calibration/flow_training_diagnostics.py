@@ -2784,7 +2784,7 @@ def main():
 
     print(f"loading MC events from {len(args.input_files)} file(s)")
     (
-        pt_r, eta_r, phi_r, pt_g, eta_g, phi_g, q, _w,
+        eta_r, phi_r, eta_g, phi_g, kappa_r, kappa_g, _w, _source_id,
     ) = load_ntuples(
         args.input_files,
         args.tree,
@@ -2796,7 +2796,7 @@ def main():
         max_events=args.max_events,
     )
     target, cond_raw = compute_targets_and_conditioning(
-        pt_r, eta_r, phi_r, pt_g, eta_g, phi_g, q
+        eta_r, phi_r, eta_g, phi_g, kappa_r, kappa_g,
     )
     target_std, cond = apply_preproc(target, cond_raw, stats)
 

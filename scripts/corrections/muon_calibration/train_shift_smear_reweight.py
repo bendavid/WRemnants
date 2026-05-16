@@ -79,15 +79,10 @@ if _HERE not in sys.path:
 from train_muon_response_flow import _build_basis_aux  # noqa: E402
 from train_muon_response_flow import _select_basis  # noqa: E402
 from train_muon_response_flow import (  # noqa: E402
-    InMemoryLoader,
     PreprocStats,
     _joint_indices,
     _state_dict_to_cpu,
-    apply_preproc,
-    build_preproc,
-    compute_targets_and_conditioning,
     evaluate_joint,
-    load_ntuples,
 )
 
 
@@ -457,6 +452,228 @@ class ReweightMLP_B(nn.Module):
             self._remap_legacy_state_dict(state_dict),
             strict=strict, assign=assign,
         )
+
+
+# ============================================================================
+# Architecture: structurally factored MLP head
+# ============================================================================
+
+class ReweightMLPFactored(nn.Module):
+    """Trunk + structurally factored head returning the log-ratio directly.
+
+    The pre-positivity scalar is
+    ::
+        log r = ⟨u, A(e, ·)⟩ + ⟨σ_pack, B(e, ·)⟩ [ + ⟨u⊗σ_pack, C(e, u, σ_pack)⟩ ]
+    where ``e = trunk(y, c)``. Both ``log r = 0`` at ``(u, σ) = (0, 0)``
+    and ``σ → −σ`` invariance are structural (no dual-forward
+    subtraction needed); ``σ_pack`` is the upper-triangular flat of
+    ``σσᵀ``, even under ``σ → −σ``.
+
+    The factorisation form is controlled by two flags set at
+    construction time:
+
+    | shift_detach | smear_detach | A inputs        | B inputs        | C |
+    |--------------|--------------|-----------------|-----------------|---|
+    | False        | False        | e, u, σ_pack    | e, u, σ_pack    | – |
+    | True         | False        | e, u            | e, u, σ_pack    | – |
+    | False        | True         | e, u, σ_pack    | e, σ_pack       | – |
+    | True         | True         | e, u            | e, σ_pack       | ✓ |
+
+    In the (False, False) "default" form, A's σ-dependence and B's
+    u-dependence absorb the cross-term coupling; no pure-block detach
+    handle is exposed. Each detach flag adds a structural factorisation
+    that exposes the corresponding pure-block. When both flags are set
+    the cross is moved into a dedicated head ``C(e, u, σ_pack)``
+    contracting with the outer product ``u ⊗ σ_pack`` (so the cross
+    vanishes whenever u=0 OR σ=0).
+
+    The same trunk amortisation as :class:`ReweightMLP_B` applies: the
+    trunk MLP runs once on ``(y, c)``, then the per-block sub-heads
+    operate on the shared embedding ``e``.
+
+    The optional ``gauss_baseline`` adds a closed-form Gaussian
+    additive contribution to ``log r``, identical in form to
+    :class:`ReweightMLP_B`'s.
+    """
+
+    # Flag for loss-code dispatch (so callers know head_forward already
+    # returns the pre-positivity ``d`` directly, without dual-forward
+    # subtraction).
+    is_factored = True
+
+    def __init__(
+        self,
+        n_features: int,
+        n_cond: int,
+        d_emb: int = 32,
+        trunk_hidden: int = 64,
+        trunk_layers: int = 2,
+        head_hidden: int = 32,
+        head_layers: int = 2,
+        activation=nn.GELU,
+        shift_only: bool = False,
+        detach_pure_shift_in_joint: bool = False,
+        detach_pure_smear_in_joint: bool = False,
+        gauss_baseline: nn.Module = None,
+    ):
+        super().__init__()
+        self.n_features = int(n_features)
+        self.n_cond = int(n_cond)
+        self.d_emb = int(d_emb)
+        self.head_hidden = int(head_hidden)
+        self.head_layers = int(head_layers)
+        self.shift_only = bool(shift_only)
+        self.n_sigma_pack = (
+            self.n_features * (self.n_features + 1) // 2
+            if not self.shift_only else 0
+        )
+        self.gauss_baseline = gauss_baseline
+        self.detach_pure_shift_in_joint = bool(
+            detach_pure_shift_in_joint
+        ) and not self.shift_only
+        self.detach_pure_smear_in_joint = bool(
+            detach_pure_smear_in_joint
+        ) and not self.shift_only
+        # A independent of σ_pack iff shift-detach is on.
+        self.A_uses_sigma = (
+            (not self.shift_only) and not self.detach_pure_shift_in_joint
+        )
+        # B independent of u iff smear-detach is on.
+        self.B_uses_u = (
+            (not self.shift_only) and not self.detach_pure_smear_in_joint
+        )
+        # Separate cross head only when both flags are on (fully
+        # factorised three-term form). The cross is the only place that
+        # JOINT-mode gradients survive when both pure blocks are
+        # detached.
+        self.has_C = (
+            self.detach_pure_shift_in_joint
+            and self.detach_pure_smear_in_joint
+        )
+        # Shift-only mode: the σ side collapses out entirely; B and C
+        # are unused. log r = ⟨u, A(e, u)⟩ trivially.
+        if self.shift_only:
+            self.A_uses_sigma = False
+            self.B_uses_u = False
+            self.has_C = False
+
+        # Trunk: (y, c) → e
+        layers = []
+        prev = self.n_features + self.n_cond
+        for _ in range(trunk_layers):
+            layers.append(nn.Linear(prev, trunk_hidden))
+            layers.append(activation())
+            prev = trunk_hidden
+        layers.append(nn.Linear(prev, self.d_emb))
+        self.trunk = nn.Sequential(*layers)
+
+        # A head: e + u (+ σ_pack) → F.
+        in_dim_A = self.d_emb + self.n_features + (
+            self.n_sigma_pack if self.A_uses_sigma else 0
+        )
+        self.A_head = self._make_mlp(
+            in_dim_A, head_hidden, head_layers, activation,
+            self.n_features,
+        )
+        # B head: e + (u +) σ_pack → n_pack. Built only if not shift-only.
+        if not self.shift_only:
+            in_dim_B = (
+                self.d_emb
+                + (self.n_features if self.B_uses_u else 0)
+                + self.n_sigma_pack
+            )
+            self.B_head = self._make_mlp(
+                in_dim_B, head_hidden, head_layers, activation,
+                self.n_sigma_pack,
+            )
+        else:
+            self.B_head = None
+        # C head: e + u + σ_pack → F · n_pack. Built only when both
+        # detach flags are on.
+        if self.has_C:
+            in_dim_C = self.d_emb + self.n_features + self.n_sigma_pack
+            self.C_head = self._make_mlp(
+                in_dim_C, head_hidden, head_layers, activation,
+                self.n_features * self.n_sigma_pack,
+            )
+        else:
+            self.C_head = None
+
+        # Init the final layers near zero so log r ≈ 0 at start.
+        with torch.no_grad():
+            for h in (self.A_head, self.B_head, self.C_head):
+                if h is None:
+                    continue
+                h[-1].weight.mul_(0.01)
+                h[-1].bias.zero_()
+
+    @staticmethod
+    def _make_mlp(in_dim, hidden, n_layers, activation, out_dim):
+        layers = []
+        prev = in_dim
+        for _ in range(n_layers):
+            layers.append(nn.Linear(prev, hidden))
+            layers.append(activation())
+            prev = hidden
+        layers.append(nn.Linear(prev, out_dim))
+        return nn.Sequential(*layers)
+
+    def trunk_forward(self, y, c):
+        return self.trunk(torch.cat([y, c], dim=-1))
+
+    def head_forward_components(
+        self, e, u, sigma_pack,
+    ):
+        """Return ``(pure_u_d, pure_s_d, cross_d)`` for the factored
+        head, each of shape ``[B]``. ``cross_d`` is ``None`` when there
+        is no separate cross head. The caller can apply per-mode
+        ``.detach()`` to the components before summing — used by the
+        loss code for ``--detach-pure-{shift,smear}-in-joint`` gradient
+        routing.
+        """
+        # A head: e + u (+ σ_pack)
+        A_inputs = [e, u]
+        if self.A_uses_sigma:
+            A_inputs.append(sigma_pack)
+        A = self.A_head(torch.cat(A_inputs, dim=-1))     # [..., F]
+        pure_u_d = (u * A).sum(dim=-1)                    # [...]
+
+        # B head: e + (u +) σ_pack
+        if self.B_head is not None:
+            B_inputs = [e]
+            if self.B_uses_u:
+                B_inputs.append(u)
+            B_inputs.append(sigma_pack)
+            B = self.B_head(torch.cat(B_inputs, dim=-1))  # [..., n_pack]
+            pure_s_d = (sigma_pack * B).sum(dim=-1)
+        else:
+            pure_s_d = torch.zeros_like(pure_u_d)
+
+        # C head: e + u + σ_pack
+        cross_d = None
+        if self.C_head is not None:
+            C_flat = self.C_head(
+                torch.cat([e, u, sigma_pack], dim=-1),
+            )                                              # [..., F·n_pack]
+            C = C_flat.view(
+                *u.shape[:-1], self.n_features, self.n_sigma_pack,
+            )
+            cross_d = torch.einsum(
+                "...i,...ij,...j->...", u, C, sigma_pack,
+            )
+        return pure_u_d, pure_s_d, cross_d
+
+    def head_forward(self, e, u, sigma_pack):
+        """Pre-positivity ``d = log W`` (structurally zero at the
+        origin). No dual-forward subtraction is needed because the
+        factored construction already enforces ``d(e, 0, 0) = 0`` and
+        ``d(e, u, σ) = d(e, u, −σ)``.
+        """
+        pu, ps, cr = self.head_forward_components(e, u, sigma_pack)
+        d = pu + ps
+        if cr is not None:
+            d = d + cr
+        return d
 
 
 # ============================================================================
@@ -1063,6 +1280,43 @@ def compute_d_quadrature(
             )
             d_mixed = d_full - d_pure_u - d_pure_s
             d = d_pure_u_used + d_pure_s_used + d_mixed
+
+    elif arch == "mlp-factored":
+        # Structurally factored MLP head: log r = ⟨u, A⟩ + ⟨σ_pack, B⟩
+        # [+ ⟨u⊗σ_pack, C⟩]. ``d`` comes from head_forward_components
+        # directly (no dual-forward subtraction); the per-event
+        # detach for --detach-pure-{shift,smear}-in-joint is applied
+        # on JOINT-mode events.
+        y_all = torch.cat(
+            [y_nom, y_pert_stack.reshape(n_eps * B, n_features)], dim=0,
+        )
+        c_all = c.repeat(n_eps + 1, 1)
+        u_all = u.repeat(n_eps + 1, 1)
+        sigma_pack_all = sigma_pack.repeat(n_eps + 1, 1)
+        e = model.trunk_forward(y_all, c_all)        # [(n_eps+1)·B, d_emb]
+        pu, ps, cr = model.head_forward_components(
+            e, u_all, sigma_pack_all,
+        )
+        if (
+            mode_id is not None
+            and (
+                model.detach_pure_shift_in_joint
+                or model.detach_pure_smear_in_joint
+            )
+        ):
+            is_joint_b = (mode_id == 2)
+            is_joint_all = (
+                is_joint_b.unsqueeze(0)
+                .expand(n_eps + 1, B)
+                .reshape(-1)
+            )
+            if model.detach_pure_shift_in_joint:
+                pu = torch.where(is_joint_all, pu.detach(), pu)
+            if model.detach_pure_smear_in_joint:
+                ps = torch.where(is_joint_all, ps.detach(), ps)
+        d = pu + ps
+        if cr is not None:
+            d = d + cr
 
     elif arch == "polyhead":
         # Per-mode Order-2 contraction.
@@ -1672,8 +1926,14 @@ def _shift_K_per_event_loss(
             scale_sigma=inner_model.basis_scale_sigma,
             basis_aux=_basis_aux,
         )                                    # [B, K_total]
-    elif arch == "mlp":
-        # Trunk: 1 forward at y_nom + K at y_pert_k.
+    elif arch in ("mlp", "mlp-factored"):
+        # Both flavours use head_forward(e, u, σ_pack). The factored
+        # head's head_forward already returns ``d`` (structurally zero
+        # at the origin), so ``f(e, u, 0) − f(e, 0, 0) = d − 0 = d`` —
+        # the dual-forward subtraction is a structural no-op for the
+        # factored variant in shift-only mode. Either way the
+        # per-event scalar comes out identical to the construction
+        # the loss expects.
         e_nom = inner_model.trunk_forward(y, c)      # [B, d_emb]
         d_emb = e_nom.shape[-1]
 
@@ -1888,14 +2148,15 @@ def loss_step(
         smear_residual = False
     y_pert_stack = _make_y_pert_stack(y, u, sigma_vec, eps_stack)
 
-    if arch == "mlp" and sigma_pack_iu is not None:
+    if arch in ("mlp", "mlp-factored") and sigma_pack_iu is not None:
         sigma_pack = _pack_sigma_outer(
             sigma_vec, sigma_pack_iu, sigma_pack_ju,
         )
     else:
-        # Either polyhead (head ignores Σ_pack) or shift-only mlp
-        # (head's σ-channel is gone). Pass a [B, 0] placeholder so the
-        # forward signature stays stable for DDP/compile.
+        # Either polyhead (head ignores Σ_pack) or shift-only mlp /
+        # mlp-factored (head's σ-channel is gone). Pass a [B, 0]
+        # placeholder so the forward signature stays stable for
+        # DDP/compile.
         sigma_pack = torch.empty(B, 0, device=device, dtype=y.dtype)
 
     # Wrapper returns the pre-positivity scalar d (no log/exp wrap).
@@ -2015,6 +2276,7 @@ def train_one_epoch(
     gh_nodes, gh_weights, is_dist=False,
     shift_smolyak_pts=None, shift_stochastic_extra: int = 0,
     inner_model=None,
+    step_profiler=None,
 ):
     model.train()
     postfix_every = 50
@@ -2034,11 +2296,23 @@ def train_one_epoch(
     # *after* the cross-rank reduction at the end of the epoch.
     split_sum_total = torch.zeros(3, device=device)
     split_w_total = torch.zeros(3, device=device)
+    profile_steps = (
+        0 if step_profiler is None else int(step_profiler.enabled) and int(
+            getattr(args, "profile_data_pipeline", 0) or 0
+        )
+    )
     for i, (x, c, w) in enumerate(bar):
+        do_profile = (step_profiler is not None
+                      and step_profiler.enabled
+                      and i < profile_steps)
+        if do_profile:
+            step_profiler.start()
         x = x.to(device, non_blocking=True)
         c = c.to(device, non_blocking=True)
         w = w.to(device, non_blocking=True)
         wb = w.sum()
+        if do_profile:
+            step_profiler.mark("h2d")
         optimizer.zero_grad(set_to_none=True)
         with amp_ctx():
             loss, split_sum, split_w = loss_step(
@@ -2060,15 +2334,24 @@ def train_one_epoch(
                 inner_model=inner_model,
             )
         loss = loss.float()
+        if do_profile:
+            step_profiler.mark("forward")
         scaler.scale(loss).backward()
+        if do_profile:
+            step_profiler.mark("backward")
         scaler.unscale_(optimizer)
         torch.nn.utils.clip_grad_norm_(model.parameters(), max_norm=10.0)
         scaler.step(optimizer)
         scaler.update()
+        if do_profile:
+            step_profiler.mark("optimizer")
         total_loss = total_loss + loss.detach() * wb
         wsum = wsum + wb
         split_sum_total = split_sum_total + split_sum.detach().float()
         split_w_total = split_w_total + split_w.detach().float()
+        if do_profile:
+            step_profiler.mark("accum")
+            step_profiler.report(i)
         if is_rank0 and (i + 1) % postfix_every == 0:
             # Rank-0-local running metric (not all-reduced); refreshed
             # cheaply between batches. The epoch-boundary report below
@@ -2171,6 +2454,19 @@ def train(
         device_type=amp_device_type, dtype=amp_dtype, enabled=amp_enabled,
     )
 
+    # Per-step profiler — pairs with the TimedLoader's per-batch
+    # split (loader_wait + trainer_step) by further breaking the
+    # trainer_step into H2D / forward / backward / optimizer / accum
+    # so we can tell whether GPU compute, optimizer, or CPU
+    # bookkeeping is the per-step ceiling.
+    from arrow_shard_loader import StepProfiler
+    step_profiler = StepProfiler(
+        enabled=int(getattr(args, "profile_data_pipeline", 0) or 0) > 0
+        and is_rank0,
+        label="train_step",
+        device=device,
+    )
+
     best_val = float("inf")
     # Per-mode (SHIFT, SMEAR, JOINT) running bests. The patience
     # clock resets on improvement of the combined val *or* any of the
@@ -2270,6 +2566,7 @@ def train(
             shift_smolyak_pts=shift_smolyak_pts,
             shift_stochastic_extra=shift_stochastic_extra,
             inner_model=inner_model,
+            step_profiler=step_profiler,
         )
         val_loss, val_split = run_val(
             model, val_loader, device, args, arch, amp_ctx,
@@ -2409,6 +2706,26 @@ def _build_ckpt(model, arch, args, epoch, train_loss, val_loss, best_val,
             "shift_only": bool(getattr(model, "shift_only", False)),
             "gauss_baseline": gauss_baseline_cfg,
         }
+    elif arch == "mlp-factored":
+        model_config = {
+            "arch": "mlp-factored",
+            "n_features": int(model.n_features),
+            "n_cond": int(model.n_cond),
+            "d_emb": int(args.d_emb),
+            "trunk_hidden": int(args.trunk_hidden),
+            "trunk_layers": int(args.trunk_layers),
+            "head_hidden": int(args.head_hidden),
+            "head_layers": int(args.head_layers),
+            "activation": args.activation,
+            "shift_only": bool(getattr(model, "shift_only", False)),
+            "detach_pure_shift_in_joint": bool(
+                getattr(model, "detach_pure_shift_in_joint", False)
+            ),
+            "detach_pure_smear_in_joint": bool(
+                getattr(model, "detach_pure_smear_in_joint", False)
+            ),
+            "gauss_baseline": gauss_baseline_cfg,
+        }
     elif arch == "polyhead":
         model_config = {
             "arch": "polyhead",
@@ -2456,6 +2773,14 @@ def _build_ckpt(model, arch, args, epoch, train_loss, val_loss, best_val,
                 bool(args.detach_pure_in_joint) if args.include_smear
                 else False
             ),
+            "detach_pure_shift_in_joint": (
+                bool(args.detach_pure_shift_in_joint)
+                if args.include_smear else False
+            ),
+            "detach_pure_smear_in_joint": (
+                bool(args.detach_pure_smear_in_joint)
+                if args.include_smear else False
+            ),
         },
         "stats": asdict(stats) if stats is not None else None,
     }
@@ -2475,7 +2800,12 @@ def parse_args():
     p.add_argument(
         "--input-files", nargs="+", required=True,
         default=argparse.SUPPRESS,
-        help="(required) Input ROOT file(s) with the J/psi snapshot tree.",
+        help="(required) One of: (a) a shard directory containing "
+        "manifest.json (auto-expanded to its Arrow IPC shards); "
+        "(b) explicit .arrow shard files (shell globs OK); "
+        "(c) explicit .root RVec RNTuple snapshots from "
+        "flow_training_snapshot.py. All entries must be the same "
+        "format.",
     )
     p.add_argument(
         "--tree", default="tree",
@@ -2486,31 +2816,92 @@ def parse_args():
         help="Output directory (created if missing).",
     )
     p.add_argument(
-        "--max-muons", type=int, default=-1,
-        help="Cap on muon rows after the event filter. -1 = no cap.",
+        "--stats-max-rows", type=int, default=-1,
+        help="Cap the rows used by the preproc-stats warmup pass. -1 "
+        "= scan all rows in all shards (most accurate). 1e7 is "
+        "plenty in practice and starts training in seconds rather "
+        "than minutes.",
     )
     p.add_argument(
-        "--max-events", type=int, default=-1,
-        help="Cap on raw J/psi events kept via RDataFrame Filter. "
-        "-1 = load all.",
+        "--robust-stats",
+        dest="robust_stats",
+        action="store_true",
+        default=True,
+        help="Compute preproc location/scale as (median, 1.4826·MAD) "
+        "from a row sample instead of (mean, std) from a full scan. "
+        "Heavy-tailed targets (notably r_kappa with its "
+        "charge-mismeasurement peak at ~-2, and the heavy tails on "
+        "dlambda / dphi) make the unweighted std much larger than "
+        "the bulk's actual width, which then makes every δ=1 "
+        "perturbation a multi-σ over-shift. The robust pair keeps "
+        "δ=1 ~ one bulk-width. Default: on. Use ``--no-robust-stats`` "
+        "to fall back to the old (mean, std) full-scan pass.",
     )
     p.add_argument(
-        "--threads", type=int, default=0,
-        help="RDataFrame ImplicitMT threads. 0 = ROOT auto (all cores). "
-        "1 disables MT.",
+        "--no-robust-stats",
+        dest="robust_stats",
+        action="store_false",
     )
     p.add_argument(
-        "--pt-min", type=float, default=2.0,
-        help="Minimum gen pt (GeV) per muon. Matches the snapshot "
-        "script and flow trainer.",
+        "--robust-sample-rows", type=int, default=20_000_000,
+        help="(``--robust-stats`` only) Sample size for the robust "
+        "median + MAD pass. 2e7 rows fits in ~640 MB and gives "
+        "stable estimates even for the rare charge-mismeasurement "
+        "tail.",
     )
     p.add_argument(
-        "--pt-max", type=float, default=200.0,
-        help="Maximum gen pt (GeV) per muon.",
+        "--weight-handling",
+        choices=["abs", "keep", "drop"],
+        default="abs",
+        help="How to handle MC@NLO-style signed event weights. "
+        "``abs`` (default): take |w| and drop w==0 / non-finite — "
+        "loses the destructive-interference signal but keeps every "
+        "row's magnitude contribution. ``keep``: pass w through "
+        "unchanged; only drops non-finite. Use for an unbiased "
+        "signed weighted-NLL. ``drop``: drop w<=0 / non-finite "
+        "(legacy, ~5%% loss on W/Z).",
     )
     p.add_argument(
-        "--eta-max", type=float, default=2.4,
-        help="Maximum |gen eta| per muon.",
+        "--data-workers", type=int, default=4,
+        help="Number of background processes that feed each rank's "
+        "data pipeline. 0 = run the loader inline in the trainer "
+        "process (single producer thread, prefetch=2). >0 wraps the "
+        "loader in a ``torch.utils.data.DataLoader`` with this many "
+        "worker processes — each opens its own shard subset, "
+        "bypasses the GIL, and ships pinned tensors via shared "
+        "memory. Useful when training is CPU-bound on data prep.",
+    )
+    p.add_argument(
+        "--pin-memory",
+        dest="pin_memory",
+        action="store_true",
+        default=None,
+        help="Pin worker output tensors so ``Tensor.to(device, "
+        "non_blocking=True)`` can DMA asynchronously. Default: "
+        "auto-enabled when device is CUDA. ``--no-pin-memory`` "
+        "disables it — useful when the single PyTorch pin-memory "
+        "thread in the main process is a bottleneck (high "
+        "``--data-workers`` but each worker sits at low CPU "
+        "utilisation); H2D copies become synchronous but the "
+        "main-process pin memcpy is skipped.",
+    )
+    p.add_argument(
+        "--no-pin-memory",
+        dest="pin_memory",
+        action="store_false",
+    )
+    p.add_argument(
+        "--profile-data-pipeline",
+        type=int,
+        default=0,
+        metavar="N",
+        help="Print per-iteration ``loader_wait`` / ``trainer_step`` "
+        "timings for the first N training batches of each epoch. "
+        "Use this to localise the data-pipeline bottleneck: large "
+        "loader_wait => workers are the ceiling (add workers or "
+        "make them faster); large trainer_step => GPU / main-process "
+        "consumer is the ceiling (adding workers won't help). 0 "
+        "disables.",
     )
     p.add_argument(
         "--val-fraction", type=float, default=0.1,
@@ -2523,10 +2914,19 @@ def parse_args():
 
     # Architecture selection.
     p.add_argument(
-        "--arch", choices=["mlp", "polyhead"], default="mlp",
+        "--arch",
+        choices=["mlp", "polyhead", "mlp-factored"],
+        default="mlp",
         help="Model architecture. 'mlp' (default) is the dual-scalar-"
         "forward construction; 'polyhead' uses a trunk that produces "
-        "polynomial coefficients with structural priors.",
+        "polynomial coefficients with structural priors; "
+        "'mlp-factored' uses a trunk + factored head returning "
+        "log W = <u, A(e, ·)> + <σ_pack, B(e, ·)>"
+        " [ + <u⊗σ_pack, C(e, u, σ_pack)> ] with structural zeros at "
+        "(u=0, σ=0) and σ-evenness built in. The detach flags "
+        "--detach-pure-{shift,smear}-in-joint select between the "
+        "full-cross default form, partially-factored two-term form, "
+        "and fully-factored three-term form.",
     )
 
     # Trunk sizing (shared between mlp and polyhead arches).
@@ -2747,18 +3147,41 @@ def parse_args():
     )
     p.add_argument(
         "--detach-pure-in-joint",
-        action=argparse.BooleanOptionalAction, default=True,
-        help="Detach the pure-shift (sigma -> 0) and pure-smear "
-        "(u -> 0) contributions to log r on JOINT-mode events "
-        "(mode==2; both u and sigma_vec nonzero). Routes pure-axis "
-        "gradients exclusively through the lower-noise SHIFT/SMEAR "
-        "events and lets JOINT events train only the cross/mixed "
-        "interaction. polyhead: zero cost (mask on pure-u/pure-sigma "
-        "basis-index slots). mlp: ~2x head cost from two extra head "
-        "forwards f(e, u, 0) and f(e, 0, sigma_pack) used to "
-        "decompose d_full = d_pure_u + d_pure_sigma + d_mixed. "
-        "Default: enabled (--detach-pure-in-joint); disable with "
-        "--no-detach-pure-in-joint.",
+        action=argparse.BooleanOptionalAction, default=False,
+        help="(polyhead / mlp arches) Detach the pure-shift "
+        "(sigma -> 0) and pure-smear (u -> 0) contributions to log r "
+        "on JOINT-mode events (mode==2; both u and sigma_vec "
+        "nonzero). Routes pure-axis gradients exclusively through the "
+        "lower-noise SHIFT/SMEAR events and lets JOINT events train "
+        "only the cross/mixed interaction. polyhead: zero cost (mask "
+        "on pure-u/pure-sigma basis-index slots). mlp: ~2x head cost "
+        "from two extra head forwards f(e, u, 0) and f(e, 0, "
+        "sigma_pack) used to decompose d_full = d_pure_u + "
+        "d_pure_sigma + d_mixed. Default: disabled. For the "
+        "mlp-factored arch use --detach-pure-shift-in-joint and/or "
+        "--detach-pure-smear-in-joint instead, which select the "
+        "structural factorisation form.",
+    )
+    p.add_argument(
+        "--detach-pure-shift-in-joint",
+        action="store_true", default=False,
+        help="(mlp-factored only) Detach the pure-shift block A on "
+        "JOINT events. Equivalently: structurally factor A so it "
+        "depends only on (e, u), not on σ_pack; the cross-term "
+        "absorption lives in B's u-dependence. A's gradient flows "
+        "only from SHIFT events.",
+    )
+    p.add_argument(
+        "--detach-pure-smear-in-joint",
+        action="store_true", default=False,
+        help="(mlp-factored only) Detach the pure-smear block B on "
+        "JOINT events. Equivalently: structurally factor B so it "
+        "depends only on (e, σ_pack), not on u; the cross-term "
+        "absorption lives in A's σ_pack-dependence. B's gradient "
+        "flows only from SMEAR events. When combined with "
+        "--detach-pure-shift-in-joint, the head becomes fully "
+        "three-block factorised with a separate cross head C(e, u, "
+        "σ_pack).",
     )
 
     # Optimization.
@@ -2892,19 +3315,20 @@ def main_worker(
     world_size,
     master_port,
     stats,
-    target_std_t,
-    cond_t,
-    w_t,
-    train_sel,
-    val_sel,
+    weight_mean,
+    shard_files,
+    shard_row_counts,
     n_features,
     n_cond,
 ):
     """One worker process. Initializes the process group (if
-    distributed), shards the train/val indices per rank, builds the
-    model + DDP wrap, and runs training. Only rank 0 prints, writes
-    checkpoints, and saves the final artifact.
+    distributed), opens its own per-rank streaming loader over the
+    Arrow shards, builds the model + DDP wrap, and runs training.
+    Only rank 0 prints, writes checkpoints, and saves the final
+    artifact.
     """
+    from arrow_shard_loader import ArrowShardLoader
+
     is_dist = world_size > 1
     is_rank0 = rank == 0
 
@@ -2930,43 +3354,93 @@ def main_worker(
         else:
             device = args.device
 
-    # Per-rank index shard. With world_size==1 this is a no-op.
-    if is_dist:
-        train_sel_rank = torch.chunk(
-            train_sel, world_size,
-        )[rank].contiguous()
-        val_sel_rank = torch.chunk(
-            val_sel, world_size,
-        )[rank].contiguous()
+    # Per-rank streaming loaders over the Arrow shards. Each rank
+    # gets a round-robin slice of the shard list. train / val split
+    # is done contiguously per record batch (first val_fraction
+    # rows go to val); the shards are already globally shuffled by
+    # the bucket-shuffle pass so this is unbiased.
+    # ``--pin-memory`` is tristate via argparse: True/False if the
+    # user passed the flag explicitly, None for the auto-default
+    # (on if device is CUDA, off otherwise).
+    if args.pin_memory is None:
+        pin_memory = device.startswith("cuda")
     else:
-        train_sel_rank = train_sel
-        val_sel_rank = val_sel
-
-    train_x = target_std_t.index_select(0, train_sel_rank).contiguous()
-    train_c = cond_t.index_select(0, train_sel_rank).contiguous()
-    train_w = w_t.index_select(0, train_sel_rank).contiguous()
-    val_x = target_std_t.index_select(0, val_sel_rank).contiguous()
-    val_c = cond_t.index_select(0, val_sel_rank).contiguous()
-    val_w = w_t.index_select(0, val_sel_rank).contiguous()
-    n_train_rank = train_x.shape[0]
-    n_val_rank = val_x.shape[0]
-
-    train_loader = InMemoryLoader(
-        train_x, train_c, train_w,
-        batch_size=args.batch_size, shuffle=True, drop_last=True,
-        prefetch_shuffle=bool(getattr(args, "prefetch_shuffle", True)),
-        time_iter=bool(getattr(args, "time_loader", False)),
+        pin_memory = bool(args.pin_memory)
+    n_data_workers = max(0, int(args.data_workers))
+    n_train_workers_hint = max(1, n_data_workers)
+    n_val_workers_hint = max(1, n_data_workers // 2)
+    train_ds = ArrowShardLoader(
+        shard_files, stats, weight_mean,
+        world_size=world_size, rank=rank,
+        batch_size=args.batch_size,
+        split="train",
+        val_fraction=args.val_fraction,
+        shuffle=True, drop_last=True,
+        pin_memory=pin_memory,
+        seed=int(args.seed),
+        weight_mode=args.weight_handling,
+        shard_row_counts=shard_row_counts,
+        num_workers_hint=n_train_workers_hint,
     )
-    val_loader = InMemoryLoader(
-        val_x, val_c, val_w,
-        batch_size=args.batch_size, shuffle=False, drop_last=False,
-        time_iter=bool(getattr(args, "time_loader", False)),
+    val_ds = ArrowShardLoader(
+        shard_files, stats, weight_mean,
+        world_size=world_size, rank=rank,
+        batch_size=args.batch_size,
+        split="val",
+        val_fraction=args.val_fraction,
+        shuffle=False, drop_last=False,
+        pin_memory=pin_memory,
+        seed=int(args.seed),
+        weight_mode=args.weight_handling,
+        shard_row_counts=shard_row_counts,
+        num_workers_hint=n_val_workers_hint,
     )
+
+    # When --data-workers > 0, wrap as ``DataLoader`` so each rank's
+    # data pipeline is fed by N worker processes. ``batch_size=None``
+    # disables PyTorch's auto-batching (our dataset already yields
+    # complete training batches). With ``num_workers == 0`` we bypass
+    # DataLoader entirely and let the dataset's own in-process
+    # prefetch thread handle pipelining.
+    if n_data_workers > 0:
+        import torch.utils.data as _td
+        from arrow_shard_loader import dataloader_worker_init
+        train_loader = _td.DataLoader(
+            train_ds,
+            batch_size=None,
+            num_workers=n_data_workers,
+            pin_memory=pin_memory,
+            persistent_workers=True,
+            prefetch_factor=2,
+            worker_init_fn=dataloader_worker_init,
+        )
+        val_loader = _td.DataLoader(
+            val_ds,
+            batch_size=None,
+            num_workers=max(1, n_data_workers // 2),
+            pin_memory=pin_memory,
+            persistent_workers=True,
+            prefetch_factor=2,
+            worker_init_fn=dataloader_worker_init,
+        )
+    else:
+        train_loader = train_ds
+        val_loader = val_ds
+
+    # Optional timing wrapper. Prints loader_wait / trainer_step for
+    # the first ``--profile-data-pipeline`` batches of each iter()
+    # call so the bottleneck (workers vs main-process+GPU) is easy
+    # to read off.
+    n_profile = int(getattr(args, "profile_data_pipeline", 0) or 0)
+    if n_profile > 0 and is_rank0:
+        from arrow_shard_loader import TimedLoader
+        train_loader = TimedLoader(train_loader, n_print=n_profile, label="train")
+        val_loader = TimedLoader(val_loader, n_print=n_profile, label="val")
     if is_rank0:
         print(
             f"rank {rank}/{world_size}  "
-            f"train {n_train_rank * world_size}  "
-            f"val {n_val_rank * world_size}  "
+            f"~train batches {len(train_loader)}  "
+            f"~val batches {len(val_loader)}  "
             f"batch {args.batch_size}  device {device}"
         )
 
@@ -3009,6 +3483,46 @@ def main_worker(
                 f"d_emb={args.d_emb} "
                 f"trunk={args.trunk_hidden}×{args.trunk_layers} "
                 f"head={args.head_hidden}×{args.head_layers}  "
+                f"params={n_params:,}"
+            )
+    elif args.arch == "mlp-factored":
+        inner_model = ReweightMLPFactored(
+            n_features=n_features,
+            n_cond=n_cond,
+            d_emb=args.d_emb,
+            trunk_hidden=args.trunk_hidden,
+            trunk_layers=args.trunk_layers,
+            head_hidden=args.head_hidden,
+            head_layers=args.head_layers,
+            activation=activation_cls,
+            shift_only=not args.include_smear,
+            detach_pure_shift_in_joint=bool(
+                args.detach_pure_shift_in_joint
+            ),
+            detach_pure_smear_in_joint=bool(
+                args.detach_pure_smear_in_joint
+            ),
+            gauss_baseline=gauss_baseline,
+        ).to(device)
+        n_params = sum(p.numel() for p in inner_model.parameters())
+        if is_rank0:
+            form = "default (full cross)"
+            if (
+                inner_model.detach_pure_shift_in_joint
+                and inner_model.detach_pure_smear_in_joint
+            ):
+                form = "three-term factored (separate C)"
+            elif inner_model.detach_pure_shift_in_joint:
+                form = "shift-factored (A: e,u; cross in B)"
+            elif inner_model.detach_pure_smear_in_joint:
+                form = "smear-factored (B: e,σ_pack; cross in A)"
+            print(
+                f"ReweightMLPFactored"
+                f"{' (shift-only)' if not args.include_smear else ''}: "
+                f"d_emb={args.d_emb} "
+                f"trunk={args.trunk_hidden}×{args.trunk_layers} "
+                f"head={args.head_hidden}×{args.head_layers}  "
+                f"form={form}  "
                 f"params={n_params:,}"
             )
     elif args.arch == "polyhead":
@@ -3081,13 +3595,22 @@ def main_worker(
 
     # Effective smear settings collapse to the shift-only defaults
     # when --no-include-smear; the user-set --smear-K / --smear-residual
-    # / --detach-pure-in-joint are tracked for logging but ignored.
+    # / --detach-pure-in-joint / --detach-pure-{shift,smear}-in-joint
+    # are tracked for logging but ignored.
     eff_smear_K = args.smear_K if args.include_smear else 1
     eff_smear_residual = (
         bool(args.smear_residual) if args.include_smear else False
     )
     eff_detach_pure_in_joint = (
         bool(args.detach_pure_in_joint) if args.include_smear else False
+    )
+    eff_detach_pure_shift_in_joint = (
+        bool(args.detach_pure_shift_in_joint)
+        if args.include_smear else False
+    )
+    eff_detach_pure_smear_in_joint = (
+        bool(args.detach_pure_smear_in_joint)
+        if args.include_smear else False
     )
 
     log_lines: List[str] = []
@@ -3111,6 +3634,8 @@ def main_worker(
             f"sigma_max={args.sigma_max if args.include_smear else 0.0} "
             f"smear=({smear_mode_str}) "
             f"detach_pure_in_joint={eff_detach_pure_in_joint} "
+            f"detach_pure_shift_in_joint={eff_detach_pure_shift_in_joint} "
+            f"detach_pure_smear_in_joint={eff_detach_pure_smear_in_joint} "
             f"{gauss_str} "
             f"precision={args.precision} compile={bool(args.compile)} "
             f"world_size={world_size} params={n_params}"
@@ -3128,7 +3653,7 @@ def main_worker(
     # Σ_pack indices live on device for the MLP arch (shift+smear
     # only — the shift-only head doesn't take Σ_pack).
     sigma_pack_iu = sigma_pack_ju = None
-    if args.arch == "mlp" and args.include_smear:
+    if args.arch in ("mlp", "mlp-factored") and args.include_smear:
         iu, ju = _sigma_pack_indices(n_features)
         sigma_pack_iu = iu.to(device)
         sigma_pack_ju = ju.to(device)
@@ -3260,10 +3785,11 @@ def main_worker(
             train_loss=float("nan"), val_loss=best_val, best_val=best_val,
             stats=stats,
         )
-        final_name = (
-            "shift_smear_reweight_mlp.pt" if args.arch == "mlp"
-            else "shift_smear_reweight_polyhead.pt"
-        )
+        final_name = {
+            "mlp": "shift_smear_reweight_mlp.pt",
+            "mlp-factored": "shift_smear_reweight_mlp_factored.pt",
+            "polyhead": "shift_smear_reweight_polyhead.pt",
+        }[args.arch]
         final_path = os.path.join(args.output, final_name)
         torch.save(final, final_path)
         print(f"wrote final model to {final_path}")
@@ -3286,38 +3812,38 @@ def main():
     torch.manual_seed(args.seed)
     np.random.seed(args.seed)
 
-    print(f"loading ntuples from {len(args.input_files)} file(s)")
-    (
-        pt_r, eta_r, phi_r, pt_g, eta_g, phi_g, q, w,
-    ) = load_ntuples(
-        args.input_files, args.tree, args.max_muons,
-        args.pt_min, args.pt_max, args.eta_max,
-        threads=args.threads, max_events=args.max_events,
+    from arrow_shard_loader import (
+        resolve_shard_files,
+        compute_stats_streaming,
     )
 
-    target, cond_raw = compute_targets_and_conditioning(
-        pt_r, eta_r, phi_r, pt_g, eta_g, phi_g, q,
+    shard_files, shard_row_counts = resolve_shard_files(
+        args.input_files, return_counts=True,
     )
-    w = (w / w.mean()).astype(np.float32)
-    stats = build_preproc(target, cond_raw)
-    target_std, cond = apply_preproc(target, cond_raw, stats)
+    print(
+        f"resolved {len(shard_files)} Arrow shard(s) from "
+        f"{len(args.input_files)} input arg(s)"
+        + ("" if shard_row_counts is None else
+           f"; manifest reports {sum(shard_row_counts):,} total rows")
+    )
+
+    # One streaming pass for preproc mean/std + weight mean.
+    # ``--stats-max-rows`` (CLI knob added below) caps the warmup
+    # to a subsample if you want training to start faster.
+    stats_max = int(getattr(args, "stats_max_rows", -1) or -1)
+    stats, weight_mean = compute_stats_streaming(
+        shard_files, max_rows=stats_max, progress=True,
+        weight_mode=args.weight_handling,
+        robust=bool(getattr(args, "robust_stats", False)),
+        robust_sample_rows=int(
+            getattr(args, "robust_sample_rows", 1_000_000)
+        ),
+    )
     with open(os.path.join(args.output, "preproc.json"), "w") as f:
         json.dump(asdict(stats), f, indent=2)
 
-    n_total = target_std.shape[0]
-    n_features = target_std.shape[1]
-    n_cond = cond.shape[1]
-    n_val = int(n_total * args.val_fraction)
-    n_train = n_total - n_val
-    gen = torch.Generator().manual_seed(args.seed)
-    perm_all = torch.randperm(n_total, generator=gen)
-    val_sel = perm_all[:n_val].contiguous()
-    train_sel = perm_all[n_val:].contiguous()
-
-    target_std_t = torch.from_numpy(target_std).contiguous()
-    cond_t = torch.from_numpy(cond).contiguous()
-    w_t = torch.from_numpy(w).contiguous()
-    del target_std, cond, w
+    n_features = len(stats.target_names)
+    n_cond = len(stats.cond_names)
 
     if args.batch_size is None:
         args.batch_size = 32768 if args.device != "cpu" else 16384
@@ -3332,23 +3858,16 @@ def main():
         world_size = 1
 
     print(
-        f"train {n_train}  val {n_val}  total {n_total}  "
+        f"streaming training over {len(shard_files)} shard(s)  "
         f"world_size {world_size}  device {args.device}"
     )
 
     if world_size == 1:
         main_worker(
-            0, args, 1, 0, stats,
-            target_std_t, cond_t, w_t, train_sel, val_sel,
-            n_features, n_cond,
+            0, args, 1, 0, stats, weight_mean, shard_files,
+            shard_row_counts, n_features, n_cond,
         )
     else:
-        # Share memory so child workers attach rather than copy.
-        target_std_t.share_memory_()
-        cond_t.share_memory_()
-        w_t.share_memory_()
-        train_sel.share_memory_()
-        val_sel.share_memory_()
         # Pick a free port on localhost for the rendezvous.
         import socket
         sock = socket.socket()
@@ -3359,9 +3878,8 @@ def main():
         mp.spawn(
             main_worker,
             args=(
-                args, world_size, master_port, stats,
-                target_std_t, cond_t, w_t, train_sel, val_sel,
-                n_features, n_cond,
+                args, world_size, master_port, stats, weight_mean,
+                shard_files, shard_row_counts, n_features, n_cond,
             ),
             nprocs=world_size,
             join=True,
