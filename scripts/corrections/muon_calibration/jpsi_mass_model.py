@@ -653,6 +653,16 @@ class JpsiMassMixtureModel(nn.Module):
         # negative-c drift (issue #2) by construction, at the cost of losing
         # the two-sided fit (the model can no longer represent MC that is too
         # broad vs data).
+        # 'square': physical = θ²·SMEAR_VAR_SCALE ≥ 0 — same individual-
+        # positivity guarantee as softplus, but with better convergence: θ=0
+        # maps to physical=0 EXACTLY (identity init, like 'linear'; no softplus
+        # ln2 offset / saturation knee), and ∂physical/∂θ = 2·SMEAR_VAR_SCALE·θ
+        # grows away from zero rather than saturating, so a fixed lr isn't
+        # throttled in the small-variance regime. Caveats: θ↔−θ are degenerate
+        # (the map is even) and ∂physical/∂θ → 0 at θ=0, so the RAW-θ covariance
+        # paths (binned observed Fisher / net-weight empirical Fisher / boot-
+        # strap) become singular for any smear bin pinned at zero — take the
+        # smear σ from the reparam-robust --output-fisher there instead.
         smear_param_form: str = "linear",
         # Per-event normalisation correction for the transformed-flow density.
         # The forward map T_θ is NOT boundary-preserving on [m_lo, m_hi]:
@@ -735,9 +745,9 @@ class JpsiMassMixtureModel(nn.Module):
             raise ValueError(
                 f"jacobian_form must be 'softlog' or 'exp'; got {jacobian_form!r}")
         self.jacobian_form = str(jacobian_form)
-        if smear_param_form not in ("linear", "softplus"):
+        if smear_param_form not in ("linear", "softplus", "square"):
             raise ValueError(
-                f"smear_param_form must be 'linear' or 'softplus'; "
+                f"smear_param_form must be 'linear', 'softplus', or 'square'; "
                 f"got {smear_param_form!r}")
         self.smear_param_form = str(smear_param_form)
         if norm_correction not in ("none", "linear", "flow_cdf"):
@@ -960,12 +970,17 @@ class JpsiMassMixtureModel(nn.Module):
         """Apply the positivity reparameterisation (if any) and the per-bin
         fit mask to the raw O(1) ``θ_smear`` tensor (shape ``[..., 2]``).
         'linear' (default): identity (signed). 'softplus': ``softplus(raw)``
-        so each of (a, c) ≥ 0 INDIVIDUALLY. The mask is applied AFTER the
-        transform so frozen params (or 'a'-/'c'-only modes) are EXACTLY zero
-        regardless of the raw value — keeping the per-muon σ_qop and all
-        downstream transformations evaluated to zero for the inactive term."""
+        so each of (a, c) ≥ 0 INDIVIDUALLY. 'square': ``raw²`` — same individual
+        positivity, but θ=0 → 0 exactly (identity init) and a non-saturating
+        Jacobian (better convergence; see the constructor note on the raw-θ
+        covariance caveat at zero). The mask is applied AFTER the transform so
+        frozen params (or 'a'-/'c'-only modes) are EXACTLY zero regardless of
+        the raw value — keeping the per-muon σ_qop and all downstream
+        transformations evaluated to zero for the inactive term."""
         if self.smear_param_form == "softplus":
             raw = F.softplus(raw)
+        elif self.smear_param_form == "square":
+            raw = raw * raw
         return raw * self.smear_param_mask
 
     def _smear_ac_pm(self, eta_pm, phi_pm, b_pm) -> torch.Tensor:
@@ -1373,7 +1388,8 @@ class JpsiMassMixtureModel(nn.Module):
     # x-variation of v, V (source-evaluation + Jacobian), and is normalised by
     # construction. v, κ are evaluated at the source via the pt∝m scaling at
     # fixed conditioning — swappable to a learned v/κ MLP without touching this.
-    # softplus on θ_smear keeps V ≥ 0 (no ill-posed de-convolution / sharpening).
+    # softplus/square on θ_smear keeps V ≥ 0 (no ill-posed de-convolution /
+    # sharpening); 'linear' is two-sided.
     # ------------------------------------------------------------------
 
     def _continuity_response(self, m_eval, m_obs, pt_obs, eta_pm, q_pm,

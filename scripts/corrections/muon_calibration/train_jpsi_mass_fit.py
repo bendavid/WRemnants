@@ -441,21 +441,25 @@ def _fisher_save_dict(H: torch.Tensor, layout: dict, model: JpsiMassMixtureModel
                 torch.clamp(torch.diag(cov_scale), min=0.0)).view(24, 3)
     # PHYSICAL σ on the smear a/c per η-bin. The fit param θ_smear is O(1); the
     # physical qop-variance coefficient is `effective(θ)·SMEAR_VAR_SCALE`, where
-    # `effective` is the identity ('linear' form) or `softplus` ('softplus'
-    # form). Delta method: σ_phys = |d effective/dθ|·SMEAR_VAR_SCALE·σ_raw —
-    # constant for linear (Jacobian = 1), sigmoid(θ̂) for softplus. Inactive
-    # columns → 0.
+    # `effective` is the identity ('linear'), `softplus` ('softplus'), or `θ²`
+    # ('square'). Delta method: σ_phys = |d effective/dθ|·SMEAR_VAR_SCALE·σ_raw —
+    # Jacobian = 1 (linear), sigmoid(θ̂) (softplus), |2·θ̂| (square; → 0 at θ̂=0,
+    # the documented raw-θ singularity for a bin pinned at zero — use
+    # --output-fisher there). Evaluated at the fitted θ. Inactive columns → 0.
     if smear_cols and cov is not None:
         n_eta, n_comp = model.theta_smear.shape
         cov_smear = cov[n_scale:, n_scale:]
         sig_raw = torch.sqrt(torch.clamp(torch.diag(cov_smear), min=0.0))
         smear_scale = (SMEAR_VAR_SCALE_A, SMEAR_VAR_SCALE_C)
-        # Reparam Jacobian per (bin, coeff): identity for 'linear', sigmoid(θ̂)
-        # for 'softplus'. Evaluated at the fitted θ.
-        is_softplus = getattr(model, "smear_param_form", "linear") == "softplus"
+        form = getattr(model, "smear_param_form", "linear")
         with torch.no_grad():
-            jac = (torch.sigmoid(model.theta_smear.detach().cpu())
-                   if is_softplus else torch.ones_like(model.theta_smear.detach().cpu()))
+            th = model.theta_smear.detach().cpu()
+            if form == "softplus":
+                jac = torch.sigmoid(th)
+            elif form == "square":
+                jac = (2.0 * th).abs()
+            else:
+                jac = torch.ones_like(th)
         sig_eff = torch.zeros(n_eta, n_comp)
         k = 0
         for b in range(n_eta):
@@ -841,7 +845,8 @@ def train_stage2(args, model, train_loader, val_loader, stats,
         # `θ=0` corresponds to physical c ≈ softplus(0)·SCALE_C ≈ 0.69·SCALE_C,
         # close to the softplus saturation knee — use --init-theta-{a,c} to
         # start at a positive raw θ and keep the parameter well inside the
-        # active region of softplus where the gradient hasn't vanished).
+        # active region of softplus where the gradient hasn't vanished. Under
+        # `square` form `θ=0` → physical 0 exactly, so no offset is needed.)
         a0 = float(getattr(args, "init_theta_a", 0.0))
         c0 = float(getattr(args, "init_theta_c", 0.0))
         with torch.no_grad():
@@ -2239,13 +2244,16 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "so the default θ=0 starts at softplus(0)=0.69, only 0.7σ from the "
                    "negative-tail saturation knee; raise to e.g. 1.0 to keep the "
                    "parameter well inside softplus's active region (where its gradient "
-                   "is not vanishing). The frozen column per --smear-fit-params is "
-                   "masked to 0 in the forward pass regardless of init.")
+                   "is not vanishing). Square form: physical a_init = θ²·SMEAR_VAR_"
+                   "SCALE_A, so θ=0 → 0 exactly (identity init, no offset needed). The "
+                   "frozen column per --smear-fit-params is masked to 0 in the forward "
+                   "pass regardless of init.")
     p.add_argument("--init-theta-c", type=float, default=0.0,
                    help="Initial value for the RAW θ_smear[:, 1] ('c' column), "
-                   "broadcast to all η-bins. See --init-theta-a for the linear vs "
-                   "softplus interpretation; in 'softplus' mode start at e.g. 1.0–2.0 "
-                   "to avoid edge-bin softplus saturation traps.")
+                   "broadcast to all η-bins. See --init-theta-a for the linear / "
+                   "softplus / square interpretation; in 'softplus' mode start at e.g. "
+                   "1.0–2.0 to avoid edge-bin softplus saturation traps. In 'square' "
+                   "mode the default 0 already maps to physical 0.")
     p.add_argument("--fit-mlp-lr", type=float, default=1e-3,
                    help="Stage-2 Adam lr for the background-fraction MLP.")
     p.add_argument("--fit-theta-mlp-lr", type=float, default=1e-3,
@@ -2385,7 +2393,8 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         "hi(ξ_i)) - F_0(m'_lo(ξ_i))] (per-GH-node boundary inversion); the "
         "PF-ODE-based forms above use the wrong operator at the boundary.")
     p.add_argument(
-        "--smear-param-form", choices=("linear", "softplus"), default="linear",
+        "--smear-param-form", choices=("linear", "softplus", "square"),
+        default="linear",
         help="Positivity reparameterisation for θ_smear. 'linear' (default): "
         "the O(1) θ_smear is the coefficient directly — signed, supports both "
         "broadening (V>0) and unsmear (V<0). 'softplus': each of (a, c) "
@@ -2396,7 +2405,15 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         "against the negative-c drift (issue #2) by construction, at the cost "
         "of losing the two-sided fit (the model can no longer represent MC "
         "that's too broad vs data). The Fisher σ accounts for the sigmoid(θ̂) "
-        "delta-method Jacobian in 'softplus'.",
+        "delta-method Jacobian in 'softplus'. 'square': physical = θ²·SMEAR_"
+        "VAR_SCALE — same individual positivity as softplus but better "
+        "convergence (θ=0 → 0 exactly, like 'linear', so identity init with no "
+        "softplus ln2 offset / saturation knee, and a non-saturating Jacobian "
+        "2·SMEAR_VAR_SCALE·θ). Caveat: θ↔−θ degenerate and ∂physical/∂θ→0 at "
+        "θ=0, so the raw-θ covariance (--fisher-info / --empirical-fisher / "
+        "--bootstrap) is singular for a smear bin pinned at zero — take the "
+        "smear σ from --output-fisher there instead. --init-theta-{a,c} sets a "
+        "nonzero raw θ init (interpreted in the chosen form).",
     )
     p.add_argument(
         "--jacobian-form", choices=("softlog", "exp"), default="softlog",

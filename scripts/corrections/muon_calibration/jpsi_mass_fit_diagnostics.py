@@ -202,7 +202,10 @@ def _injected_raw_theta(model, inject_scale_phys, inject_smear_phys):
         - ``smear_param_form='softplus'``: effective(θ) = softplus(θ); invert
           via raw = log(exp(eff) − 1) (= softplus⁻¹). For zero (un-injected)
           physical, eff is clipped to 1e-10 so the raw value is large-negative
-          (~ −23) with softplus(.) ≈ 0 — effectively the no-smear identity."""
+          (~ −23) with softplus(.) ≈ 0 — effectively the no-smear identity.
+        - ``smear_param_form='square'``: effective(θ) = θ²; invert via
+          raw = √(eff) (positive root; θ↔−θ are equivalent). Zero injection →
+          raw 0 exactly (no clipping needed)."""
     n_eta = model.theta_scale.shape[0]
     if inject_scale_phys is None:
         inject_scale_phys = np.zeros((n_eta, 3), dtype=np.float64)
@@ -212,11 +215,15 @@ def _injected_raw_theta(model, inject_scale_phys, inject_smear_phys):
     raw_scale = torch.tensor(inject_scale_phys / ref[None, :], dtype=torch.float32)
     scale = np.asarray([SMEAR_VAR_SCALE_A, SMEAR_VAR_SCALE_C], dtype=np.float64)
     eff = inject_smear_phys / scale[None, :]   # target effective θ_smear
-    if getattr(model, "smear_param_form", "linear") == "softplus":
+    form = getattr(model, "smear_param_form", "linear")
+    if form == "softplus":
         # softplus⁻¹(y) = log(exp(y) − 1) = log(expm1(y)); clip eff at 1e-10 so
         # zero-injection columns give a large-negative raw value (softplus→0).
         eff_safe = np.clip(eff, 1e-10, None)
         raw_smear = torch.tensor(np.log(np.expm1(eff_safe)), dtype=torch.float32)
+    elif form == "square":
+        # square⁻¹(y) = √y (positive root); zero injection → raw 0 exactly.
+        raw_smear = torch.tensor(np.sqrt(np.clip(eff, 0.0, None)), dtype=torch.float32)
     else:
         raw_smear = torch.tensor(eff, dtype=torch.float32)
     return raw_scale, raw_smear
@@ -1834,12 +1841,12 @@ def main() -> int:
         # Keep muon-0 output and reshape back to (n_eta, n_phi_all, n_comp).
         AeM_g = AeM_g[:, 0, :].view(n_eta_c, n_phi_all, 3)              # physical scale (×scale_ref inside the net)
         # Effective smear: route the raw MLP (a, c) through
-        # _smear_raw_to_effective so the softplus positivity reparam (when
-        # --smear-param-form softplus) is applied here too — same operator the
-        # model uses internally for the MLP smear branch in _smear_ac_pm.
-        # Then multiply by SMEAR_VAR_SCALE for the physical units.
+        # _smear_raw_to_effective so the positivity reparam (softplus / square,
+        # per --smear-param-form) is applied here too — same operator the model
+        # uses internally for the MLP smear branch in _smear_ac_pm. Then
+        # multiply by SMEAR_VAR_SCALE for the physical units.
         smear_scale = ac_g.new_tensor([SMEAR_VAR_SCALE_A, SMEAR_VAR_SCALE_C])
-        ac_eff = model._smear_raw_to_effective(ac_g[:, 0, :])           # softplus(ac)·mask if 'softplus', else ac·mask
+        ac_eff = model._smear_raw_to_effective(ac_g[:, 0, :])           # reparam(ac)·mask
         ac_phys = (ac_eff * smear_scale).view(n_eta_c, n_phi_all, 2)
         # Split: first n_phi_avg are the φ-average grid; rest are the slices.
         AeM_avg, AeM_slc = AeM_g[:, :n_phi_avg, :], AeM_g[:, n_phi_avg:, :]
