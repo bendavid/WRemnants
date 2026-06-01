@@ -181,11 +181,16 @@ def _make_fit_optimizer(args, groups):
                 f"(import failed: {e})")
         # weight_decay=0.0 (SOAP defaults to 0.01!) — a calibration fit must NOT
         # be pulled toward θ=0; this matches the Adam(groups) path (wd=0).
-        # precondition_frequency: steps between the (cheap, tiny-tensor here)
-        # eigendecompositions; the default ~10 is fine since the cost is
-        # dominated by data_nll_continuity, not the optimizer.
+        # precondition_1d=True (SOAP defaults to False!) — else 1-D parameters
+        # (every nn.Linear bias, incl. the θ_net final-layer (A,e,M,a,c) bias,
+        # and any 1-D θ) are left UN-preconditioned / pure-Adam; we want SOAP to
+        # condition them too. precondition_frequency: steps between the (cheap,
+        # tiny-tensor here) eigendecompositions. eps: the denominator floor in
+        # the rotated space — acts as a ridge on the preconditioner (larger →
+        # less aggressive whitening of the sloppy/near-degenerate directions).
         sb = args.soap_shampoo_beta
-        return SOAP(groups, weight_decay=0.0,
+        return SOAP(groups, weight_decay=0.0, precondition_1d=True,
+                    eps=float(args.soap_eps),
                     shampoo_beta=(float(sb) if sb is not None and sb >= 0 else None),
                     precondition_frequency=int(args.soap_precondition_frequency))
     raise ValueError(f"unknown --fit-optimizer {kind!r}")
@@ -2599,12 +2604,15 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "directions (the θ_net and background MLP weights especially) "
                    "converge more completely toward the local minimum with less "
                    "per-group lr tuning. weight_decay is forced to 0 (a "
-                   "calibration fit must not be pulled toward θ=0). Preconditions "
-                   "WITHIN each tensor, so it complements (not replaces) "
-                   "--theta-whiten, which couples the small cross-tensor "
-                   "degeneracies (A/e, a/c, scale/smear); the two can be combined. "
-                   "Per-group lrs / plateau schedule / bootstrap reset are "
-                   "unchanged. Requires the pytorch_optimizer package.")
+                   "calibration fit must not be pulled toward θ=0) and "
+                   "precondition_1d is forced True (SOAP defaults it False, which "
+                   "would leave every 1-D bias — incl. the θ_net final-layer "
+                   "(A,e,M,a,c) bias — un-preconditioned). Preconditions WITHIN "
+                   "each tensor, so it complements (not replaces) --theta-whiten, "
+                   "which couples the small cross-tensor degeneracies (A/e, a/c, "
+                   "scale/smear); the two can be combined. Per-group lrs / plateau "
+                   "schedule / bootstrap reset are unchanged. Requires the "
+                   "pytorch_optimizer package.")
     p.add_argument("--soap-precondition-frequency", type=int, default=10,
                    help="(--fit-optimizer soap) Optimizer steps between SOAP's "
                    "preconditioner eigendecompositions. Cheap here (tiny θ "
@@ -2613,6 +2621,14 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    help="(--fit-optimizer soap) EMA decay for the Shampoo "
                    "preconditioner. <0 (default) → use SOAP's own default (the "
                    "second β of --betas).")
+    p.add_argument("--soap-eps", type=float, default=1e-8,
+                   help="(--fit-optimizer soap) Denominator floor on the "
+                   "second-moment √(exp_avg_sq) in SOAP's ROTATED (preconditioned) "
+                   "space — effectively a ridge on the preconditioner: LARGER eps "
+                   "→ less aggressive whitening of small-curvature (sloppy / "
+                   "near-degenerate, e.g. A/e) directions → more Adam-like and "
+                   "more conservative steps along flat directions; smaller → "
+                   "stronger whitening. Default 1e-8 (SOAP's own default).")
     p.add_argument("--continuity-n-iter", type=int, default=2,
                    help="Fixed-point iterations for the #2 source solve "
                    "(advection+smear pre-image).")
