@@ -1701,7 +1701,8 @@ def _run_empirical_fisher_mlp(args, model, shard_files, stats, device) -> None:
 
 def compute_output_fisher_2d(model, loader, device, *, method="empirical",
                              n_phi=4, eta_edges=None, mc_as_data=False, n_iter=2,
-                             chunk_events=64, max_events=0, progress=True):
+                             chunk_events=64, max_events=0, progress=True,
+                             marginalize_bkg=False):
     """OUTPUT-space Fisher for --theta-mlp: reparametrise θ as a 2-D (η-bin ×
     φ-bin) TABLE seeded from the net at the bin centres, with the per-muon lookup
     reading that table, so the data's information about the per-(η,φ) OUTPUTS is
@@ -1713,14 +1714,29 @@ def compute_output_fisher_2d(model, loader, device, *, method="empirical",
       • sandwich → both.
     The per-η φ-mean covariance is recovered downstream by averaging the table
     covariance over its φ axes. θ_scale is physical (A,e,M); θ_smear is the O(1)
-    (a,c). Returns ``(H|None, J|None, layout)`` (cpu)."""
+    (a,c).
+
+    ``marginalize_bkg``: ALSO float the background MLP weights and accumulate the
+    JOINT [θ-table ⊕ bkg-weight] information, so the caller can Schur-complement
+    the background block out → the background-marginalized θ covariance (the
+    fixed-background default treats f_data(c) as known). The returned matrices are
+    then ``[n_joint, n_joint]`` (θ-active block first, bkg block after), with the
+    split recorded in ``layout`` (``n_theta_act``, ``n_bg``).
+
+    Returns ``(H|None, J|None, layout)`` (cpu)."""
     need_H = method in ("observed", "sandwich")
     need_J = method in ("empirical", "sandwich")
     model.eval()
     for p in model.flow.parameters():
         p.requires_grad_(False)
-    for p in model.mlp.parameters():
-        p.requires_grad_(False)
+    bg_params = []
+    if marginalize_bkg and getattr(model, "background_enabled", True):
+        bg_params = list(model.mlp.parameters())
+        for p in bg_params:
+            p.requires_grad_(True)
+    else:
+        for p in model.mlp.parameters():
+            p.requires_grad_(False)
     model.theta_scale.requires_grad_(False)
     model.theta_smear.requires_grad_(False)
     centres = 0.5 * (np.asarray(eta_edges[:-1]) + np.asarray(eta_edges[1:]))
@@ -1768,6 +1784,16 @@ def compute_output_fisher_2d(model, loader, device, *, method="empirical",
             p.requires_grad_(False)
         model._scale_AeM_pm, model._smear_ac_pm = orig_s, orig_c
         raise RuntimeError("output Fisher: no active θ columns.")
+    n_theta_act = len(active)
+    # Background marginalisation: append ALL bkg-MLP weights to the differentiated
+    # set, with EVERY entry active (the joint block to be Schur-complemented out).
+    off_after_theta = (t2s.numel() if model.scale_enabled else 0) \
+        + (t2c.numel() if smear_cols else 0)
+    n_bg = 0
+    if bg_params:
+        params = params + bg_params
+        n_bg = int(sum(p.numel() for p in bg_params))
+        active += [off_after_theta + i for i in range(n_bg)]
     active_idx = torch.tensor(active, dtype=torch.long, device=device)
     n_act = int(active_idx.numel())
 
@@ -1818,6 +1844,8 @@ def compute_output_fisher_2d(model, loader, device, *, method="empirical",
         bar.close()
     finally:
         model._scale_AeM_pm, model._smear_ac_pm = orig_s, orig_c
+        for p in bg_params:
+            p.requires_grad_(False)
     if seen == 0:
         raise RuntimeError("output Fisher: zero data-branch events seen.")
     if H is not None:
@@ -1827,8 +1855,124 @@ def compute_output_fisher_2d(model, loader, device, *, method="empirical",
     layout = {"n_eta": n_eta, "n_phi": n_phi, "scale_cols": scale_cols,
               "smear_cols": smear_cols, "n_sa": n_eta * n_phi * len(scale_cols),
               "n_ca": n_eta * n_phi * len(smear_cols), "sw": sw, "seen": seen,
-              "hit_cap": hit}
+              "hit_cap": hit, "n_theta_act": n_theta_act, "n_bg": n_bg}
     return H, J, layout
+
+
+def _table_output_jacobian(model, eta_edges, n_phi, scale_cols, smear_cols,
+                           device):
+    """Jacobian ``G = ∂o/∂w`` [n_act, n_w] of the ACTIVE η×φ table OUTPUTS w.r.t.
+    the θ-net weights, in the SAME active ordering ``compute_output_fisher_2d``
+    uses (scale block then smear block; each (η outer, φ middle, col inner)).
+
+    The table outputs are exactly the net evaluated at the bin centres: scale =
+    physical (A,e,M); smear = the O(1) EFFECTIVE (a,c) = ``_smear_raw_to_effective``
+    — matching the units the output-space information ``J_table`` is built in, so
+    ``G`` and ``J_table`` are consistent for the projection ``Uᵀ J_table U``.
+    Returned on CPU float64 (to match the CPU-side information matrices)."""
+    net_params = list(model.theta_net.parameters())
+    centres = 0.5 * (np.asarray(eta_edges[:-1]) + np.asarray(eta_edges[1:]))
+    n_eta = int(len(centres))
+    eta_c = torch.as_tensor(centres, dtype=torch.float32, device=device)
+    phi_edges = torch.linspace(-float(np.pi), float(np.pi), n_phi + 1, device=device)
+    phi_c = 0.5 * (phi_edges[:-1] + phi_edges[1:])
+    eg = eta_c[:, None, None].expand(n_eta, n_phi, 2).reshape(-1, 2)
+    pg = phi_c[None, :, None].expand(n_eta, n_phi, 2).reshape(-1, 2)
+    AeM, ac = model.theta_net(eg, pg)                    # physical A,e,M; raw a,c
+    AeM = AeM[:, 0, :]                                   # [n_eta*n_phi, 3]
+    ac_eff = model._smear_raw_to_effective(ac[:, 0, :])  # [n_eta*n_phi, 2] effective
+    # Assemble the active output vector in the exact active_idx order.
+    o_rows = []
+    for ie in range(n_eta):
+        for ip in range(n_phi):
+            row = ie * n_phi + ip
+            for c in scale_cols:
+                o_rows.append(AeM[row, c])
+    for ie in range(n_eta):
+        for ip in range(n_phi):
+            row = ie * n_phi + ip
+            for c in smear_cols:
+                o_rows.append(ac_eff[row, c])
+    o_active = torch.stack(o_rows)                       # [n_act]
+    rows = []
+    for k in range(int(o_active.numel())):
+        g = torch.autograd.grad(o_active[k], net_params, retain_graph=True,
+                                allow_unused=True)
+        rows.append(torch.cat([
+            (gi if gi is not None else torch.zeros_like(p)).reshape(-1)
+            for gi, p in zip(g, net_params)]).to(torch.float64).cpu())
+    return torch.stack(rows)                             # [n_act, n_w] cpu float64
+
+
+def _marginalize_bkg_block(M, n_theta, ridge):
+    """Background-marginalise a JOINT information matrix ``M`` (θ-active block
+    [:n_theta] then bkg-weight block [n_theta:]) → the θ-only information via the
+    Schur complement ``S = M_θθ − M_θb (M_bb)⁻¹ M_bθ``.
+
+    ``S`` is the information about θ AFTER profiling out the background — its
+    inverse is the background-marginalised θ covariance (the off-diagonal θ↔bkg
+    coupling inflates θ exactly as a joint-then-invert would). The bkg block is
+    rank-deficient (≫ events worth of MLP weights), so ``M_bb⁻¹ M_bθ`` is a
+    RIDGE-regularised solve in bkg-weight space (``--empirical-fisher-ridge``,
+    scale-aware): that ridge only damps the PSD correction term ``M_θb M_bb⁻¹
+    M_bθ`` (which can only inflate θ), so over-ridging → falls back to the fixed-
+    background θ block (conservative), never destabilising the primary θ inverse.
+    Returns the θ-only matrix ``S`` [n_theta, n_theta]."""
+    M = 0.5 * (M + M.T)
+    Mtt = M[:n_theta, :n_theta]
+    if M.shape[0] == n_theta:                     # no bkg block → nothing to do
+        return Mtt
+    Mtb = M[:n_theta, n_theta:]
+    Mbb = M[n_theta:, n_theta:]
+    nb = Mbb.shape[0]
+    # Scale-aware ridge solve  X = (Mbb + ridge·diag(Mbb))⁻¹ Mbθ  in standardised
+    # bkg space, mirroring _empirical_cov_theta_block's conditioning.
+    Mbb = 0.5 * (Mbb + Mbb.T)
+    d = torch.sqrt(torch.clamp(torch.diag(Mbb), min=0.0))
+    dmax = float(d.max()) if d.numel() else 1.0
+    dinv = 1.0 / torch.clamp(d, min=1e-12 * (dmax if dmax > 0 else 1.0))
+    Mbb_s = Mbb * dinv.unsqueeze(0) * dinv.unsqueeze(1)
+    eye = torch.eye(nb, dtype=M.dtype, device=M.device)
+    rhs = (dinv.unsqueeze(1) * Mtb.t())           # D⁻¹ Mbθ  [nb, n_theta]
+    x = torch.linalg.solve(Mbb_s + max(ridge, 1e-12) * eye, rhs)
+    correction = (dinv.unsqueeze(1) * Mtb.t()).t() @ x   # Mθb D⁻¹ (…)⁻¹ D⁻¹ Mbθ
+    return Mtt - 0.5 * (correction + correction.T)
+
+
+def _project_to_net_subspace(M_dict, G, ridge, svd_rtol):
+    """Option (b): restrict the output-space covariance to the network-REACHABLE
+    subspace, so the band carries the cross-bin (smoothness) correlations the MLP
+    induces while keeping the ridge in well-conditioned output space.
+
+    ``G = U Σ Vᵀ``; ``U_r`` = left singular vectors with σ_k/σ_max > svd_rtol
+    (the SMOOTHNESS CUTOFF — directions the net can only produce with large weight
+    excursions are dropped). Project each information matrix ``M_a = U_rᵀ M U_r``,
+    invert in that r-dim space with the scale-aware output ridge, map back
+    ``C = U_r C_a U_rᵀ``. With no ridge + no truncation this equals the
+    pseudoinverse limit of the weight-propagated covariance
+    ``G (Gᵀ J U_r-style)⁺ Gᵀ`` (network-consistent), but computed in a clean basis.
+
+    ``M_dict`` carries the matrices the method needs: {'J':…} (empirical),
+    {'H':…} (observed), or both (sandwich). Returns ``(C [n_act,n_act], r_kept)``.
+    """
+    U_full, S, _ = torch.linalg.svd(G, full_matrices=False)   # U[n_act,k] S[k]
+    smax = float(S[0]) if S.numel() else 0.0
+    keep = (S > svd_rtol * smax) if smax > 0 else (S > 0)
+    r = int(keep.sum())
+    U = U_full[:, :r]                                          # [n_act, r]
+
+    def _proj(M):
+        return U.t() @ M.to(torch.float64) @ U                # [r, r]
+
+    if "J" in M_dict and "H" in M_dict:                        # sandwich
+        Ja, Ha = _proj(M_dict["J"]), _proj(M_dict["H"])
+        Ha_inv = _empirical_cov_theta_block(Ha, r, ridge)
+        C_a = Ha_inv @ Ja @ Ha_inv
+    else:                                                      # empirical / observed
+        Ma = _proj(next(iter(M_dict.values())))
+        C_a = _empirical_cov_theta_block(Ma, r, ridge)
+    C = (U @ C_a.to(torch.float64) @ U.t())                    # [n_act, n_act]
+    return C.float(), r
 
 
 def _run_output_fisher_mlp(args, model, shard_files, stats, device) -> None:
@@ -1837,10 +1981,26 @@ def _run_output_fisher_mlp(args, model, shard_files, stats, device) -> None:
     σ-band keys, the φ-mean per-η covariance obtained by averaging the table
     covariance over φ. The smarter alternative to the weight-space empirical
     Fisher + ridge: the degeneracy structure is physical (output space), the
-    regularisation scale is physical, and observed/sandwich are available."""
+    regularisation scale is physical, and observed/sandwich are available.
+
+    ``--output-fisher-project``: 'free' (default) treats every (η,φ) cell as an
+    independent parameter — model-agnostic, well-conditioned, but BLIND to the
+    cross-bin correlations the smooth net induces (so the φ-mean band averages
+    down like 1/n_φ, often too small). 'net' restricts the covariance to the
+    network-reachable output subspace (SVD of the table-output Jacobian G), so
+    the band carries the MLP's smoothness correlations — the network-consistent
+    covariance — while the ridge stays in clean output space."""
     method = getattr(args, "output_fisher_method", "empirical")
+    project = getattr(args, "output_fisher_project", "free")
+    svd_rtol = float(getattr(args, "output_fisher_svd_rtol", 1e-2))
     n_phi = max(1, int(getattr(args, "output_fisher_nphi", 4)))
     ridge = float(args.empirical_fisher_ridge)
+    # Background marginalisation: tri-state CLI 'auto' (default) → ON for BOTH
+    # projections (float the bkg MLP into the joint output-space info and Schur-
+    # complement it out, so f_data(c) is profiled not held fixed — making the
+    # band comparable to the net-weight / bootstrap bands). 'on'/'off' force it.
+    mb_opt = getattr(args, "output_fisher_marginalize_bkg", "auto")
+    marg_bkg = True if mb_opt == "auto" else (mb_opt == "on")
     half = _validation_half(args, "fit")
     inj = _inject_theta_np(args, len(stats.eta_edges) - 1) if args.validation else None
     inj_sm = _inject_smear_np(args, len(stats.eta_edges) - 1) if args.validation else None
@@ -1855,8 +2015,11 @@ def _run_output_fisher_mlp(args, model, shard_files, stats, device) -> None:
         cond_basis=getattr(args, "cond_basis", "muon_kin"),
         max_events=int(getattr(args, "max_events", 0) or 0),
         event_fraction=float(getattr(args, "event_fraction", 1.0) or 1.0))
-    print(f"\ncomputing OUTPUT-space Fisher (method={method}, 2-D η×φ table "
-          f"n_phi={n_phi}, ridge={ridge:g}) on split={args.fisher_split}"
+    print(f"\ncomputing OUTPUT-space Fisher (method={method}, project={project}"
+          + (f", svd_rtol={svd_rtol:g}" if project == "net" else "")
+          + (", marginalize_bkg" if marg_bkg else "")
+          + f", 2-D η×φ table n_phi={n_phi}, ridge={ridge:g}) "
+          f"on split={args.fisher_split}"
           + ("  half=%s (MC pseudo-data)" % ('all' if half is None else half)
              if args.validation else "")
           + (f"; ≤{args.empirical_fisher_max_events:,} events"
@@ -1866,8 +2029,10 @@ def _run_output_fisher_mlp(args, model, shard_files, stats, device) -> None:
         model, loader, device, method=method, n_phi=n_phi,
         eta_edges=stats.eta_edges, mc_as_data=args.validation,
         n_iter=args.continuity_n_iter, chunk_events=args.empirical_fisher_chunk,
-        max_events=args.empirical_fisher_max_events, progress=args.progress)
+        max_events=args.empirical_fisher_max_events, progress=args.progress,
+        marginalize_bkg=marg_bkg)
     n_act = layout["n_sa"] + layout["n_ca"]
+    n_theta_act = layout.get("n_theta_act", n_act)
     # Scale H/J to full subset Σw if the event budget capped them (both ∝ Σw).
     if layout["hit_cap"] and layout["sw"] > 0:
         sw_total = 0.0
@@ -1882,8 +2047,35 @@ def _run_output_fisher_mlp(args, model, shard_files, stats, device) -> None:
                 J = J * sc
             print(f"  scaled Fisher by Σw_total/Σw_seen = {sc:.2f}")
             layout["sw"] = sw_total
+    # Background marginalisation: Schur-complement the joint [θ ⊕ bkg] info down
+    # to the θ-only block (commutes with the global Σw scalar above, and — for the
+    # net case — with the U-projection, since the bkg block is disjoint from the
+    # θ-table indices U spans). Yields the background-marginalised θ information.
+    if marg_bkg and layout.get("n_bg", 0) > 0:
+        if H is not None:
+            H = _marginalize_bkg_block(H.to(torch.float64), n_theta_act, ridge).float()
+        if J is not None:
+            J = _marginalize_bkg_block(J.to(torch.float64), n_theta_act, ridge).float()
+        print(f"  marginalised background ({layout['n_bg']} MLP weights) via "
+              f"Schur complement → {n_theta_act}-param θ information")
+    n_act = n_theta_act
     # Invert per method → active θ-table covariance C [n_act, n_act].
-    if method == "empirical":
+    r_kept = None
+    if project == "net":
+        # Option (b): project the output information into the network-reachable
+        # subspace (smoothness correlations retained), then invert there.
+        G = _table_output_jacobian(
+            model, stats.eta_edges, n_phi, layout["scale_cols"],
+            layout["smear_cols"], device)
+        M_dict = {}
+        if method in ("empirical", "sandwich"):
+            M_dict["J"] = J
+        if method in ("observed", "sandwich"):
+            M_dict["H"] = H
+        C, r_kept = _project_to_net_subspace(M_dict, G, ridge, svd_rtol)
+        print(f"  projected to net subspace: kept {r_kept}/{n_act} singular "
+              f"directions (svd_rtol={svd_rtol:g})")
+    elif method == "empirical":
         C = _empirical_cov_theta_block(J, n_act, ridge)
     elif method == "observed":
         C = _empirical_cov_theta_block(H, n_act, ridge)      # robust ridge inverse
@@ -1893,9 +2085,19 @@ def _run_output_fisher_mlp(args, model, shard_files, stats, device) -> None:
     C = C.numpy()
     n_sa, n_eta, nphi = layout["n_sa"], layout["n_eta"], layout["n_phi"]
     sc_cols, cc_cols = layout["scale_cols"], layout["smear_cols"]
+    proj_tag = (f", project=net[{r_kept}/{n_act}], svd_rtol={svd_rtol:g}"
+                if project == "net" else ", project=free")
+    bkg_tag = (f", bkg-marginalised[{layout['n_bg']}w]"
+               if (marg_bkg and layout.get("n_bg", 0) > 0) else "")
     out = {
-        "method": f"output-space Fisher ({method}, 2-D η×φ n_phi={nphi}, ridge={ridge:g})",
+        "method": (f"output-space Fisher ({method}, 2-D η×φ n_phi={nphi}, "
+                   f"ridge={ridge:g}{proj_tag}{bkg_tag})"),
         "ridge": ridge, "theta_mode": "mlp", "output_fisher_method": method,
+        "output_fisher_project": project,
+        "output_fisher_svd_rtol": (svd_rtol if project == "net" else None),
+        "net_subspace_rank": (r_kept if project == "net" else None),
+        "background_marginalized": bool(marg_bkg and layout.get("n_bg", 0) > 0),
+        "n_bkg_weights_marginalized": (layout.get("n_bg", 0) if marg_bkg else 0),
         "smear_fit_params": model.smear_fit_params,
         "n_events": layout["seen"], "sum_weight": layout["sw"],
         "param_space": "2-D (η,φ) θ-table outputs (physical A,e,M; O(1) a,c)",
@@ -2581,6 +2783,42 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    help="(--output-fisher) Number of φ bins in the η×φ table "
                    "(default 4). More bins resolve φ structure but split the "
                    "statistics per cell; the per-η band averages over them.")
+    p.add_argument("--output-fisher-project", default="free",
+                   choices=("free", "net"),
+                   help="(--output-fisher) Output-covariance subspace. 'free' "
+                   "(default): every (η,φ) cell is an independent parameter — "
+                   "model-agnostic and well-conditioned, but BLIND to the cross-"
+                   "bin (smoothness) correlations the MLP induces, so the φ-mean "
+                   "band averages down like 1/n_φ (often too small). 'net': "
+                   "restrict the covariance to the network-REACHABLE output "
+                   "subspace (SVD of the table-output Jacobian G = ∂o/∂w), so the "
+                   "band carries the MLP's smoothness correlations — the network-"
+                   "consistent covariance. With no ridge/truncation this equals "
+                   "the pseudoinverse limit of the weight-propagated covariance, "
+                   "but computed in a clean low-dim basis (no rank-deficient "
+                   "weight-space ridge lottery).")
+    p.add_argument("--output-fisher-svd-rtol", type=float, default=1e-2,
+                   help="(--output-fisher --output-fisher-project net) Relative "
+                   "singular-value cutoff σ_k/σ_max for the net-subspace "
+                   "projection — the SMOOTHNESS CUTOFF: output directions the net "
+                   "can only reach with large weight excursions (σ_k below this) "
+                   "are dropped. Default 1e-2; smaller keeps more (rougher) "
+                   "network modes.")
+    p.add_argument("--output-fisher-marginalize-bkg", default="auto",
+                   choices=("auto", "on", "off"),
+                   help="(--output-fisher) Marginalise the background-fraction "
+                   "MLP into the θ uncertainty by floating its weights in the "
+                   "JOINT output-space information and Schur-complementing them "
+                   "out (so f_data(c) is profiled, not held fixed). 'auto' "
+                   "(default): ON for BOTH projections — making the band "
+                   "comparable to the net-weight / bootstrap bands, which also "
+                   "marginalise the background. 'off' gives the fixed-background "
+                   "conditional band; 'on' is the same as auto. The bkg Schur "
+                   "block uses the same --empirical-fisher-ridge (it only damps "
+                   "the PSD inflation term, so over-ridging falls back to the "
+                   "fixed-bkg band). NOTE: with project=free the per-cell inverse "
+                   "is already ill-conditioned, so the marginalised free band is "
+                   "the noisiest combination — project=net is recommended.")
     # Warm-start Poisson bootstrap (Hessian-free covariance incl. the background)
     p.add_argument("--bootstrap", type=int, default=0,
                    help="(two-stage) After the stage-2 fit, run this many warm-start "
