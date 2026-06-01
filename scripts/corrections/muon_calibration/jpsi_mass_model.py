@@ -231,6 +231,16 @@ MUON_MASS_GEV = 0.1056583755
 SMEAR_VAR_SCALE_A = 1e-7
 SMEAR_VAR_SCALE_C = 2e-5
 
+# Default RAW θ_smear init for the 'square' reparam (physical = raw²·SCALE).
+# At raw=0 the square map is degenerate: effective=0 AND ∂effective/∂raw=2·raw=0,
+# so the smear branch gets ZERO gradient and is frozen at the zero init (observed:
+# θ_smear‖∞ stuck at 0 across a real fit). Initialising raw at this nonzero value
+# starts the fit off that saddle; 0.5 is chosen so the square Jacobian 2·raw = 1
+# at init — the same gradient scale the 'linear'/'softplus' forms have at their
+# init — so the smear lr is calibrated identically across forms. (effective at
+# init = 0.25, i.e. physical a,c = 0.25·SCALE, a small nonzero start.)
+SMEAR_SQUARE_INIT_RAW = 0.5
+
 # Invertibility floor on the probability-flow smear Jacobian G' = dx/dm'. A valid
 # forward (broadening) transport has G' > 0; the floor catches the fold/over-
 # sharpen region (V·∂²_m log p₀ large) gracefully, mirroring the old (1+s) ≥ 0.05.
@@ -503,10 +513,15 @@ class ThetaNet(nn.Module):
     outputs sit at O(1) (A,e ~ 1e-3, M ~ 1e-5); (a, c) are the qop-resolution
     variance coefficients in their O(1) units (SMEAR_VAR_SCALE_* applied
     downstream). The final layer is ZERO-INITIALISED, so the net outputs 0 at
-    init — the binned θ=0 init (no scale/smear correction)."""
+    init — the binned θ=0 init (no scale/smear correction) — EXCEPT the smear
+    (a, c) outputs, whose final-layer BIAS is set to ``smear_bias_init`` so the
+    raw (a, c) start at that constant for every (η, φ). This is required for the
+    'square' reparam, where a zero smear init is a dead saddle (∂effective/∂raw
+    = 0); see ``SMEAR_SQUARE_INIT_RAW``. Default 0.0 reproduces the original
+    zero-output init (correct for 'linear'/'softplus')."""
 
     def __init__(self, hidden: int = 32, n_layers: int = 2,
-                 scale_ref=THETA_SCALE_REF):
+                 scale_ref=THETA_SCALE_REF, smear_bias_init: float = 0.0):
         super().__init__()
         layers: list[nn.Module] = []
         d_in = 3  # (η, cosφ, sinφ)
@@ -516,6 +531,12 @@ class ThetaNet(nn.Module):
         last = nn.Linear(d_in, N_THETA_SCALE + N_THETA_SMEAR)  # 5 = (A,e,M,a,c)
         nn.init.zeros_(last.weight)
         nn.init.zeros_(last.bias)
+        if smear_bias_init != 0.0:
+            # Smear (a, c) outputs are the trailing N_THETA_SMEAR. With the
+            # weight zeroed, the raw (a, c) output equals this bias for ALL
+            # inputs at init → uniform nonzero raw smear, off the square saddle.
+            with torch.no_grad():
+                last.bias[N_THETA_SCALE:].fill_(float(smear_bias_init))
         layers.append(last)
         self.net = nn.Sequential(*layers)
         self.register_buffer(
@@ -830,18 +851,31 @@ class JpsiMassMixtureModel(nn.Module):
         self.theta_scale = nn.Parameter(
             torch.zeros(n_eta_bins, N_THETA_SCALE, dtype=torch.float32)
         )
+        # Default RAW θ_smear init. 'linear'/'softplus' start at 0 (the historical
+        # identity init); 'square' starts at SMEAR_SQUARE_INIT_RAW because raw=0
+        # is a dead saddle for that form (∂effective/∂raw = 0 → no smear gradient,
+        # observed as θ_smear frozen at 0 in a real fit). Applied to BOTH the
+        # binned table (here) and the ThetaNet smear bias (below) so MLP θ — which
+        # has no --init-theta-{a,c} override path — is also seeded off the saddle.
+        smear_init_raw = (SMEAR_SQUARE_INIT_RAW
+                          if self.smear_param_form == "square" else 0.0)
         # θ_smear are signed per-η-bin qop-resolution VARIANCE coefficients
         # (a, c): σ²_qop = a + c·k² (two-sided). They drive BOTH the per-muon qop
         # fold (validation) and the mass-density stretch (density), consistently.
-        # Init at 0 → σ²_qop = 0 (identity), free to broaden or unsmear.
+        # Init: 0 (linear/softplus) → σ²_qop=0 identity; SMEAR_SQUARE_INIT_RAW
+        # (square) → small nonzero, off the saddle. The binned --init-theta-{a,c}
+        # CLI overrides this downstream when explicitly set.
         self.theta_smear = nn.Parameter(
-            torch.zeros(n_eta_bins, N_THETA_SMEAR, dtype=torch.float32)
+            torch.full((n_eta_bins, N_THETA_SMEAR), smear_init_raw,
+                       dtype=torch.float32)
         )
         # 'mlp' θ: a small net maps each muon's (η, φ) → (A,e,M,a,c) continuously
-        # (zero-init → 0 at start). Replaces the binned tables above (which stay
-        # registered but inert). Trained in stage 2 like the background MLP.
+        # (scale zero-init → 0; smear bias = smear_init_raw). Replaces the binned
+        # tables above (which stay registered but inert). Trained in stage 2 like
+        # the background MLP.
         self.theta_net = (
-            ThetaNet(hidden=theta_mlp_hidden, n_layers=theta_mlp_layers)
+            ThetaNet(hidden=theta_mlp_hidden, n_layers=theta_mlp_layers,
+                     smear_bias_init=smear_init_raw)
             if self.theta_mode == "mlp" else None
         )
 

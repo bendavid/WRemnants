@@ -841,12 +841,13 @@ def train_stage2(args, model, train_loader, val_loader, stats,
               f"θ = ThetaNet(η, φ) [continuous]")
     else:
         # θ_scale is the advective shift (init 0, signed). θ_smear are the
-        # qop-variance coefficients (init 0 by default; under `softplus` form
-        # `θ=0` corresponds to physical c ≈ softplus(0)·SCALE_C ≈ 0.69·SCALE_C,
-        # close to the softplus saturation knee — use --init-theta-{a,c} to
-        # start at a positive raw θ and keep the parameter well inside the
-        # active region of softplus where the gradient hasn't vanished. Under
-        # `square` form `θ=0` → physical 0 exactly, so no offset is needed.)
+        # qop-variance coefficients. Their DEFAULT init comes from the model
+        # (0 for linear/softplus; SMEAR_SQUARE_INIT_RAW for `square`, since raw=0
+        # is a dead saddle there — ∂effective/∂raw=0 → the smear stays frozen at
+        # 0). For `softplus`, `θ=0` is physical c ≈ softplus(0)·SCALE_C ≈ 0.69·
+        # SCALE_C, near the saturation knee — use --init-theta-{a,c} to start at
+        # a positive raw θ. --init-theta-{a,c} (when set) OVERRIDES the model
+        # default here for the binned table.
         a0 = float(getattr(args, "init_theta_a", 0.0))
         c0 = float(getattr(args, "init_theta_c", 0.0))
         with torch.no_grad():
