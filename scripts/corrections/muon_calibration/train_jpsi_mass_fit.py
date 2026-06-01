@@ -155,6 +155,41 @@ def _make_scheduler(args, optim, epochs):
     return None, "none"
 
 
+def _make_fit_optimizer(args, groups):
+    """Build the stage-2 optimizer over ``groups`` (list of {params, lr} dicts)
+    per ``--fit-optimizer``. 'adam' (default): the historical torch.optim.Adam.
+    'soap': SOAP (Shampoo-in-the-Adam-eigenbasis) from pytorch_optimizer — a
+    Kronecker-factored curvature preconditioner that whitens the per-tensor
+    gradient, so correlated/ill-scaled directions (the θ_net / background MLP
+    weights especially) converge more completely than diagonal Adam toward the
+    local minimum. Per-group lrs, the plateau scheduler, _lr_str, and the
+    bootstrap reset all work unchanged (SOAP keeps the param_groups interface).
+
+    Note: SOAP preconditions WITHIN each parameter tensor, so it complements but
+    does not replace --theta-whiten, whose analytic eigenbasis couples the small
+    CROSS-tensor degeneracies (A/e, a/c, scale/smear) that live across the tiny
+    binned-θ tensors. The two can be combined."""
+    kind = getattr(args, "fit_optimizer", "adam")
+    if kind == "adam":
+        return torch.optim.Adam(groups)
+    if kind == "soap":
+        try:
+            from pytorch_optimizer import SOAP
+        except ImportError as e:
+            raise RuntimeError(
+                "--fit-optimizer soap requires the pytorch_optimizer package "
+                f"(import failed: {e})")
+        # weight_decay=0.0 (SOAP defaults to 0.01!) — a calibration fit must NOT
+        # be pulled toward θ=0; this matches the Adam(groups) path (wd=0).
+        # precondition_frequency: steps between the (cheap, tiny-tensor here)
+        # eigendecompositions; the default ~10 is fine since the cost is
+        # dominated by data_nll_continuity, not the optimizer.
+        sb = args.soap_shampoo_beta
+        return SOAP(groups, weight_decay=0.0,
+                    shampoo_beta=(float(sb) if sb is not None and sb >= 0 else None),
+                    precondition_frequency=int(args.soap_precondition_frequency))
+    raise ValueError(f"unknown --fit-optimizer {kind!r}")
+
 
 def _validation_half(args, which: str) -> "int | None":
     """Which event half to use in validation mode for the named stage
@@ -864,7 +899,8 @@ def train_stage2(args, model, train_loader, val_loader, stats,
             groups.append({"params": [model.theta_smear], "lr": args.fit_smear_lr}); tags.append("θ_smear")
         print(f"  optimizer groups: {', '.join(tags)}  "
               f"(lr mlp={args.fit_mlp_lr:g} scale={args.fit_scale_lr:g} smear={args.fit_smear_lr:g})")
-    optim = torch.optim.Adam(groups)
+    optim = _make_fit_optimizer(args, groups)
+    print(f"  optimizer: {getattr(args, 'fit_optimizer', 'adam')}")
     print(f"  signal density: #2 direct-eval (advection + probability-flow smear, "
           f"flow_steps={getattr(args, 'smear_flow_steps', 1)}, n_iter="
           f"{args.continuity_n_iter}); normalised by construction")
@@ -1162,7 +1198,7 @@ def run_bootstrap_continuity(args, model, shard_files, stats, device, *,
             groups.append({"params": [model.theta_scale], "lr": args.fit_scale_lr})
         if model.smearing_enabled:
             groups.append({"params": [model.theta_smear], "lr": args.fit_smear_lr})
-        optim = torch.optim.Adam(groups)           # fresh Adam state, re-raised LR
+        optim = _make_fit_optimizer(args, groups)  # fresh optimizer state, re-raised LR
         sched, sched_kind = _make_scheduler(args, optim, max_epochs)  # same as nominal
         seed = args.bootstrap_seed + b
         best = float("inf"); no_improve = 0; used = 0
@@ -2463,6 +2499,29 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    help="Stage-2 Adam lr for the θ ThetaNet (--theta-mlp). One lr "
                    "for all of (A,e,M,a,c); the net's output reference scaling "
                    "sets the relative A,e,M vs a,c magnitudes.")
+    p.add_argument("--fit-optimizer", choices=("adam", "soap"), default="adam",
+                   help="Stage-2 (θ + background) optimizer. 'adam' (default): "
+                   "torch.optim.Adam, the historical choice. 'soap': SOAP "
+                   "(Shampoo in the Adam eigenbasis, from pytorch_optimizer) — a "
+                   "Kronecker-factored curvature preconditioner that whitens each "
+                   "parameter tensor's gradient, so ill-scaled/correlated "
+                   "directions (the θ_net and background MLP weights especially) "
+                   "converge more completely toward the local minimum with less "
+                   "per-group lr tuning. weight_decay is forced to 0 (a "
+                   "calibration fit must not be pulled toward θ=0). Preconditions "
+                   "WITHIN each tensor, so it complements (not replaces) "
+                   "--theta-whiten, which couples the small cross-tensor "
+                   "degeneracies (A/e, a/c, scale/smear); the two can be combined. "
+                   "Per-group lrs / plateau schedule / bootstrap reset are "
+                   "unchanged. Requires the pytorch_optimizer package.")
+    p.add_argument("--soap-precondition-frequency", type=int, default=10,
+                   help="(--fit-optimizer soap) Optimizer steps between SOAP's "
+                   "preconditioner eigendecompositions. Cheap here (tiny θ "
+                   "tensors); cost is dominated by data_nll_continuity.")
+    p.add_argument("--soap-shampoo-beta", type=float, default=-1.0,
+                   help="(--fit-optimizer soap) EMA decay for the Shampoo "
+                   "preconditioner. <0 (default) → use SOAP's own default (the "
+                   "second β of --betas).")
     p.add_argument("--continuity-n-iter", type=int, default=2,
                    help="Fixed-point iterations for the #2 source solve "
                    "(advection+smear pre-image).")
