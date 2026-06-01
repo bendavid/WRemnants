@@ -348,6 +348,10 @@ def _scale_inject_rho_np(pt_pm, eta_pm, q_pm, b_pm, theta_inj):
 
 _MUON_MASS_GEV = 0.1056583755
 
+# qop=0 singularity guard for pt = |sinθ / qop| (numpy twin of model.QOP_EPS).
+# Only the pt=∞ pole is clamped; a qop sign flip is a physical charge mis-reco.
+_QOP_EPS = 1e-9
+
 
 def _event_mll_np(pt_pm, eta_pm, phi_pm):
     """Two-body invariant mass ``[N]`` for muons of mass ``_MUON_MASS_GEV`` —
@@ -443,51 +447,53 @@ def _inject_modulation_np(eta, phi):
 
 
 def _inject_pt_np(pt_pm, eta_pm, q_pm, b_pm, scale_inj, smear_inj, rng,
-                  qop_floor_frac: float = 0.25, phi_pm=None,
+                  qop_floor_frac: float = 0.0, phi_pm=None,
                   nonuniform: bool = False):
-    """Apply the injected θ_scale (deterministic δqop) THEN the θ_smear (per-muon
-    Gaussian qop kick) to the per-muon pt, entirely in qop/pt space, with the
-    sign-preserving qop floor at each step — mirroring the model's forward
-    operators (``_delta_qop_analytic`` + ``_apply_scale_pt`` for the scale,
-    ``apply_smear_pt`` for the smear). Returns the injected pt ``[N, 2]``.
+    """Inject the θ_scale + θ_smear as a SINGLE shifted-mean Gaussian qop kick::
 
-    Working in pt space (rather than the old additive m_ll shifts) lets the
-    caller propagate a fully SELF-CONSISTENT pseudo-data event — smeared pt,
-    ``mll = _event_mll(pt)``, and ρ(pt) — so every downstream consumer (both
-    smear operators, the per-muon fold, the diagnostics) sees coherent observed
-    quantities with no rescaling, exactly as for real data."""
+        qop_obs = qop_truth + δqop(A,e,M) + σ_qop·ε,   ε ~ N(0,1)
+
+    with the deterministic shift δqop AND the width σ_qop BOTH evaluated at the
+    nominal (truth) pt — i.e. the same reference — so scale+smear compose into
+    one affine-Gaussian map in qop (the natural variable: the per-muon kick is
+    Gaussian in qop). This is the forward of the model's combined gh_qop inverse
+    (``_gh_qop_unsmear``); evaluating δqop and σ at the SAME nominal pt is what
+    makes injection and fit exact inverses (no per-step pt drift between them).
+
+    pt is recovered as ``|sinθ / qop_obs|`` — a magnitude, so a kick large enough
+    to flip the sign of qop is kept as the PHYSICAL charge mis-reconstruction it
+    is (only the qop=0 pole is guarded by ``_QOP_EPS``); no resolution-
+    suppressing floor. Returns the injected pt ``[N, 2]`` — fully self-consistent
+    pseudo-data (smeared pt, ``mll = _event_mll(pt)``, ρ(pt)), so every consumer
+    (the gh_qop operator, the fold, the diagnostics) uses it directly.
+
+    ``qop_floor_frac`` is accepted for back-compat but unused (the floor is gone)."""
     sinth = 1.0 / np.cosh(eta_pm)                          # [N,2]
-    pt_cur = pt_pm.astype(np.float64, copy=True)
+    k = 1.0 / pt_pm.astype(np.float64)                     # at the NOMINAL pt
+    qop = q_pm * sinth * k                                 # qop_truth = q·sinθ/pt
     # Non-uniform injection: per-muon (η,φ) factor multiplying the injected θ
     # (the scale δqop and the smear variance each scale by f, i.e. A,e,M and a,c
     # are each modulated by the same f(η,φ)). f≡1 when uniform.
     fmod = (_inject_modulation_np(eta_pm, phi_pm)
             if (nonuniform and phi_pm is not None) else None)
-
-    def _floor_to_pt(qop_new, qop_ref):
-        if qop_floor_frac > 0.0:
-            s = np.sign(qop_ref)
-            qop_new = s * np.maximum(qop_new * s, qop_floor_frac * np.abs(qop_ref))
-        return q_pm * sinth / qop_new
-
+    qop_new = qop.copy()
     if scale_inj is not None:
-        k = 1.0 / pt_cur
         A = scale_inj[b_pm, 0]; e = scale_inj[b_pm, 1]; M = scale_inj[b_pm, 2]
-        dqop = q_pm * sinth * ((A - e * k) * k + q_pm * M)
+        dqop = q_pm * sinth * ((A - e * k) * k + q_pm * M)  # δqop at nominal pt
         if fmod is not None:
             dqop = dqop * fmod                              # modulate A,e,M ∝ f
-        qop_ref = q_pm * sinth / pt_cur
-        pt_cur = _floor_to_pt(qop_ref + dqop, qop_ref)
+        qop_new = qop_new + dqop
     if smear_inj is not None:
-        k2 = (1.0 / pt_cur) ** 2
-        vq = smear_inj[b_pm, 0] + smear_inj[b_pm, 1] * k2   # σ²_qop = a + c·k²
+        k2 = k * k
+        vq = smear_inj[b_pm, 0] + smear_inj[b_pm, 1] * k2   # σ²_qop = a + c·k² at nominal pt
         if fmod is not None:
             vq = vq * fmod                                  # modulate a,c ∝ f
         sig = np.sqrt(np.clip(vq, 0.0, None))
         eps = rng.standard_normal(pt_pm.shape)
-        qop_ref = q_pm * sinth / pt_cur
-        pt_cur = _floor_to_pt(qop_ref + sig * eps, qop_ref)
-    return pt_cur.astype(np.float32)
+        qop_new = qop_new + sig * eps
+    # pt = |sinθ / qop|; guard only the qop=0 pole (sign flip is physical).
+    pt_new = sinth / np.maximum(np.abs(qop_new), _QOP_EPS)
+    return pt_new.astype(np.float32)
 
 
 def _smear_inject_dmll_np(mll, pt_pm, eta_pm, phi_pm, q_pm, b_pm, smear_inj, rng,

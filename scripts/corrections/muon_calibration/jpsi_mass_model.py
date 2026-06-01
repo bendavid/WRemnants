@@ -241,6 +241,14 @@ SMEAR_VAR_SCALE_C = 2e-5
 # init = 0.25, i.e. physical a,c = 0.25·SCALE, a small nonzero start.)
 SMEAR_SQUARE_INIT_RAW = 0.5
 
+# Singularity guard for the qop→pt inversion pt = |sinθ / qop|. A scale/smear
+# shift adds to qop; if it drives qop EXACTLY through zero, pt → ∞. We take the
+# magnitude (pt is positive; a sign flip of qop is a PHYSICAL charge mis-
+# reconstruction, kept) and only clamp |qop| at this floor to keep pt finite —
+# NOT a resolution-suppressing floor on the shift itself. Chosen tiny so it
+# bites only on the measure-zero qop=0 case (|qop| is ~1e-3..1e-1 physically).
+QOP_EPS = 1e-9
+
 # Invertibility floor on the probability-flow smear Jacobian G' = dx/dm'. A valid
 # forward (broadening) transport has G' > 0; the floor catches the fold/over-
 # sharpen region (V·∂²_m log p₀ large) gracefully, mirroring the old (1+s) ≥ 0.05.
@@ -614,14 +622,12 @@ class JpsiMassMixtureModel(nn.Module):
         # inert) Parameter; trainer excludes it from the optimizer. With both
         # scale and smearing disabled only the flow + MLP (background) train.
         scale_enabled: bool = True,
-        # Robustness floor for the qop→pt inversion. A scale/smear shift adds
-        # to qop = q·sinθ/pt; if it drives qop through zero, pt → ∞ and the
-        # reconstructed mass explodes (catastrophic at high |η| where |qop| is
-        # smallest and the fitted σ_qop can approach |qop|). We floor the
-        # shifted |qop| at ``qop_floor_frac · |qop_orig|`` with the original
-        # sign, so a resolution smear can neither flip the charge nor inflate
-        # pt by more than ``1/qop_floor_frac``. 0 disables the floor (legacy).
-        qop_floor_frac: float = 0.25,
+        # DEPRECATED / inert. The qop→pt inversion is now ``pt = |sinθ/qop|``
+        # with only the ``qop=0`` pole guarded (``QOP_EPS``): pt is a magnitude,
+        # so a qop sign flip from a large kick is treated as the PHYSICAL charge
+        # mis-reconstruction it is, not floored away. This argument is accepted
+        # for checkpoint/back-compat but no longer affects the inversion.
+        qop_floor_frac: float = 0.0,
         # Which per-bin smear terms to *fit*: "both" (a and c), "a" (constant
         # term only), or "c" (∝1/pt term only). The constant a and the c·k
         # term are nearly degenerate over the narrow J/ψ pt range, so fitting
@@ -1104,28 +1110,18 @@ class JpsiMassMixtureModel(nn.Module):
         q_pm: torch.Tensor,
         sintheta: torch.Tensor,
     ) -> torch.Tensor:
-        """Invert a shifted qop back to pt, sign-preserving and floored.
+        """Invert a shifted qop back to pt as ``pt = |sinθ / qop_new|``.
 
-        ``qop_new = qop + shift`` may approach or cross zero (a large
-        smear/scale shift), which sends ``pt = q·sinθ/qop_new`` to ∞ or
-        flips the charge — unphysical. We project ``qop_new`` onto the sign
-        of the original ``qop`` and floor its magnitude at
-        ``qop_floor_frac · |qop|`` (so pt inflates by at most
-        ``1/qop_floor_frac``). ``qop_floor_frac == 0`` restores the old
-        near-zero-only guard.
+        pt is a positive magnitude, so we take ``abs`` rather than carrying the
+        qop sign: if a large scale/smear shift flips the sign of ``qop_new``,
+        that is a PHYSICAL charge mis-reconstruction (real at large measurement
+        uncertainty), not something to forbid — the magnitude |1/qop| is the
+        right pt either way. The ONLY pathology is ``qop_new == 0`` → pt = ∞, so
+        we clamp |qop_new| at ``QOP_EPS`` and nothing else (no resolution-
+        suppressing floor on the shift). ``q_pm`` is unused (its sign is absorbed
+        into the magnitude); kept in the signature for call-site symmetry.
         """
-        if self.qop_floor_frac > 0.0:
-            s = torch.sign(qop)
-            floor = self.qop_floor_frac * qop.abs()
-            # Signed magnitude along qop's sign, floored, then re-signed.
-            qop_new = s * torch.maximum(qop_new * s, floor)
-        else:
-            qop_new = torch.where(
-                qop_new.abs() < 1e-12,
-                torch.full_like(qop_new, 1e-12) * torch.sign(qop_new + 1e-30),
-                qop_new,
-            )
-        return q_pm * sintheta / qop_new
+        return sintheta / qop_new.abs().clamp_min(QOP_EPS)   # sinθ > 0 → pt > 0
 
     def _apply_scale_pt(
         self,
@@ -1795,57 +1791,53 @@ class JpsiMassMixtureModel(nn.Module):
 
     def _gh_qop_unsmear(self, pt_cfg, etao, phio, qo, bpo, eps):
         """Un-kick an OBSERVED per-muon pt config to the nominal (truth) mass +
-        ρ, per 2-D GH node — the genuine INVERSE of the per-muon Gaussian-qop
-        fold. For each node (ξ₊, ξ₋):
+        ρ, per 2-D GH node — the genuine INVERSE of the COMBINED per-muon kick
+        the injection applies. The forward (``_inject_pt_np``) is a single
+        shifted-mean Gaussian in qop with the deterministic scale shift δqop and
+        the width σ_qop BOTH at the truth pt::
 
-            qop_obs,μ = q sinθ / pt_cfg,μ
-            qop_nom,μ = qop_obs,μ − σ_qop,μ·ξ_μ            (un-smear; σ at pt_cfg)
-            pt_nom    = q sinθ / qop_nom        (sign/floor-safe)
-            pt_truth  = inverse-scale(pt_nom)              (un-apply the scale)
-            m_t = m_ll(pt_truth),  ρ_t = ρ(pt_truth)
+            qop_obs,μ = qop_truth,μ + δqop_μ(pt_truth) + σ_qop,μ(pt_truth)·ξ_μ
 
-        ``pt_cfg`` [B, ·, 2] is the observed config (possibly scaled along the
-        mass direction); ``eps`` [·, G², 2] the kicks. Returns ``(m_t [B, G²],
-        pt_truth [B, G², 2])`` — the un-kicked nominal mass + per-muon momenta
-        (the caller derives the conditioning via ``_node_cond``).
+        so the exact inverse solves, per node (ξ₊, ξ₋), the joint fixed point::
 
-        This is the correct inverse: it un-kicks the ACTUAL observed config —
-        giving the nominal config with its OWN nominal ρ and mass — rather than
-        scaling a trial source mass and re-kicking it. The latter (the old
-        formulation) carried the OBSERVED ρ through the intermediate config and
-        grossly over-broadened the density."""
+            qop_truth,μ = qop_obs,μ − δqop_μ(pt_truth) − σ_qop,μ(pt_truth)·ξ_μ
+            pt_truth,μ  = |sinθ_μ / qop_truth,μ|
+
+        with δqop and σ evaluated at the SAME (truth) pt — which is why injection
+        and fit are exact inverses, with no per-step pt drift between un-smear and
+        un-scale (the old sequential un-smear-then-un-scale evaluated δqop at the
+        intermediate post-un-smear pt). pt = |sinθ/qop| is a magnitude, so a kick
+        that flips the sign of qop is the physical charge mis-reco, kept (only the
+        qop=0 pole guarded). A few iterations converge since δqop, σ ≪ |qop|.
+
+        ``pt_cfg`` [B, G², 2] is the observed config (possibly scaled along the
+        mass direction by the Jacobian leaf λ); ``eps`` [·, G², 2] the kicks.
+        Returns ``(m_t [B, G²], pt_truth [B, G², 2])``.
+
+        (+EPS inside the σ sqrt keeps the autograd gradient finite as σ²→0, else
+        d√v/dv→∞ times ∂v/∂λ→0 gives 0·∞ = NaN → a spurious uniform density at
+        c≈0; EPS=1e-14 → σ floor 1e-7, negligible vs ~1e-3.)"""
         sinth = _sintheta_from_eta(etao)                          # [B,·,2]
         qop_obs = qo * sinth / pt_cfg                             # [B,G²,2] (bcast)
-        if self.smearing_enabled:
-            # σ_qop = √(σ²_qop). The fold that generates the pseudo-data draws
-            # the kick with σ_qop evaluated at the NOMINAL (pre-smear) pt, so
-            # the exact inverse must un-kick with σ at the nominal pt too — NOT
-            # at the observed pt. Forward |η| the smear is large (σ_qop/|qop|
-            # ~ few %) and σ_qop ∝ 1/pt, so σ(observed) systematically differs
-            # from σ(nominal) across the broadened sample; using σ(observed)
-            # over-estimates the kick and over-broadens the density. Refine σ
-            # to the nominal pt by a short fixed-point iteration.
-            # (+EPS inside the sqrt keeps the autograd gradient finite as σ²→0,
-            # else d√v/dv→∞ times ∂v/∂λ→0 gives 0·∞ = NaN → a spurious uniform
-            # density at c≈0; EPS=1e-14 → σ floor 1e-7, negligible vs ~1e-3.)
-            def _sig_at(pt):
-                return (self._qop_var_pm(etao, phio, bpo, pt).clamp_min(0.0)
-                        + 1e-14).sqrt()
-            sig = _sig_at(pt_cfg)
-            for _ in range(2):
-                qop_nom = qop_obs - sig * eps
-                pt_nom_est = self._qop_new_to_pt(qop_obs, qop_nom, qo, sinth)
-                sig = _sig_at(pt_nom_est)
-            qop_nom = qop_obs - sig * eps
-        else:
-            qop_nom = qop_obs
-        pt_nom = self._qop_new_to_pt(qop_obs, qop_nom, qo, sinth)  # [B,G²,2]
-        if self.scale_enabled:
-            AeM = self._scale_AeM_pm(etao, phio, bpo)             # scale params
-            dqop = self._delta_qop_analytic(AeM, pt_nom, etao, qo)
-            pt_truth = self._apply_scale_pt(pt_nom, etao, qo, dqop, sign=-1.0)
-        else:
-            pt_truth = pt_nom
+
+        def _shift_at(pt):
+            """Combined qop shift δqop + σ·ξ evaluated at trial truth pt."""
+            s = qop_obs.new_zeros(())
+            if self.scale_enabled:
+                AeM = self._scale_AeM_pm(etao, phio, bpo)
+                s = s + self._delta_qop_analytic(AeM, pt, etao, qo)
+            if self.smearing_enabled:
+                sig = (self._qop_var_pm(etao, phio, bpo, pt).clamp_min(0.0)
+                       + 1e-14).sqrt()
+                s = s + sig * eps
+            return s
+
+        # Joint fixed point for the truth pt: both δqop and σ at the SAME pt.
+        pt_truth = pt_cfg
+        if self.scale_enabled or self.smearing_enabled:
+            for _ in range(3):
+                qop_truth = qop_obs - _shift_at(pt_truth)
+                pt_truth = self._qop_new_to_pt(qop_obs, qop_truth, qo, sinth)
         m_t = _event_mll(pt_truth, etao, phio)                   # [B,G²]
         # Return the un-kicked nominal momenta; the caller builds the per-node
         # conditioning from them via _node_cond (ρ-only for muon_kin, the full
@@ -1862,21 +1854,22 @@ class JpsiMassMixtureModel(nn.Module):
             ``       ≈ Σ_{i,j} W_i W_j · p_0(m_t,ij | ρ_t,ij) · |∂m_t/∂x|_{ij}``
 
         For each node, the observed per-muon config (the event's pt, scaled
-        along the mass direction by a leaf ``λ``) is un-kicked
-        (``qop_nom = qop_obs − σ·ξ``) and un-scaled to the nominal config →
-        nominal mass ``m_t`` and ρ. ``p_0`` is the frozen flow at that nominal
-        mass conditioned on the per-node nominal ρ; the change-of-variables
-        Jacobian ``|∂m_t/∂x|`` is taken by autograd through ``λ``. This is the
-        genuine inverse of the per-muon fold that generates the pseudo-data
-        (the GH nodes live in the 2-D qop±-kick space), reproducing its full
+        along the mass direction by a leaf ``λ``) is inverted through the
+        COMBINED qop kick ``qop_obs = qop_truth + δqop + σ·ξ`` (scale shift and
+        smear width both at the truth pt) to the nominal config → nominal mass
+        ``m_t`` and ρ (see ``_gh_qop_unsmear``). ``p_0`` is the frozen flow at
+        that nominal mass conditioned on the per-node nominal ρ; the change-of-
+        variables Jacobian ``|∂m_t/∂x|`` is taken by autograd through ``λ``. This
+        is the genuine inverse of the per-muon fold that generates the pseudo-
+        data (the GH nodes live in the 2-D qop±-kick space), reproducing its full
         non-Gaussian shape — mean-shift and skew, not just the variance.
 
         Unlike ``gh_convolution`` (a single Gaussian convolution in MASS space,
         the small-kick linearisation), the kicks can't be factorised into two
         1-D integrals (``p_0`` is nonlinear in the combined config), so this is
         a genuine n_gh² quadrature. Each per-muon kick is a single 1-D Gaussian,
-        so a modest ``n_gh`` (≈4–6) suffices. (``n_iter`` is unused — no
-        fixed-point solve is needed for the un-kick.)"""
+        so a modest ``n_gh`` (≈4–6) suffices. (``n_iter`` is unused — the
+        un-kick runs its own short joint fixed point internally.)"""
         B = m_obs.shape[0]
         # --disable-smearing: no kick to integrate, so collapse the n_gh² GH
         # quadrature to a single node (ξ=0, W=1). _gh_qop_unsmear then does pure

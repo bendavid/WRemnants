@@ -2310,12 +2310,12 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    help="Upper edge of the m_ll fit window [GeV].")
     # Scale transform + smear init + noise sampling
     p.add_argument(
-        "--qop-floor-frac", type=float, default=0.25,
-        help="Robustness floor for the qop→pt inversion in the scale/smear "
-        "fold: the shifted |qop| is clamped (sign-preserving) to at least "
-        "this fraction of |qop_orig|, so a smear/scale shift can neither flip "
-        "the charge nor inflate pt by more than 1/this. Prevents catastrophic "
-        "mass blow-ups at high |η| where |qop| is small. 0 disables.",
+        "--qop-floor-frac", type=float, default=0.0,
+        help="DEPRECATED / inert. The qop→pt inversion is now pt = |sinθ/qop| "
+        "with only the qop=0 pole guarded (QOP_EPS): pt is a magnitude, so a "
+        "kick large enough to flip the sign of qop is kept as the physical "
+        "charge mis-reconstruction it is, not floored away. Accepted for "
+        "checkpoint/back-compat but no longer affects the fold.",
     )
     p.add_argument(
         "--scale-fit-params", default="AM",
