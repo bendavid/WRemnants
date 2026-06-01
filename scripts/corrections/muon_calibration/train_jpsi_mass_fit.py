@@ -191,6 +191,85 @@ def _make_fit_optimizer(args, groups):
     raise ValueError(f"unknown --fit-optimizer {kind!r}")
 
 
+class _StepProfiler:
+    """Phase timer to diagnose whether the training step is data/host-bound or
+    compute-bound (and, on CUDA, GPU-bound vs launch/sync-bound). Times three
+    phases over the first ``n`` steps of an epoch:
+
+      • data   — loader fetch + ``_move_batch`` host→device copy (the gap from the
+                 end of the previous step to the start of forward);
+      • fwd    — ``step_fn`` up to the loss;
+      • bwd    — ``loss.backward()`` + ``optim.step()``.
+
+    On CUDA each phase is bracketed by ``torch.cuda.synchronize()`` so the async
+    kernels are attributed to the phase that launched them (else wall-clock would
+    measure only Python launch time). Prints the mean split + GPU util/mem when a
+    GPU is active. Reading: data≫compute → CPU/dataloader-bound; compute high +
+    GPU util high → GPU-bound; compute high + GPU util low → launch/sync-bound
+    (small batches, the per-event fixed-point / GH-quadrature Python overhead)."""
+
+    def __init__(self, device, n):
+        self.n = int(n)
+        self.is_cuda = (str(device).startswith("cuda")
+                        and torch.cuda.is_available())
+        self.data = self.fwd = self.bwd = 0.0
+        self.count = 0
+        self._t = None
+        self._pd = self._pf = 0.0   # pending (this-iter) data / fwd, committed at backward
+
+    def _sync(self):
+        if self.is_cuda:
+            torch.cuda.synchronize()
+
+    def active(self):
+        return self.count < self.n
+
+    def mark_iter_start(self):
+        """Call at the top of the loop body (a batch has just been yielded)."""
+        if self.active():
+            self._pd = self._pf = 0.0
+            self._sync(); self._t = time.time()
+
+    def after_move(self):
+        if self.active():
+            self._sync(); now = time.time(); self._pd = now - self._t; self._t = now
+
+    def after_forward(self):
+        if self.active():
+            self._sync(); now = time.time(); self._pf = now - self._t; self._t = now
+
+    def after_backward(self):
+        # Commit all three phases together so bailed steps (sw<=0 / NaN-skip,
+        # which never reach here) don't leak a partial iter into the averages.
+        if self.active():
+            self._sync(); now = time.time()
+            self.data += self._pd; self.fwd += self._pf; self.bwd += now - self._t
+            self.count += 1
+
+    def report(self, stage_name, epoch):
+        if self.count == 0:
+            return
+        n = self.count
+        d, f, b = self.data / n, self.fwd / n, self.bwd / n
+        tot = d + f + b
+        if tot <= 0:
+            return
+        msg = (f"[{stage_name}] epoch {epoch:>3} profile (mean of {n} steps): "
+               f"data={d*1e3:.1f}ms ({100*d/tot:.0f}%)  "
+               f"fwd={f*1e3:.1f}ms ({100*f/tot:.0f}%)  "
+               f"bwd+step={b*1e3:.1f}ms ({100*b/tot:.0f}%)")
+        if self.is_cuda:
+            try:
+                util = torch.cuda.utilization()
+                mem = torch.cuda.max_memory_allocated() / 1024**3
+                msg += f"  | GPU util≈{util}%  peak_mem={mem:.2f}GB"
+            except Exception:
+                pass
+        else:
+            msg += "  | device=cpu (no GPU in use)"
+        print(msg)
+
+
 def _validation_half(args, which: str) -> "int | None":
     """Which event half to use in validation mode for the named stage
     (``which`` ∈ {'flow', 'fit'}). Defaults to the disjoint half split
@@ -720,16 +799,22 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
             "args": vars(args),
         }
 
+    prof_steps = int(getattr(args, "profile_steps", 0) or 0)
     for epoch in range(1, epochs + 1):
         t0 = time.time(); model.train()
         tr_sum = 0.0; tr_w = 0.0; n_seen = 0
         lr_str = _lr_str(optim)
+        prof = _StepProfiler(device, prof_steps) if prof_steps > 0 else None
         # total=n_batches_total → tqdm renders a % bar (None on epoch 1).
         bar = tqdm(train_loader, total=n_batches_total,
                    desc=f"[{stage_name}] epoch {epoch:>3}/{epochs}",
                    leave=False, disable=not args.progress, unit="batch")
         for batch in bar:
+            if prof is not None:
+                prof.mark_iter_start()
             batch = _move_batch(batch, device)
+            if prof is not None:
+                prof.after_move()
             optim.zero_grad(set_to_none=True)
             loss, sw = step_fn(model, batch)
             n_seen += 1
@@ -740,11 +825,17 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
                     raise RuntimeError(f"non-finite loss [{stage_name}] epoch {epoch}")
                 if args.nan_on_step == "skip":
                     bar.set_postfix_str("SKIP NaN"); continue
+            if prof is not None:
+                prof.after_forward()
             loss.backward()
             optim.step()
+            if prof is not None:
+                prof.after_backward()
             tr_sum += float(loss.item()) * sw; tr_w += sw
             bar.set_postfix_str(f"nll={tr_sum / max(tr_w, 1e-30):+.4f} lr={lr_str}")
         bar.close()
+        if prof is not None:
+            prof.report(stage_name, epoch)
         if n_batches_total is None:
             n_batches_total = n_seen   # exact count for the % bar from epoch 2 on
         train_nll = tr_sum / max(tr_w, 1e-30)
@@ -2922,6 +3013,16 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         "--progress", default=True, action=argparse.BooleanOptionalAction,
         help="Show a per-epoch tqdm progress bar with running NLL "
         "(--no-progress to disable).",
+    )
+    p.add_argument(
+        "--profile-steps", type=int, default=0,
+        help="If >0, time the first N training steps of each epoch and print a "
+        "per-phase breakdown (data+H2D / forward / backward+step), to diagnose "
+        "whether training is CPU/dataloader-bound vs compute-bound. On CUDA each "
+        "phase is bracketed with torch.cuda.synchronize() (so async kernels are "
+        "attributed correctly) and a GPU util/peak-mem readout is appended; "
+        "reading — data≫compute → data/host-bound, compute high + util high → "
+        "GPU-bound, compute high + util low → launch/sync-bound. 0 = off.",
     )
     # Adaptive σ from Adam's second moment.
     # Adaptive-σ clamps are split scale/smear because the two parameters live
