@@ -2359,6 +2359,9 @@ def compute_output_fisher_2d(model, loader, device, *, method="empirical",
     H = torch.zeros((n_act, n_act), device=device) if need_H else None
     J = torch.zeros((n_act, n_act), device=device) if need_J else None
     sw = 0.0; seen = 0; hit = False
+    # Per-(η,φ)-cell Σw occupancy (both muons of each data event), for the
+    # SAMPLE-weighted φ-collapse + η-average of the covariance downstream.
+    cell_w = torch.zeros((n_eta, n_phi), device=device)
     use_batched = bool(vectorized) and need_H  # vectorise the observed-H rows
     try:
         bar = tqdm(loader, desc=f"out-fisher({method})", disable=not progress, unit="batch")
@@ -2380,6 +2383,13 @@ def compute_output_fisher_2d(model, loader, device, *, method="empirical",
             if nd == 0:
                 break
             per_d = per_d[:nd]; w_d = w_d[:nd]
+            # Accumulate per-cell Σw from both muons of the kept data events.
+            with torch.no_grad():
+                eb = batch["b_pm"][di][:nd].long()                 # [nd, 2] η-bins
+                pb = _phibin(batch["phi_pm"][di][:nd])             # [nd, 2] φ-bins
+                flat = (eb * n_phi + pb).reshape(-1)
+                cell_w.view(-1).index_add_(
+                    0, flat, w_d.unsqueeze(1).expand(-1, 2).reshape(-1))
             if need_J:                                  # per-event scores first
                 for s0 in range(0, nd, max(1, chunk_events)):
                     s1 = min(s0 + chunk_events, nd)
@@ -2439,7 +2449,8 @@ def compute_output_fisher_2d(model, loader, device, *, method="empirical",
     layout = {"n_eta": n_eta, "n_phi": n_phi, "scale_cols": scale_cols,
               "smear_cols": smear_cols, "n_sa": n_eta * n_phi * len(scale_cols),
               "n_ca": n_eta * n_phi * len(smear_cols), "sw": sw, "seen": seen,
-              "hit_cap": hit, "n_theta_act": n_theta_act, "n_bg": n_bg}
+              "hit_cap": hit, "n_theta_act": n_theta_act, "n_bg": n_bg,
+              "cell_w": cell_w.detach().cpu().numpy()}   # [n_eta, n_phi] Σw occupancy
     return H, J, layout
 
 
@@ -2685,12 +2696,34 @@ def _run_output_fisher_mlp(args, model, shard_files, stats, device) -> None:
         "smear_fit_params": model.smear_fit_params,
         "n_events": layout["seen"], "sum_weight": layout["sw"],
         "param_space": "2-D (η,φ) θ-table outputs (physical A,e,M; O(1) a,c)",
+        "n_phi": nphi,
     }
-    # φ-mean per-η covariance = average the table covariance over BOTH φ axes
-    # (cov of a mean over φ = mean of the cov over the two φ indices).
+    # SAMPLE-weighted φ-collapse: the per-η φ-mean is the OCCUPANCY-weighted mean
+    # θ̄_η = Σ_φ a_{η,φ} θ_{η,φ}, a_{η,φ} = w_{η,φ}/Σ_φ w_{η,φ} (cell Σw from the
+    # data, not uniform 1/n_φ). Cov of that weighted mean over φ:
+    #   cov_φmean[η,η'] = Σ_{φ,φ'} a_{η,φ} a_{η',φ'} C[(η,φ),(η',φ')].
+    # Also save the FULL 2-D (η,φ) covariance + the φ-weights so the diagnostics
+    # can draw a φ-RESOLVED band; fall back to uniform weights for empty cells.
+    cell_w = np.asarray(layout.get("cell_w"))                # [n_eta, n_phi] Σw
+    if cell_w is None or cell_w.shape != (n_eta, nphi):
+        cell_w = np.ones((n_eta, nphi), dtype=np.float64)
+    aw = cell_w.astype(np.float64).copy()
+    rs = aw.sum(axis=1, keepdims=True)
+    unif = (rs <= 0).reshape(-1)
+    aw[unif] = 1.0; rs[unif.reshape(-1, 1)] = nphi          # empty η → uniform φ
+    aw = aw / rs                                            # [n_eta, n_phi] weights
+
+    def _phi_collapse(block, cols):
+        # block: C sub-block [n_eta*nphi*ncol]² → weighted φ-mean [n_eta,ncol,n_eta,ncol]
+        nc = len(cols)
+        B = block.reshape(n_eta, nphi, nc, n_eta, nphi, nc)
+        # Σ_{φ,φ'} a[η,φ] a[η',φ'] B[η,φ,·,η',φ',·]
+        return np.einsum('ep,EP,epcEPC->ecEC', aw, aw, B)
+
+    out["phi_weights"] = torch.tensor(aw, dtype=torch.float32)
+    out["cell_w"] = torch.tensor(cell_w, dtype=torch.float32)   # [n_eta,n_phi] Σw
     if sc_cols:
-        Cs = C[:n_sa, :n_sa].reshape(n_eta, nphi, len(sc_cols),
-                                     n_eta, nphi, len(sc_cols)).mean(axis=(1, 4))
+        Cs = _phi_collapse(C[:n_sa, :n_sa], sc_cols)
         cov_s = np.zeros((n_eta, 3, n_eta, 3), dtype=np.float64)
         for i, ci in enumerate(sc_cols):
             for j, cj in enumerate(sc_cols):
@@ -2700,10 +2733,17 @@ def _run_output_fisher_mlp(args, model, shard_files, stats, device) -> None:
         out["covariance_24_3_24_3"] = torch.tensor(cov_s, dtype=torch.float32).view(24, 3, 24, 3)
         out["sigma_scale_24_3"] = torch.sqrt(torch.clamp(
             torch.tensor(np.einsum('icic->ic', cov_s)), min=0.0)).float()
+        # FULL 2-D (η,φ) covariance [n_eta,nphi,ncol-in-3, …] embedded in 3-col.
+        Cs2d = C[:n_sa, :n_sa].reshape(n_eta, nphi, len(sc_cols),
+                                       n_eta, nphi, len(sc_cols))
+        full_s = np.zeros((n_eta, nphi, 3, n_eta, nphi, 3), dtype=np.float64)
+        for i, ci in enumerate(sc_cols):
+            for j, cj in enumerate(sc_cols):
+                full_s[:, :, ci, :, :, cj] = Cs2d[:, :, i, :, :, j]
+        out["covariance_scale_2d"] = torch.tensor(full_s, dtype=torch.float32)
     if cc_cols:
-        Cc = C[n_sa:, n_sa:].reshape(n_eta, nphi, len(cc_cols),
-                                     n_eta, nphi, len(cc_cols)).mean(axis=(1, 4))
         sv = [SMEAR_VAR_SCALE_A, SMEAR_VAR_SCALE_C]
+        Cc = _phi_collapse(C[n_sa:, n_sa:], cc_cols)
         cov_c = np.zeros((n_eta, 2, n_eta, 2), dtype=np.float64)
         for i, ci in enumerate(cc_cols):
             for j, cj in enumerate(cc_cols):
@@ -2714,6 +2754,13 @@ def _run_output_fisher_mlp(args, model, shard_files, stats, device) -> None:
         sig_sm = torch.sqrt(torch.clamp(
             torch.tensor(np.einsum('icic->ic', cov_c)), min=0.0)).float()
         out["sigma_smear_eff_24_2"] = sig_sm
+        Cc2d = C[n_sa:, n_sa:].reshape(n_eta, nphi, len(cc_cols),
+                                       n_eta, nphi, len(cc_cols))
+        full_c = np.zeros((n_eta, nphi, 2, n_eta, nphi, 2), dtype=np.float64)
+        for i, ci in enumerate(cc_cols):
+            for j, cj in enumerate(cc_cols):
+                full_c[:, :, ci, :, :, cj] = Cc2d[:, :, i, :, :, j] * sv[ci] * sv[cj]
+        out["covariance_smear_2d"] = torch.tensor(full_c, dtype=torch.float32)
     path = os.path.join(args.output, "empirical_fisher.pt")
     torch.save(out, path)
     print(f"  wrote {path}: output-space {method} Fisher ({n_act}-param η×φ table, "
@@ -3470,10 +3517,12 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "H=Σw·∂²(−lnL)/∂θ² (Hessian, double-backward); 'sandwich' "
                    "H⁻¹JH⁻¹ (robust). Empirical is the cheapest; observed/sandwich "
                    "cost a per-batch Hessian block over the active table entries.")
-    p.add_argument("--output-fisher-nphi", type=int, default=4,
+    p.add_argument("--output-fisher-nphi", type=int, default=16,
                    help="(--output-fisher) Number of φ bins in the η×φ table "
-                   "(default 4). More bins resolve φ structure but split the "
-                   "statistics per cell; the per-η band averages over them.")
+                   "(default 16). More bins resolve φ structure (and give a finer "
+                   "φ-resolved Fisher band) but split the statistics per cell; the "
+                   "per-η φ-collapse + the φ-band average over them, occupancy-"
+                   "weighted by the per-cell Σw.")
     p.add_argument("--output-fisher-project", default="free",
                    choices=("free", "net"),
                    help="(--output-fisher) Output-covariance subspace. 'free' "

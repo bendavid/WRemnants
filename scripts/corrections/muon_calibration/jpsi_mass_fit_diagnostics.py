@@ -990,12 +990,21 @@ def plot_theta_vs_phi(
     eta_slice_vals: np.ndarray,  # [n_eta_slc] the |η| (centre) of each slice curve
     output_dir: str,
     ref: "np.ndarray | None" = None,   # [n_phi, n_comp] φ-dependent injected ref
+    eta_mean: "np.ndarray | None" = None,   # [n_phi, n_comp] η-averaged curve
+    eta_band: "np.ndarray | None" = None,   # [n_phi, n_comp] ±1σ band on the η-mean
+    band_label: str = "±1σ over η",
+    fisher_sigma: "np.ndarray | None" = None,  # [n_phi, n_comp] Fisher ±1σ(φ) on η-mean
 ):
-    """θ output (A,e,M or a,c) as a function of φ, one curve per representative η
-    slice — the φ-direction companion to plot_theta_vs_eta. Only meaningful for
-    --theta-mlp (the binned θ has no φ dependence). Reveals the net's learned φ
-    structure (and, in --inject-nonuniform validation, whether it tracks the
-    injected sinusoidal-φ modulation)."""
+    """θ output (A,e,M or a,c) as a function of φ, one (faint) curve per
+    representative η slice — the φ-direction companion to plot_theta_vs_eta. Only
+    meaningful for --theta-mlp (the binned θ has no φ dependence). Reveals the
+    net's learned φ structure (and, in --inject-nonuniform validation, whether it
+    tracks the injected sinusoidal-φ modulation).
+
+    ``eta_mean``/``eta_band``: an η-AVERAGED φ curve (bold black) with a shaded
+    ±1σ-over-η band (the η STRUCTURE spread). ``fisher_sigma`` [n_phi, n_comp]:
+    the STATISTICAL ±1σ(φ) of the η-averaged output from the full 2-D (η,φ)
+    Fisher covariance — φ-resolved (varies with φ)."""
     n_eta_slc, n_phi, n_comp = theta.shape
     fig, axes = plt.subplots(n_comp, 1, sharex=True, figsize=(8, 2.5 * n_comp))
     if n_comp == 1:
@@ -1004,16 +1013,32 @@ def plot_theta_vs_phi(
     for i, ax in enumerate(axes):
         for s in range(n_eta_slc):
             ax.plot(phi_grid, theta[s, :, i],
-                    color=eta_colors[s % len(eta_colors)], lw=1.2,
+                    color=eta_colors[s % len(eta_colors)], lw=0.9, alpha=0.55,
                     label=f"|η|≈{eta_slice_vals[s]:.1f}")
+        # η-averaged curve + bands (bold, drawn on top).
+        if eta_mean is not None:
+            # Fisher statistical band, φ-resolved — drawn first as the reference.
+            if fisher_sigma is not None and np.any(fisher_sigma[:, i] > 0):
+                fs = np.nan_to_num(fisher_sigma[:, i], nan=0.0)
+                ax.fill_between(
+                    phi_grid, eta_mean[:, i] - fs, eta_mean[:, i] + fs,
+                    color="C0", alpha=0.20, linewidth=0, label="±1σ (Fisher)")
+            if eta_band is not None:
+                ax.fill_between(
+                    phi_grid, eta_mean[:, i] - eta_band[:, i],
+                    eta_mean[:, i] + eta_band[:, i],
+                    color="0.4", alpha=0.25, linewidth=0, label=band_label)
+            ax.plot(phi_grid, eta_mean[:, i], "-", color="k", lw=1.8,
+                    label="η-mean")
         if ref is not None:
             ax.plot(phi_grid, ref[:, i], color="C3", ls="--", lw=1.3,
                     label="injected")
         ax.axhline(0, color="0.5", lw=0.8, ls=":")
         ax.set_ylabel(component_names[i])
         ax.grid(True, alpha=0.3)
-    axes[0].legend(loc="best", fontsize=7,
-                   ncol=max(1, (n_eta_slc + int(ref is not None)) // 4 + 1))
+    nleg = (n_eta_slc + int(ref is not None) + 2 * int(eta_mean is not None)
+            + int(fisher_sigma is not None))
+    axes[0].legend(loc="best", fontsize=7, ncol=max(1, nleg // 4 + 1))
     axes[-1].set_xlabel("φ [rad]")
     axes[0].set_title(name)
     fig.tight_layout()
@@ -1796,6 +1821,8 @@ def main() -> int:
     sigma_smear = None
     cov_scale_flat = None   # 72×72 θ_scale covariance block (for the χ² test)
     cov_smear_flat = None    # 48×48 θ_smear (a,c) covariance (for the whitened band)
+    cov_scale_2d = cov_smear_2d = None   # full (η,φ) output cov (φ-resolved band)
+    fisher_cell_w = None     # [n_eta,n_phi] Σw occupancy (sample-weighted avgs)
     edm = None
     mlp_fisher = False   # the file carries θ-net-weight Fisher propagated to per-η σ
     if args.fisher and os.path.exists(args.fisher):
@@ -1818,6 +1845,15 @@ def main() -> int:
         cs_pt = f.get("covariance_smear_24_2_24_2")
         if cs_pt is not None:
             cov_smear_flat = cs_pt.reshape(48, 48).cpu().numpy()
+        # Full 2-D (η,φ) output covariance + occupancy weights (output-fisher),
+        # for the φ-RESOLVED Fisher band and the SAMPLE-weighted η-average on the
+        # θ-vs-φ plots. Present only for the output-space Fisher.
+        cov_scale_2d = (f["covariance_scale_2d"].cpu().numpy()
+                        if f.get("covariance_scale_2d") is not None else None)
+        cov_smear_2d = (f["covariance_smear_2d"].cpu().numpy()
+                        if f.get("covariance_smear_2d") is not None else None)
+        fisher_cell_w = (f["cell_w"].cpu().numpy()
+                         if f.get("cell_w") is not None else None)
         # Covariance + correlation matrix over the FULL joint parameter set
         # (θ_scale + active θ_smear); fall back to the θ_scale-only correlation
         # for legacy files that store only the 24×3×24×3 scale block.
@@ -1907,26 +1943,47 @@ def main() -> int:
         # a binned fisher file's per-bin σ does not apply to the net outputs.
         if not mlp_fisher:
             sigma_scale = sigma_smear = None
-        # θ-vs-φ plots: sample the net on a FINE φ grid at a few representative
-        # |η| slices (the φ-direction companion to the θ-vs-η plots; meaningful
-        # only for the continuous MLP θ). Pick η slices spread across the range.
+        # θ-vs-φ plots: sample the net on a FINE φ grid over ALL η-bin centres
+        # (the φ-direction companion to the θ-vs-η plots; meaningful only for the
+        # continuous MLP θ). A few |η| slices are shown faint; the η-AVERAGE over
+        # all bins (+ ±1σ-over-η band) is the headline curve.
         n_phi_fine = 49
         phi_fine = torch.linspace(-np.pi, np.pi, n_phi_fine,
                                   dtype=torch.float32, device=device)
-        sl_idx = np.unique(np.linspace(0, n_eta_c - 1, 5).round().astype(int))
-        eta_sl = centers_t[sl_idx]                                     # [n_slc]
-        n_slc = int(eta_sl.shape[0])
-        eg = eta_sl[:, None, None].expand(n_slc, n_phi_fine, 2).reshape(-1, 2)
-        pg = phi_fine[None, :, None].expand(n_slc, n_phi_fine, 2).reshape(-1, 2)
+        eg = centers_t[:, None, None].expand(n_eta_c, n_phi_fine, 2).reshape(-1, 2)
+        pg = phi_fine[None, :, None].expand(n_eta_c, n_phi_fine, 2).reshape(-1, 2)
         with torch.no_grad():
             AeM_p, ac_p = model.theta_net(eg, pg)
-        phi_AeM = AeM_p[:, 0, :].view(n_slc, n_phi_fine, 3).cpu().numpy()  # physical
-        phi_ac = (model._smear_raw_to_effective(ac_p[:, 0, :]) * smear_scale
-                  ).view(n_slc, n_phi_fine, 2).cpu().numpy()
-        phi_fine_np = phi_fine.cpu().numpy()
-        eta_sl_np = centers[sl_idx]
-        mlp_phi = dict(phi=phi_fine_np, AeM=phi_AeM, ac=phi_ac,
-                       eta_sl=eta_sl_np, sl_idx=sl_idx)
+        # [n_eta, n_phi, n_comp] physical, over all η bins
+        AeM_all = AeM_p[:, 0, :].view(n_eta_c, n_phi_fine, 3).cpu().numpy()
+        ac_all = (model._smear_raw_to_effective(ac_p[:, 0, :]) * smear_scale
+                  ).view(n_eta_c, n_phi_fine, 2).cpu().numpy()
+        # representative slices (faint curves)
+        sl_idx = np.unique(np.linspace(0, n_eta_c - 1, 5).round().astype(int))
+        # SAMPLE-weighted η-average: weight each η bin by its Σw occupancy (from
+        # the Fisher file's cell_w, summed over φ) so the mean/band reflect where
+        # the data actually is; uniform if no occupancy info.
+        if fisher_cell_w is not None and fisher_cell_w.shape[0] == n_eta_c:
+            wgt = fisher_cell_w.sum(axis=1).astype(np.float64)     # [n_eta]
+        else:
+            wgt = np.ones(n_eta_c, dtype=np.float64)
+        if wgt.sum() <= 0:
+            wgt = np.ones(n_eta_c, dtype=np.float64)
+        wn = wgt / wgt.sum()
+
+        def _wavg(a):   # a: [n_eta, n_phi, n_comp] → weighted mean/std over η
+            mean = np.einsum('e,epc->pc', wn, a)
+            var = np.einsum('e,epc->pc', wn, (a - mean[None]) ** 2)
+            return mean, np.sqrt(np.clip(var, 0.0, None))
+        AeM_m, AeM_b = _wavg(AeM_all)
+        ac_m, ac_b = _wavg(ac_all)
+        mlp_phi = dict(
+            phi=phi_fine.cpu().numpy(),
+            AeM=AeM_all[sl_idx], ac=ac_all[sl_idx],     # [n_slc, n_phi, n_comp]
+            eta_sl=centers[sl_idx],
+            # η-averaged (sample-weighted) curve + spread-over-η band [n_phi,n_comp]
+            AeM_mean=AeM_m, AeM_band=AeM_b, ac_mean=ac_m, ac_band=ac_b,
+            eta_w=wn)
     if model.scale_enabled:
         # binned θ_scale is the O(1) fit param → ×THETA_SCALE_REF for physical
         # (A,e,M); the MLP grid is already physical (scale_ref inside the net).
@@ -1980,27 +2037,60 @@ def main() -> int:
     # f_η(η_slice)·f_φ(φ)).
     if mlp_phi is not None:
         phi = mlp_phi["phi"]
-        def _phi_ref(base_row, eta_sl_vals):
-            # base_row: [n_comp] injected base; build [n_phi, n_comp] = base ·
-            # f_η(η_slice) · f_φ(φ) per slice — but the plot overlays one ref
-            # curve, so use the CENTRE-η slice's modulation as representative.
+        # η-averaged f_η so the injected ref matches the η-MEAN closure curve
+        # (the η-mean of base·f_η(η)·f_φ(φ) = base·⟨f_η⟩·f_φ(φ)).
+        _eta_c2 = 0.5 * (np.asarray(stats.eta_edges[:-1])
+                         + np.asarray(stats.eta_edges[1:]))
+        feta_mean = (float(_inject_modulation_eta_np(_eta_c2).mean())
+                     if nonuniform else 1.0)
+
+        def _phi_ref(base_row):
+            # [n_phi, n_comp] = base · ⟨f_η⟩ · f_φ(φ), the η-averaged injected ref.
             if not nonuniform:
                 return np.broadcast_to(base_row, (len(phi), len(base_row)))
             fphi = 1.0 + _INJECT_AMP * np.sin(_INJECT_PHI_NOSC * phi)   # [n_phi]
-            feta = _inject_modulation_eta_np(np.array([eta_sl_vals]))[0]
-            return (base_row[None, :] * (feta * fphi)[:, None])
+            return base_row[None, :] * (feta_mean * fphi)[:, None]
+
+        eta_w = mlp_phi["eta_w"]                            # [n_eta] sample weights
+
+        def _fisher_sigma_phi(cov2d):
+            # φ-RESOLVED statistical ±1σ of the SAMPLE-weighted η-averaged output,
+            # from the full 2-D (η,φ_save) Fisher covariance. At each saved φ-bin:
+            #   var_c(φ) = Σ_{η,η'} wn_η wn_η' Cov[(η,φ,c),(η',φ,c)],
+            # then broadcast/interpolate from the saved φ-bin centres onto the
+            # fine plotted φ grid. cov2d: [n_eta,n_phi_s,ncol,n_eta,n_phi_s,ncol].
+            if cov2d is None:
+                return None
+            n_eta_s, n_phi_s, ncol = cov2d.shape[:3]
+            if n_eta_s != len(eta_w):
+                return None
+            sig_s = np.zeros((n_phi_s, ncol))
+            for pi in range(n_phi_s):
+                for c in range(ncol):
+                    blk = cov2d[:, pi, c, :, pi, c]          # [n_eta, n_eta]
+                    var = float(np.einsum('e,ef,f->', eta_w, blk, eta_w))
+                    sig_s[pi, c] = np.sqrt(max(var, 0.0))
+            # map saved φ-bin centres → fine grid by nearest bin (σ is smooth in φ)
+            phi_edges_s = np.linspace(-np.pi, np.pi, n_phi_s + 1)
+            phi_ctr_s = 0.5 * (phi_edges_s[:-1] + phi_edges_s[1:])
+            idx = np.clip(np.searchsorted(phi_edges_s, phi) - 1, 0, n_phi_s - 1)
+            return sig_s[idx]                                # [n_phi_fine, ncol]
         if model.scale_enabled:
             sref = (None if inject_np is None
-                    else _phi_ref(np.asarray(inject_np)[0], 0.0))   # base at η≈0
+                    else _phi_ref(np.asarray(inject_np)[0]))
             plot_theta_vs_phi(
                 phi, mlp_phi["AeM"], ["A", "e [GeV]", "M"],
-                "theta_scale_vs_phi", mlp_phi["eta_sl"], out_dir, ref=sref)
+                "theta_scale_vs_phi", mlp_phi["eta_sl"], out_dir, ref=sref,
+                eta_mean=mlp_phi["AeM_mean"], eta_band=mlp_phi["AeM_band"],
+                fisher_sigma=_fisher_sigma_phi(cov_scale_2d))
         if model.smearing_enabled:
             cref = (None if inject_smear_np is None
-                    else _phi_ref(np.asarray(inject_smear_np)[0], 0.0))
+                    else _phi_ref(np.asarray(inject_smear_np)[0]))
             plot_theta_vs_phi(
                 phi, mlp_phi["ac"], ["a [qop²]", "c [qop²·GeV²]"],
-                "theta_smear_vs_phi", mlp_phi["eta_sl"], out_dir, ref=cref)
+                "theta_smear_vs_phi", mlp_phi["eta_sl"], out_dir, ref=cref,
+                eta_mean=mlp_phi["ac_mean"], eta_band=mlp_phi["ac_band"],
+                fisher_sigma=_fisher_sigma_phi(cov_smear_2d))
     elif model.theta_mode != "mlp":
         print("  binned θ (no φ dependence): skipping theta_*_vs_phi")
 
