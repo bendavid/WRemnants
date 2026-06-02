@@ -1110,7 +1110,12 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn, *,
         model.zero_grad(set_to_none=True)
         ctr["fg"] += 1
         s = 0.0; w = 0.0; nev = 0
-        gacc = torch.zeros(n_par, device=device)
+        # Accumulate in float64: the per-batch grads are float32 (float32 model),
+        # but summing O(N/batch) of them in float32 incurs ~√N·ε ≈ 3e-5 relative
+        # cancellation noise — right at the ‖g‖ floor that stalled trust-krylov.
+        # float64 accumulation drops that floor to ~1e-12 so a small gtol is
+        # meaningful; the Σw-weighted loss sum is likewise summed in float64.
+        gacc = torch.zeros(n_par, device=device, dtype=torch.float64)
         bar = _pbar(f"[{stage_name}] grad pass #{ctr['fg']} (full sample)")
         for batch in train_loader:
             batch = _move_batch(batch, device)
@@ -1119,7 +1124,7 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn, *,
             if sw <= 0 or not torch.isfinite(loss):
                 continue
             g = torch.autograd.grad((loss * sw), params, allow_unused=True)
-            gacc += _flat_grad(g).detach()
+            gacc += _flat_grad(g).detach().double()
             s += float(loss.item()) * sw; w += sw
             bar.set_postfix_str(f"events={nev:,} nll={s / max(w, 1e-30):+.5f}")
         bar.close()
@@ -1211,7 +1216,7 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn, *,
         _set_flat(x_np)
         ctr["hvp"] += 1; ctr["hvp_since"] += 1
         v = torch.as_tensor(v_np, dtype=torch.float32, device=device)
-        hv = torch.zeros(n_par, device=device); w = 0.0
+        hv = torch.zeros(n_par, device=device, dtype=torch.float64); w = 0.0
         bar = _pbar(f"[{stage_name}] HVP #{ctr['hvp']} (recompute, "
                     f"{sub_str} events)")
         for batch in _hess_batches():
@@ -1230,7 +1235,7 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn, *,
                 gflat = _flat_grad(g)
                 hvc = torch.autograd.grad(gflat, params, grad_outputs=v,
                                           retain_graph=False, allow_unused=True)
-                hv += _flat_grad(hvc).detach(); w += sw
+                hv += _flat_grad(hvc).detach().double(); w += sw
         bar.close()
         if w <= 0:
             raise RuntimeError("trust-region HVP(recompute): no usable subset events")
