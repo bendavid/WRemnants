@@ -1069,11 +1069,21 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn, *,
     hvp_mode = getattr(args, "trust_hvp", "reuse")
     hvp_chunk = max(1, int(getattr(args, "trust_hvp_chunk", 4096)))
     hsub = int(getattr(args, "hess_subsample_events", 0) or 0)   # 0 = full sample
+    sub_str = (f"{hsub:,}" if hsub > 0 else "full")
     max_iter = int(args.fit_epochs or args.epochs)
     # Flat parameter vector ↔ the active θ (+ bkg) params.
     shapes = [p.shape for p in params]
     numels = [int(p.numel()) for p in params]
     n_par = int(sum(numels))
+    verbose = bool(getattr(args, "progress", True))
+    # Evaluation counters (objective/grad passes, g_S rebuilds, Krylov HVPs) — the
+    # trust-region inner solve is otherwise silent, so a slow step looks like a
+    # hang; report them so the per-iteration cost is visible.
+    ctr = {"fg": 0, "gS": 0, "hvp": 0, "hvp_since": 0, "iter": 0}
+
+    def _pbar(desc):
+        return tqdm(total=None, desc=desc, leave=False,
+                    disable=not verbose, unit="batch")
 
     def _set_flat(x_np):
         x = torch.as_tensor(x_np, dtype=torch.float32, device=device)
@@ -1092,20 +1102,31 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn, *,
     def _fun_and_grad(x_np):
         _set_flat(x_np)
         model.zero_grad(set_to_none=True)
-        s = 0.0; w = 0.0
+        ctr["fg"] += 1
+        s = 0.0; w = 0.0; nev = 0
         gacc = torch.zeros(n_par, device=device)
+        bar = _pbar(f"[{stage_name}] grad pass #{ctr['fg']} (full sample)")
         for batch in train_loader:
             batch = _move_batch(batch, device)
             loss, sw = step_fn(model, batch)
+            nb = int(batch["mll"].shape[0]); nev += nb; bar.update(1)
             if sw <= 0 or not torch.isfinite(loss):
                 continue
             g = torch.autograd.grad((loss * sw), params, allow_unused=True)
             gacc += _flat_grad(g).detach()
             s += float(loss.item()) * sw; w += sw
+            bar.set_postfix_str(f"events={nev:,} nll={s / max(w, 1e-30):+.5f}")
+        bar.close()
         if w <= 0:
             raise RuntimeError(f"trust-region: no usable batches [{stage_name}]")
         inv_w = 1.0 / w
         _fun_and_grad.last_nll = s * inv_w
+        gnorm = float((gacc * inv_w).norm())
+        if verbose:
+            print(f"  [{stage_name}] f/grad eval #{ctr['fg']}: nll={s*inv_w:+.6f} "
+                  f"‖g‖={gnorm:.3e}  (HVPs since last iter: {ctr['hvp_since']})",
+                  flush=True)
+        ctr["hvp_since"] = 0
         return float(s * inv_w), (gacc * inv_w).double().cpu().numpy()
     _fun_and_grad.last_nll = float("inf")
 
@@ -1119,45 +1140,74 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn, *,
                 return
 
     # Scheme A: per-step retained differentiable gradient over the subset.
-    state = {"x_id": None, "gS": None, "wS": 1.0}
+    state = {"x_key": None, "ver": None, "gS": None, "wS": 1.0}
 
-    def _build_reuse_grad(x_np):
+    def _param_versions():
+        # In-place op counter per param leaf; bumps whenever _set_flat's copy_
+        # mutates a param (e.g. scipy evaluating a trial step fun(x+p)).
+        return tuple(p._version for p in params)
+
+    def _build_reuse_grad():
         # Build g_S = ∂(Σ_S w·nll)/∂θ with the graph retained (create_graph).
         # NOTE: the whole |S|-event graph stays alive for all HVPs this step.
         model.zero_grad(set_to_none=True)
-        accs = None; w = 0.0
+        ctr["gS"] += 1
+        accs = None; w = 0.0; nev = 0
+        bar = _pbar(f"[{stage_name}] HVP graph build #{ctr['gS']} "
+                    f"({sub_str} events)")
         for batch in _hess_batches():
             batch = _move_batch(batch, device)
             loss, sw = step_fn(model, batch)
+            nev += int(batch["mll"].shape[0]); bar.update(1)
             if sw <= 0 or not torch.isfinite(loss):
                 continue
             term = loss * sw
             accs = term if accs is None else accs + term
             w += sw
+            bar.set_postfix_str(f"events={nev:,}")
+        bar.close()
         if accs is None or w <= 0:
             raise RuntimeError("trust-region HVP(reuse): no usable subset events")
         gS = torch.autograd.grad(accs, params, create_graph=True)
         state["gS"] = _flat_grad(gS)        # differentiable, graph retained
         state["wS"] = w
+        if verbose:
+            print(f"  [{stage_name}] built retained HVP graph #{ctr['gS']} "
+                  f"({nev:,} events) — subsequent HVPs reuse it (no data pass)",
+                  flush=True)
 
     def _hvp_reuse(x_np, v_np):
-        # Rebuild g_S whenever the iterate changed (scipy passes the same x for
-        # all HVPs of a step); reuse the retained graph within a step.
-        if state["x_id"] != _arr_key(x_np):
+        # Rebuild g_S when the retained graph is stale: either the iterate x
+        # changed, OR the param leaves were modified in place since the build
+        # (scipy mutates them via _set_flat when evaluating a trial step — on a
+        # REJECTED step x is unchanged but the params were left perturbed, so an
+        # x-only check would reuse a stale graph → "modified by an inplace op"
+        # version error). Within one subproblem solve scipy makes no fun calls,
+        # so versions are stable and the retained graph is reused across HVPs.
+        if (state["gS"] is None or state["x_key"] != _arr_key(x_np)
+                or state["ver"] != _param_versions()):
             _set_flat(x_np)
-            _build_reuse_grad(x_np)
-            state["x_id"] = _arr_key(x_np)
+            _build_reuse_grad()
+            state["x_key"] = _arr_key(x_np)
+            state["ver"] = _param_versions()
         v = torch.as_tensor(v_np, dtype=torch.float32, device=device)
         hv = torch.autograd.grad(state["gS"], params, grad_outputs=v,
                                  retain_graph=True, allow_unused=True)
         hv = _flat_grad(hv) / state["wS"]
+        ctr["hvp"] += 1; ctr["hvp_since"] += 1
+        if verbose and ctr["hvp_since"] % 10 == 0:
+            print(f"  [{stage_name}] Krylov HVP {ctr['hvp_since']} this "
+                  f"subproblem ({ctr['hvp']} total)", flush=True)
         return hv.detach().double().cpu().numpy()
 
     # Scheme B: recompute forward+double-backward per HVP, chunked over events.
     def _hvp_recompute(x_np, v_np):
         _set_flat(x_np)
+        ctr["hvp"] += 1; ctr["hvp_since"] += 1
         v = torch.as_tensor(v_np, dtype=torch.float32, device=device)
         hv = torch.zeros(n_par, device=device); w = 0.0
+        bar = _pbar(f"[{stage_name}] HVP #{ctr['hvp']} (recompute, "
+                    f"{sub_str} events)")
         for batch in _hess_batches():
             batch = _move_batch(batch, device)
             # chunk the batch's events to bound the resident graph
@@ -1167,6 +1217,7 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn, *,
                            and val.shape[:1] == (n,) else val)
                        for k, val in batch.items()}
                 loss, sw = step_fn(model, sub)
+                bar.update(1)
                 if sw <= 0 or not torch.isfinite(loss):
                     continue
                 g = torch.autograd.grad((loss * sw), params, create_graph=True)
@@ -1174,13 +1225,16 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn, *,
                 hvc = torch.autograd.grad(gflat, params, grad_outputs=v,
                                           retain_graph=False, allow_unused=True)
                 hv += _flat_grad(hvc).detach(); w += sw
+        bar.close()
         if w <= 0:
             raise RuntimeError("trust-region HVP(recompute): no usable subset events")
+        if verbose and ctr["hvp_since"] % 10 == 0:
+            print(f"  [{stage_name}] Krylov HVP {ctr['hvp_since']} this "
+                  f"subproblem ({ctr['hvp']} total)", flush=True)
         return (hv / w).double().cpu().numpy()
 
     hessp = _hvp_reuse if hvp_mode == "reuse" else _hvp_recompute
     x0 = torch.cat([p.detach().reshape(-1) for p in params]).double().cpu().numpy()
-    sub_str = (f"{hsub:,}" if hsub > 0 else "full")
     print(f"  optimizer: {method} (2nd-order trust region) — full-sample exact "
           f"gradient; exact HVP via scheme {'A/reuse' if hvp_mode=='reuse' else 'B/recompute'} "
           f"on {sub_str} events; max {max_iter} iters, gtol={args.trust_gtol:g}")
@@ -1188,10 +1242,13 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn, *,
     best = {"nll": float("inf"), "x": x0.copy()}
 
     def _callback(xk, *a):
+        ctr["iter"] += 1
         nll = _fun_and_grad.last_nll
         if nll < best["nll"]:
             best["nll"] = nll; best["x"] = np.array(xk, copy=True)
-        print(f"  [{stage_name}] trust iter: nll={nll:+.6f}", flush=True)
+        print(f"  [{stage_name}] trust iter {ctr['iter']}/{max_iter}: "
+              f"nll={nll:+.6f}  (cum: {ctr['fg']} f/grad evals, "
+              f"{ctr['gS']} graph builds, {ctr['hvp']} HVPs)", flush=True)
 
     res = _scipy_min(
         _fun_and_grad, x0, method=method, jac=True, hessp=hessp,
