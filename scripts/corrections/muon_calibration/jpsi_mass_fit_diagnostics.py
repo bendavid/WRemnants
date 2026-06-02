@@ -982,6 +982,45 @@ def plot_theta_vs_eta(
         print(f"  wrote {p}")
 
 
+def plot_theta_vs_phi(
+    phi_grid: np.ndarray,        # [n_phi] φ sample points
+    theta: np.ndarray,           # [n_eta_slc, n_phi, n_comp] net output at η-slices
+    component_names: List[str],
+    name: str,
+    eta_slice_vals: np.ndarray,  # [n_eta_slc] the |η| (centre) of each slice curve
+    output_dir: str,
+    ref: "np.ndarray | None" = None,   # [n_phi, n_comp] φ-dependent injected ref
+):
+    """θ output (A,e,M or a,c) as a function of φ, one curve per representative η
+    slice — the φ-direction companion to plot_theta_vs_eta. Only meaningful for
+    --theta-mlp (the binned θ has no φ dependence). Reveals the net's learned φ
+    structure (and, in --inject-nonuniform validation, whether it tracks the
+    injected sinusoidal-φ modulation)."""
+    n_eta_slc, n_phi, n_comp = theta.shape
+    fig, axes = plt.subplots(n_comp, 1, sharex=True, figsize=(8, 2.5 * n_comp))
+    if n_comp == 1:
+        axes = [axes]
+    eta_colors = ["C0", "C1", "C2", "C4", "C5", "C6"]
+    for i, ax in enumerate(axes):
+        for s in range(n_eta_slc):
+            ax.plot(phi_grid, theta[s, :, i],
+                    color=eta_colors[s % len(eta_colors)], lw=1.2,
+                    label=f"|η|≈{eta_slice_vals[s]:.1f}")
+        if ref is not None:
+            ax.plot(phi_grid, ref[:, i], color="C3", ls="--", lw=1.3,
+                    label="injected")
+        ax.axhline(0, color="0.5", lw=0.8, ls=":")
+        ax.set_ylabel(component_names[i])
+        ax.grid(True, alpha=0.3)
+    axes[0].legend(loc="best", fontsize=7,
+                   ncol=max(1, (n_eta_slc + int(ref is not None)) // 4 + 1))
+    axes[-1].set_xlabel("φ [rad]")
+    axes[0].set_title(name)
+    fig.tight_layout()
+    for p in _save_fig(fig, output_dir, name):
+        print(f"  wrote {p}")
+
+
 def plot_fisher_correlation(cov: np.ndarray, output_dir: str):
     """72×72 correlation heatmap, with η-bin grid lines + (A,e,M) tick labels."""
     n = cov.shape[0]
@@ -1808,6 +1847,7 @@ def main() -> int:
     mlp_scale_slices = mlp_smear_slices = None
     mlp_scale_avg_samples = mlp_smear_avg_samples = None
     mlp_slice_labels = None
+    mlp_phi = None
     if model.theta_mode == "mlp":
         # Sample the ThetaNet on a 2D (η-centre, φ) grid: 16 points uniformly
         # spaced over [0, 2π) for the φ-average and ±std band, plus 4 cardinal
@@ -1867,6 +1907,26 @@ def main() -> int:
         # a binned fisher file's per-bin σ does not apply to the net outputs.
         if not mlp_fisher:
             sigma_scale = sigma_smear = None
+        # θ-vs-φ plots: sample the net on a FINE φ grid at a few representative
+        # |η| slices (the φ-direction companion to the θ-vs-η plots; meaningful
+        # only for the continuous MLP θ). Pick η slices spread across the range.
+        n_phi_fine = 49
+        phi_fine = torch.linspace(-np.pi, np.pi, n_phi_fine,
+                                  dtype=torch.float32, device=device)
+        sl_idx = np.unique(np.linspace(0, n_eta_c - 1, 5).round().astype(int))
+        eta_sl = centers_t[sl_idx]                                     # [n_slc]
+        n_slc = int(eta_sl.shape[0])
+        eg = eta_sl[:, None, None].expand(n_slc, n_phi_fine, 2).reshape(-1, 2)
+        pg = phi_fine[None, :, None].expand(n_slc, n_phi_fine, 2).reshape(-1, 2)
+        with torch.no_grad():
+            AeM_p, ac_p = model.theta_net(eg, pg)
+        phi_AeM = AeM_p[:, 0, :].view(n_slc, n_phi_fine, 3).cpu().numpy()  # physical
+        phi_ac = (model._smear_raw_to_effective(ac_p[:, 0, :]) * smear_scale
+                  ).view(n_slc, n_phi_fine, 2).cpu().numpy()
+        phi_fine_np = phi_fine.cpu().numpy()
+        eta_sl_np = centers[sl_idx]
+        mlp_phi = dict(phi=phi_fine_np, AeM=phi_AeM, ac=phi_ac,
+                       eta_sl=eta_sl_np, sl_idx=sl_idx)
     if model.scale_enabled:
         # binned θ_scale is the O(1) fit param → ×THETA_SCALE_REF for physical
         # (A,e,M); the MLP grid is already physical (scale_ref inside the net).
@@ -1912,6 +1972,37 @@ def main() -> int:
         )
     else:
         print("  --disable-smearing: skipping theta_smear_vs_eta")
+
+    # Plots 2b/3b: θ vs φ at representative |η| slices (MLP only — binned θ has
+    # no φ dependence). Companion to the θ-vs-η plots; shows the net's learned
+    # φ structure and, under --inject-nonuniform, whether it tracks the injected
+    # f_phi = 1 + amp·sin(2φ) sinusoid (the injected ref scales the per-η base by
+    # f_η(η_slice)·f_φ(φ)).
+    if mlp_phi is not None:
+        phi = mlp_phi["phi"]
+        def _phi_ref(base_row, eta_sl_vals):
+            # base_row: [n_comp] injected base; build [n_phi, n_comp] = base ·
+            # f_η(η_slice) · f_φ(φ) per slice — but the plot overlays one ref
+            # curve, so use the CENTRE-η slice's modulation as representative.
+            if not nonuniform:
+                return np.broadcast_to(base_row, (len(phi), len(base_row)))
+            fphi = 1.0 + _INJECT_AMP * np.sin(_INJECT_PHI_NOSC * phi)   # [n_phi]
+            feta = _inject_modulation_eta_np(np.array([eta_sl_vals]))[0]
+            return (base_row[None, :] * (feta * fphi)[:, None])
+        if model.scale_enabled:
+            sref = (None if inject_np is None
+                    else _phi_ref(np.asarray(inject_np)[0], 0.0))   # base at η≈0
+            plot_theta_vs_phi(
+                phi, mlp_phi["AeM"], ["A", "e [GeV]", "M"],
+                "theta_scale_vs_phi", mlp_phi["eta_sl"], out_dir, ref=sref)
+        if model.smearing_enabled:
+            cref = (None if inject_smear_np is None
+                    else _phi_ref(np.asarray(inject_smear_np)[0], 0.0))
+            plot_theta_vs_phi(
+                phi, mlp_phi["ac"], ["a [qop²]", "c [qop²·GeV²]"],
+                "theta_smear_vs_phi", mlp_phi["eta_sl"], out_dir, ref=cref)
+    elif model.theta_mode != "mlp":
+        print("  binned θ (no φ dependence): skipping theta_*_vs_phi")
 
     # Plots 3b/3c: closure in the DEGENERACY-WHITENED basis. (A,e) and (a,c)
     # are each near-degenerate over the J/ψ pt range, so the m_ll likelihood
