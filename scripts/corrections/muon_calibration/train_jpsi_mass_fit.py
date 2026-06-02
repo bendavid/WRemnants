@@ -1402,11 +1402,15 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
     def step1(model, batch):
         idx = (~batch["is_data_mask"]).nonzero(as_tuple=True)[0]
         if idx.numel() == 0:
-            return torch.zeros((), device=batch["mll"].device), 0.0
+            return torch.zeros((), dtype=torch.float64,
+                               device=batch["mll"].device), 0.0
         logp = model.log_p_nominal(batch["mll"][idx], batch["cond_std"][idx])
-        w = batch["w"][idx]
-        sw = float(w.sum().clamp_min(1e-30))
-        return -(w * logp).sum() / sw, sw
+        w = batch["w"][idx].double()                 # float64 reduction: the model
+        sw = float(w.sum().clamp_min(1e-30))         # runs at --precision, but the
+        return -(w * logp.double()).sum() / sw, sw   # Σw·NLL sum + its backward are
+        # float64 (a ~65k-event float32 sum carries ~√N·ε cancellation; backward
+        # accumulates per-event grad contributions in float64, cast to the fp32
+        # leaf only at the end). Benefits adam/soap/lbfgs alike (all call step_fn).
 
     return _run_epochs(args, model, optim, train_loader, val_loader, stats,
                        step_fn=step1, ckpt_prefix="flow", stage_name="flow",
@@ -1483,9 +1487,12 @@ def train_stage2(args, model, train_loader, val_loader, stats,
             batch["mll"], batch["pt_pm"], batch["eta_pm"], batch["phi_pm"],
             batch["q_pm"], batch["b_pm"], batch["cond_std"], data_mask,
             n_iter=args.continuity_n_iter)
-        w = batch["w"] * data_mask.to(batch["w"].dtype)
+        # float64 Σw·NLL reduction + backward (model stays at --precision); same
+        # rationale as step1 / the trust driver's _per_event_term, applied to all
+        # optimisers that go through step_fn (adam/soap/lbfgs).
+        w = (batch["w"] * data_mask.to(batch["w"].dtype)).double()
         sw = float(w.sum().clamp_min(1e-30))
-        return (w * per).sum() / sw, sw
+        return (w * per.double()).sum() / sw, sw
 
     fit_opt = getattr(args, "fit_optimizer", "adam")
     max_epochs = args.fit_epochs or args.epochs
