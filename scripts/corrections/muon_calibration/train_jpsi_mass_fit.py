@@ -200,7 +200,7 @@ def _make_fit_optimizer(args, groups, minibatch_loop=False, kind=None):
     # only use a plain step-based optimiser, so fall back to the base (adam/soap)
     # or adam.
     if minibatch_loop and ("+" in kind or kind in ("lbfgs", "trust-krylov",
-                                                    "trust-ncg")):
+                                                    "trust-ncg", "trust-exact")):
         base = kind.split("+")[0]
         kind = base if base in ("adam", "soap") else "adam"
         print(f"  note: --fit-optimizer {getattr(args, 'fit_optimizer', '')} "
@@ -1264,11 +1264,72 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
                   f"subproblem ({ctr['hvp']} total)", flush=True)
         return (hv / w).double().cpu().numpy()
 
+    # trust-exact wants the FULL Hessian matrix (n_par×n_par), accumulated over
+    # the subset and assembled with the vectorised batched second-backward (same
+    # _hessian_block_batched used by the observed output-fisher), with a per-row
+    # loop fallback. The reduction is float64 (per-event term upcast). Feasible
+    # only when n_par is small (binned θ); a guard warns/blocks for large n_par.
+    _h_active_idx = torch.arange(n_par, device=device)
+    _h_use_batched = bool(getattr(args, "fisher_vectorized", True))
+
+    def _full_hessian(x_np):
+        nonlocal _h_use_batched
+        _set_flat(x_np)
+        H = torch.zeros((n_par, n_par), device=device, dtype=torch.float64)
+        w = 0.0
+        bar = _pbar(f"[{stage_name}] Hessian build (exact, {sub_str} events)")
+        for batch in _hess_batches():
+            batch = _move_batch(batch, device)
+            term, sw = _per_event_term(batch)        # Σw·NLL (float64 reduction)
+            bar.update(1)
+            if sw <= 0 or not torch.isfinite(term):
+                continue
+            g = torch.autograd.grad(term, params, create_graph=True)
+            g_full = torch.cat([gi.reshape(-1) for gi in g])
+            if _h_use_batched:
+                try:
+                    Hb = _hessian_block_batched(
+                        g_full[_h_active_idx], params, _h_active_idx, n_par,
+                        chunk=max(1, int(args.empirical_fisher_chunk)))
+                except (RuntimeError, NotImplementedError) as e:
+                    _h_use_batched = False
+                    if str(device).startswith("cuda"):
+                        torch.cuda.empty_cache()
+                    bar.write(f"  note: vectorised Hessian unavailable "
+                              f"({type(e).__name__}); using the per-row loop")
+                    Hb = _hessian_block_loop(g_full, params, _h_active_idx, n_par)
+            else:
+                Hb = _hessian_block_loop(g_full, params, _h_active_idx, n_par)
+            H += Hb.detach().double(); w += sw
+        bar.close()
+        if w <= 0:
+            raise RuntimeError("trust-region: no usable subset events (Hessian)")
+        ctr["hvp"] += 1                              # count as one curvature eval
+        H = H / w                                    # per-unit-weight (mean) Hessian
+        H = 0.5 * (H + H.T)                           # symmetrise ULP asymmetry
+        if verbose:
+            print(f"  [{stage_name}] built exact Hessian ({n_par}×{n_par}) "
+                  f"this iter", flush=True)
+        return H.cpu().numpy()
+
+    use_exact_hess = (method == "trust-exact")
+    if use_exact_hess and n_par > int(getattr(args, "trust_exact_max_par", 400)):
+        raise RuntimeError(
+            f"--fit-optimizer trust-exact builds the full {n_par}×{n_par} Hessian "
+            f"per iteration, which is too large (>{getattr(args,'trust_exact_max_par',400)} "
+            f"params; e.g. --theta-mlp). Use trust-krylov (Hessian-free HVP) or "
+            f"raise --trust-exact-max-par if you really intend this.")
     hessp = _hvp_reuse if hvp_mode == "reuse" else _hvp_recompute
     x0 = torch.cat([p.detach().reshape(-1) for p in params]).double().cpu().numpy()
-    print(f"  optimizer: {method} (2nd-order trust region) — full-sample exact "
-          f"gradient; exact HVP via scheme {'A/reuse' if hvp_mode=='reuse' else 'B/recompute'} "
-          f"on {sub_str} events; max {max_iter} iters, gtol={args.trust_gtol:g}")
+    if use_exact_hess:
+        print(f"  optimizer: {method} (2nd-order trust region) — full-sample exact "
+              f"gradient; FULL {n_par}×{n_par} Hessian (vectorised second-backward, "
+              f"float64) on {sub_str} events; max {max_iter} iters, "
+              f"gtol={args.trust_gtol:g}")
+    else:
+        print(f"  optimizer: {method} (2nd-order trust region) — full-sample exact "
+              f"gradient; exact HVP via scheme {'A/reuse' if hvp_mode=='reuse' else 'B/recompute'} "
+              f"on {sub_str} events; max {max_iter} iters, gtol={args.trust_gtol:g}")
 
     best = {"nll": float("inf"), "x": x0.copy()}
 
@@ -1281,10 +1342,16 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
               f"nll={nll:+.6f}  (cum: {ctr['fg']} f/grad evals, "
               f"{ctr['gS']} graph builds, {ctr['hvp']} HVPs)", flush=True)
 
-    res = _scipy_min(
-        _fun_and_grad, x0, method=method, jac=True, hessp=hessp,
-        callback=_callback,
-        options={"maxiter": max_iter, "gtol": float(args.trust_gtol)})
+    if use_exact_hess:
+        res = _scipy_min(
+            _fun_and_grad, x0, method=method, jac=True, hess=_full_hessian,
+            callback=_callback,
+            options={"maxiter": max_iter, "gtol": float(args.trust_gtol)})
+    else:
+        res = _scipy_min(
+            _fun_and_grad, x0, method=method, jac=True, hessp=hessp,
+            callback=_callback,
+            options={"maxiter": max_iter, "gtol": float(args.trust_gtol)})
     # Use the best iterate seen (scipy returns the last, which the ratio test
     # guarantees is ≤ start, but the callback-tracked best is safest).
     x_final = best["x"] if best["nll"] <= float(res.fun) else res.x
@@ -1410,7 +1477,7 @@ def train_stage2(args, model, train_loader, val_loader, stats,
 
     fit_opt = getattr(args, "fit_optimizer", "adam")
     max_epochs = args.fit_epochs or args.epochs
-    if fit_opt in ("trust-krylov", "trust-ncg"):
+    if fit_opt in ("trust-krylov", "trust-ncg", "trust-exact"):
         # Second-order trust region (scipy) over the active θ (+ bkg) params.
         tr_params = [p for g in groups for p in g["params"]]
         args.trust_method = fit_opt
@@ -1423,7 +1490,7 @@ def train_stage2(args, model, train_loader, val_loader, stats,
         # than Adam/SOAP can) from the reloaded best. Groups depend only on the
         # (unchanged) model state, so they're rebuilt fresh per phase.
         base, polish = fit_opt.split("+", 1)
-        is_trust = polish in ("trust-krylov", "trust-ncg")
+        is_trust = polish in ("trust-krylov", "trust-ncg", "trust-exact")
         n2 = (max_epochs if is_trust          # trust uses --fit-epochs as its iter cap
               else int(getattr(args, "lbfgs_final_epochs", 1)))
         print(f"  optimizer: HYBRID {fit_opt} — phase 1 = {base} (≤{max_epochs} "
@@ -3121,9 +3188,10 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "sets the relative A,e,M vs a,c magnitudes.")
     p.add_argument("--fit-optimizer",
                    choices=("adam", "soap", "lbfgs", "adam+lbfgs", "soap+lbfgs",
-                            "trust-krylov", "trust-ncg",
+                            "trust-krylov", "trust-ncg", "trust-exact",
                             "adam+trust-krylov", "soap+trust-krylov",
-                            "adam+trust-ncg", "soap+trust-ncg"),
+                            "adam+trust-ncg", "soap+trust-ncg",
+                            "adam+trust-exact", "soap+trust-exact"),
                    default="adam",
                    help="Stage-2 (θ + background) optimizer. 'adam' (default): "
                    "torch.optim.Adam, the historical choice. 'soap': SOAP "
@@ -3151,13 +3219,18 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "for the small, degenerate BINNED θ fit; the line search "
                    "auto-scales the step so the per-group lrs / plateau schedule "
                    "don't apply. The bootstrap refit (minibatch) falls back to "
-                   "Adam. Pairs well with --theta-whiten. HYBRIDS "
-                   "'{adam,soap}+{lbfgs,trust-krylov,trust-ncg}': two-phase — "
-                   "Adam/SOAP to its normal stopping (robust bulk descent; "
-                   "escapes the near-flat θ≈0 start that stalls L-BFGS's line "
-                   "search), THEN the second-order polish warm-started from it "
-                   "(L-BFGS for --lbfgs-final-epochs, or the trust-region driver "
-                   "for --fit-epochs iters) to reach a tight gradient norm that "
+                   "Adam. Pairs well with --theta-whiten. 'trust-krylov' / "
+                   "'trust-ncg' / 'trust-exact': scipy second-order trust region "
+                   "(full-sample exact gradient, exact Hessian/HVP over "
+                   "--hess-subsample-events). trust-krylov/ncg are Hessian-FREE "
+                   "(HVP); trust-exact builds the full Hessian (binned θ only, "
+                   "see --trust-exact-max-par). HYBRIDS "
+                   "'{adam,soap}+{lbfgs,trust-krylov,trust-ncg,trust-exact}': "
+                   "two-phase — Adam/SOAP to its normal stopping (robust bulk "
+                   "descent; escapes the near-flat θ≈0 start that stalls L-BFGS's "
+                   "line search), THEN the second-order polish warm-started from "
+                   "it (L-BFGS for --lbfgs-final-epochs, or the trust-region "
+                   "driver for --fit-epochs iters) to reach a tight gradient norm "
                    "Adam/SOAP — normalising by the gradient RMS — structurally "
                    "cannot. If the polish regresses, the phase-1 result is "
                    "restored.")
@@ -3184,21 +3257,32 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "L-BFGS polish epochs in phase 2 (each = one optim.step(closure) "
                    "of up to --lbfgs-max-iter inner iterations), warm-started from "
                    "the phase-1 Adam/SOAP result.")
-    # SciPy second-order trust region (trust-krylov / trust-ncg).
+    # SciPy second-order trust region (trust-krylov / trust-ncg / trust-exact).
+    # trust-krylov/ncg are Hessian-FREE (HVP, --trust-hvp); trust-exact builds
+    # the FULL n_par×n_par Hessian per iteration (vectorised second-backward,
+    # float64) and solves the subproblem exactly — best for the small binned θ
+    # (few params), blocked above --trust-exact-max-par (e.g. --theta-mlp).
     p.add_argument("--trust-gtol", type=float, default=1e-6,
-                   help="(--fit-optimizer trust-krylov/ncg) Gradient-norm "
-                   "convergence tolerance (the exhaustive-minimisation stopping "
-                   "criterion; the gradient is exact on the FULL sample).")
+                   help="(--fit-optimizer trust-*) Gradient-norm convergence "
+                   "tolerance (the exhaustive-minimisation stopping criterion; "
+                   "the gradient is exact on the FULL sample). NOTE: the float32 "
+                   "model evals floor ‖g‖ at ~1e-4..1e-5, so a much smaller gtol "
+                   "just runs to the iter cap.")
+    p.add_argument("--trust-exact-max-par", type=int, default=400,
+                   help="(--fit-optimizer trust-exact) Max number of fitted "
+                   "parameters for which the full Hessian is built; above this "
+                   "trust-exact errors out (use trust-krylov instead). Binned θ "
+                   "is well under; --theta-mlp (~1000s of net weights) is not.")
     p.add_argument("--trust-hvp", choices=("reuse", "recompute"), default="reuse",
-                   help="(trust-*) Exact (true-Hessian) HVP scheme — H is never "
-                   "formed. 'reuse' (scheme A, default): build the differentiable "
-                   "gradient g_S once per step (create_graph) and RETAIN its graph; "
-                   "each Krylov HVP is one second backward, NO data pass/forward "
-                   "per HVP — cheapest, but the whole subset graph stays resident "
-                   "(memory ∝ subset, not chunkable). 'recompute' (scheme B): "
-                   "re-do forward+double-backward per HVP, chunked over events "
-                   "(--trust-hvp-chunk) so peak memory is bounded — the only "
-                   "scheme that scales to large/full Hessian samples.")
+                   help="(trust-krylov/ncg) Exact (true-Hessian) HVP scheme — H is "
+                   "never formed. 'reuse' (scheme A, default): build the "
+                   "differentiable gradient g_S once per step (create_graph) and "
+                   "RETAIN its graph; each Krylov HVP is one second backward, NO "
+                   "data pass/forward per HVP — cheapest, but the whole subset "
+                   "graph stays resident (memory ∝ subset, not chunkable). "
+                   "'recompute' (scheme B): re-do forward+double-backward per HVP, "
+                   "chunked over events (--trust-hvp-chunk) so peak memory is "
+                   "bounded. (Ignored by trust-exact, which builds the full H.)")
     p.add_argument("--hess-subsample-events", type=int, default=0,
                    help="(trust-*) Cap on events used for the HVP/Hessian subset "
                    "(0 = full sample). The GRADIENT is always exact on the full "
