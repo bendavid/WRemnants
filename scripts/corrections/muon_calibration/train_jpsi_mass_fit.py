@@ -1039,8 +1039,12 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
     return best_val
 
 
-def _run_trust_region(args, model, params, train_loader, stats, step_fn, *,
+def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
                       stage_name="fit", mc_as_data=False):
+    # ``step_fn`` is accepted for call-site parity with _run_epochs but UNUSED:
+    # the trust driver builds its own per-event objective (``_per_event_term``)
+    # so the Σw-weighted reduction + backward run in FLOAT64 (the model stays at
+    # --precision). It reproduces step2's data-branch NLL (mc_as_data-aware).
     """SciPy trust-region (trust-krylov / trust-ncg) minimisation of the stage-2
     NLL — a genuinely second-order, line-search-free minimiser for the smooth,
     deterministic objective, robust to the indefinite/degenerate curvature
@@ -1104,6 +1108,23 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn, *,
             (g if g is not None else torch.zeros_like(p)).reshape(-1)
             for g, p in zip(grads, params)])
 
+    # Per-event NLL + weights for ONE batch, reduced in FLOAT64. The model
+    # (flow + gh_qop) runs at --precision; we upcast the per-event log-density to
+    # double BEFORE the Σw-weighted reduction + backward, so the in-batch sum and
+    # the gradient accumulation along the backward path are float64 (the dominant
+    # remaining floor — a 65k-event float32 sum carries ~√N·ε ≈ 3e-5 relative
+    # cancellation). This does NOT recover the model's internal float32 round-off
+    # (per-event log p is only float32-accurate), only stops adding to it.
+    def _per_event_term(batch):
+        dm = (~batch["is_data_mask"] if mc_as_data else batch["is_data_mask"])
+        per = model.data_nll_continuity(
+            batch["mll"], batch["pt_pm"], batch["eta_pm"], batch["phi_pm"],
+            batch["q_pm"], batch["b_pm"], batch["cond_std"], dm,
+            n_iter=int(getattr(args, "continuity_n_iter", 2)))
+        w = (batch["w"] * dm.to(batch["w"].dtype)).double()      # float64 weights
+        term = (w * per.double()).sum()                          # Σw·NLL in float64
+        return term, float(w.sum())
+
     # ---- full-sample exact objective + gradient (one pass/step, detached) ----
     def _fun_and_grad(x_np):
         _set_flat(x_np)
@@ -1119,13 +1140,13 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn, *,
         bar = _pbar(f"[{stage_name}] grad pass #{ctr['fg']} (full sample)")
         for batch in train_loader:
             batch = _move_batch(batch, device)
-            loss, sw = step_fn(model, batch)
+            term, sw = _per_event_term(batch)        # Σw·NLL (float64), Σw
             nb = int(batch["mll"].shape[0]); nev += nb; bar.update(1)
-            if sw <= 0 or not torch.isfinite(loss):
+            if sw <= 0 or not torch.isfinite(term):
                 continue
-            g = torch.autograd.grad((loss * sw), params, allow_unused=True)
+            g = torch.autograd.grad(term, params, allow_unused=True)
             gacc += _flat_grad(g).detach().double()
-            s += float(loss.item()) * sw; w += sw
+            s += float(term.item()); w += sw         # term is already Σw·NLL
             bar.set_postfix_str(f"events={nev:,} nll={s / max(w, 1e-30):+.5f}")
         bar.close()
         if w <= 0:
@@ -1168,11 +1189,10 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn, *,
                     f"({sub_str} events)")
         for batch in _hess_batches():
             batch = _move_batch(batch, device)
-            loss, sw = step_fn(model, batch)
+            term, sw = _per_event_term(batch)        # Σw·NLL (float64), Σw
             nev += int(batch["mll"].shape[0]); bar.update(1)
-            if sw <= 0 or not torch.isfinite(loss):
+            if sw <= 0 or not torch.isfinite(term):
                 continue
-            term = loss * sw
             accs = term if accs is None else accs + term
             w += sw
             bar.set_postfix_str(f"events={nev:,}")
@@ -1227,12 +1247,12 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn, *,
                 sub = {k: (val[c0:c0 + hvp_chunk] if torch.is_tensor(val)
                            and val.shape[:1] == (n,) else val)
                        for k, val in batch.items()}
-                loss, sw = step_fn(model, sub)
+                term, sw = _per_event_term(sub)      # Σw·NLL (float64 reduction)
                 bar.update(1)
-                if sw <= 0 or not torch.isfinite(loss):
+                if sw <= 0 or not torch.isfinite(term):
                     continue
-                g = torch.autograd.grad((loss * sw), params, create_graph=True)
-                gflat = _flat_grad(g)
+                g = torch.autograd.grad(term, params, create_graph=True)
+                gflat = _flat_grad(g)                 # float32 (fp32 param leaves)
                 hvc = torch.autograd.grad(gflat, params, grad_outputs=v,
                                           retain_graph=False, allow_unused=True)
                 hv += _flat_grad(hvc).detach().double(); w += sw
