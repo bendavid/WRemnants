@@ -195,8 +195,8 @@ def _make_fit_optimizer(args, groups, minibatch_loop=False, kind=None):
     --fit-optimizer."""
     if kind is None:
         kind = getattr(args, "fit_optimizer", "adam")
-    if kind == "lbfgs" and minibatch_loop:
-        print("  note: --fit-optimizer lbfgs needs the closure loop; the "
+    if kind in ("lbfgs", "trust-krylov", "trust-ncg") and minibatch_loop:
+        print(f"  note: --fit-optimizer {kind} needs its own driver loop; the "
               "bootstrap refit falls back to Adam.")
         kind = "adam"
     if kind == "adam":
@@ -1033,6 +1033,198 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
     return best_val
 
 
+def _run_trust_region(args, model, params, train_loader, stats, step_fn, *,
+                      stage_name="fit", mc_as_data=False):
+    """SciPy trust-region (trust-krylov / trust-ncg) minimisation of the stage-2
+    NLL — a genuinely second-order, line-search-free minimiser for the smooth,
+    deterministic objective, robust to the indefinite/degenerate curvature
+    (A/e, a/c) that stalls the L-BFGS line search.
+
+    Cost design (see the discussion): the GRADIENT is exact on the FULL sample
+    (one pass/step, detached — it sets the step and is the convergence test);
+    the exact (true-Hessian) HVP is computed WITHOUT forming H, on a fixed event
+    SUBSET, by one of:
+
+      • scheme A (``--trust-hvp reuse``, default): build the differentiable
+        gradient g_S once per step with create_graph=True and RETAIN its graph;
+        each Krylov HVP is then ``grad(g_S, θ, grad_outputs=v, retain_graph=True)``
+        — a single second backward, NO data pass / forward per HVP. Cheapest per
+        HVP, but the whole |S|-event forward+1st-backward graph stays resident for
+        the inner solve (memory ∝ |S|, not chunkable).
+      • scheme B (``--trust-hvp recompute``): each HVP re-does forward+backward
+        over S (double-backward), chunked over events so peak memory is bounded
+        by the chunk — the only scheme that could scale to the full sample.
+
+    The full-gradient + full-objective trust-region ratio test makes ANY Hessian
+    subset safe: a noisy H_S only yields a sub-optimal step (ρ small → shrink Δ),
+    never a wrong-direction one. The Hessian subset is FIXED across all HVPs of a
+    step (resampled per step) — mandatory for the Krylov inner solve's operator
+    consistency. Returns the best (lowest) full-sample NLL reached."""
+    try:
+        from scipy.optimize import minimize as _scipy_min
+    except ImportError as e:
+        raise RuntimeError(f"--fit-optimizer trust-* requires scipy ({e})")
+    device = args.device
+    method = getattr(args, "trust_method", "trust-krylov")
+    hvp_mode = getattr(args, "trust_hvp", "reuse")
+    hvp_chunk = max(1, int(getattr(args, "trust_hvp_chunk", 4096)))
+    hsub = int(getattr(args, "hess_subsample_events", 0) or 0)   # 0 = full sample
+    max_iter = int(args.fit_epochs or args.epochs)
+    # Flat parameter vector ↔ the active θ (+ bkg) params.
+    shapes = [p.shape for p in params]
+    numels = [int(p.numel()) for p in params]
+    n_par = int(sum(numels))
+
+    def _set_flat(x_np):
+        x = torch.as_tensor(x_np, dtype=torch.float32, device=device)
+        off = 0
+        with torch.no_grad():
+            for p, n, sh in zip(params, numels, shapes):
+                p.copy_(x[off:off + n].view(sh)); off += n
+        return x
+
+    def _flat_grad(grads):
+        return torch.cat([
+            (g if g is not None else torch.zeros_like(p)).reshape(-1)
+            for g, p in zip(grads, params)])
+
+    # ---- full-sample exact objective + gradient (one pass/step, detached) ----
+    def _fun_and_grad(x_np):
+        _set_flat(x_np)
+        model.zero_grad(set_to_none=True)
+        s = 0.0; w = 0.0
+        gacc = torch.zeros(n_par, device=device)
+        for batch in train_loader:
+            batch = _move_batch(batch, device)
+            loss, sw = step_fn(model, batch)
+            if sw <= 0 or not torch.isfinite(loss):
+                continue
+            g = torch.autograd.grad((loss * sw), params, allow_unused=True)
+            gacc += _flat_grad(g).detach()
+            s += float(loss.item()) * sw; w += sw
+        if w <= 0:
+            raise RuntimeError(f"trust-region: no usable batches [{stage_name}]")
+        inv_w = 1.0 / w
+        _fun_and_grad.last_nll = s * inv_w
+        return float(s * inv_w), (gacc * inv_w).double().cpu().numpy()
+    _fun_and_grad.last_nll = float("inf")
+
+    # ---- Hessian subset loader: a fixed, deterministic subset of S events ----
+    def _hess_batches():
+        seen = 0
+        for batch in train_loader:
+            yield batch
+            seen += int(batch["mll"].shape[0])
+            if hsub > 0 and seen >= hsub:
+                return
+
+    # Scheme A: per-step retained differentiable gradient over the subset.
+    state = {"x_id": None, "gS": None, "wS": 1.0}
+
+    def _build_reuse_grad(x_np):
+        # Build g_S = ∂(Σ_S w·nll)/∂θ with the graph retained (create_graph).
+        # NOTE: the whole |S|-event graph stays alive for all HVPs this step.
+        model.zero_grad(set_to_none=True)
+        accs = None; w = 0.0
+        for batch in _hess_batches():
+            batch = _move_batch(batch, device)
+            loss, sw = step_fn(model, batch)
+            if sw <= 0 or not torch.isfinite(loss):
+                continue
+            term = loss * sw
+            accs = term if accs is None else accs + term
+            w += sw
+        if accs is None or w <= 0:
+            raise RuntimeError("trust-region HVP(reuse): no usable subset events")
+        gS = torch.autograd.grad(accs, params, create_graph=True)
+        state["gS"] = _flat_grad(gS)        # differentiable, graph retained
+        state["wS"] = w
+
+    def _hvp_reuse(x_np, v_np):
+        # Rebuild g_S whenever the iterate changed (scipy passes the same x for
+        # all HVPs of a step); reuse the retained graph within a step.
+        if state["x_id"] != _arr_key(x_np):
+            _set_flat(x_np)
+            _build_reuse_grad(x_np)
+            state["x_id"] = _arr_key(x_np)
+        v = torch.as_tensor(v_np, dtype=torch.float32, device=device)
+        hv = torch.autograd.grad(state["gS"], params, grad_outputs=v,
+                                 retain_graph=True, allow_unused=True)
+        hv = _flat_grad(hv) / state["wS"]
+        return hv.detach().double().cpu().numpy()
+
+    # Scheme B: recompute forward+double-backward per HVP, chunked over events.
+    def _hvp_recompute(x_np, v_np):
+        _set_flat(x_np)
+        v = torch.as_tensor(v_np, dtype=torch.float32, device=device)
+        hv = torch.zeros(n_par, device=device); w = 0.0
+        for batch in _hess_batches():
+            batch = _move_batch(batch, device)
+            # chunk the batch's events to bound the resident graph
+            n = int(batch["mll"].shape[0])
+            for c0 in range(0, n, hvp_chunk):
+                sub = {k: (val[c0:c0 + hvp_chunk] if torch.is_tensor(val)
+                           and val.shape[:1] == (n,) else val)
+                       for k, val in batch.items()}
+                loss, sw = step_fn(model, sub)
+                if sw <= 0 or not torch.isfinite(loss):
+                    continue
+                g = torch.autograd.grad((loss * sw), params, create_graph=True)
+                gflat = _flat_grad(g)
+                hvc = torch.autograd.grad(gflat, params, grad_outputs=v,
+                                          retain_graph=False, allow_unused=True)
+                hv += _flat_grad(hvc).detach(); w += sw
+        if w <= 0:
+            raise RuntimeError("trust-region HVP(recompute): no usable subset events")
+        return (hv / w).double().cpu().numpy()
+
+    hessp = _hvp_reuse if hvp_mode == "reuse" else _hvp_recompute
+    x0 = torch.cat([p.detach().reshape(-1) for p in params]).double().cpu().numpy()
+    sub_str = (f"{hsub:,}" if hsub > 0 else "full")
+    print(f"  optimizer: {method} (2nd-order trust region) — full-sample exact "
+          f"gradient; exact HVP via scheme {'A/reuse' if hvp_mode=='reuse' else 'B/recompute'} "
+          f"on {sub_str} events; max {max_iter} iters, gtol={args.trust_gtol:g}")
+
+    best = {"nll": float("inf"), "x": x0.copy()}
+
+    def _callback(xk, *a):
+        nll = _fun_and_grad.last_nll
+        if nll < best["nll"]:
+            best["nll"] = nll; best["x"] = np.array(xk, copy=True)
+        print(f"  [{stage_name}] trust iter: nll={nll:+.6f}", flush=True)
+
+    res = _scipy_min(
+        _fun_and_grad, x0, method=method, jac=True, hessp=hessp,
+        callback=_callback,
+        options={"maxiter": max_iter, "gtol": float(args.trust_gtol)})
+    # Use the best iterate seen (scipy returns the last, which the ratio test
+    # guarantees is ≤ start, but the callback-tracked best is safest).
+    x_final = best["x"] if best["nll"] <= float(res.fun) else res.x
+    _set_flat(x_final)
+    final_nll = min(best["nll"], float(res.fun))
+    print(f"  [{stage_name}] trust-region done: nll={final_nll:+.6f}, "
+          f"‖g‖={np.linalg.norm(res.jac):.3e}, {res.nit} iters, "
+          f"success={res.success} ({res.message})")
+    ck = {
+        "epoch": res.nit, "stage": stage_name,
+        "state_dict": {k: v.detach().cpu() for k, v in model.state_dict().items()},
+        "theta_scale": model.theta_scale.detach().cpu(),
+        "theta_smear": model.theta_smear.detach().cpu(),
+        "stats": _stats_to_dict(stats), "best_val": final_nll,
+        "val_metric": final_nll, "args": vars(args),
+    }
+    torch.save(ck, os.path.join(args.output, "fit_best.pt"))
+    torch.save(ck, os.path.join(args.output, "fit_last.pt"))
+    return final_nll
+
+
+def _arr_key(x_np):
+    """Cheap content key for a small parameter vector (to detect when scipy
+    hands the same iterate across the HVPs of one trust-region step)."""
+    return (float(x_np[0]), float(x_np[-1]), float(np.asarray(x_np).sum()),
+            int(x_np.size))
+
+
 def train_stage1(args, model, train_loader, val_loader, stats) -> float:
     """Stage 1: fit the nominal flow p₀(m|muon_kin) on simulation (MC rows)."""
     print("\n=== stage 1: nominal flow on simulation (θ=0, no θ conditioning) ===")
@@ -1130,6 +1322,12 @@ def train_stage2(args, model, train_loader, val_loader, stats,
 
     fit_opt = getattr(args, "fit_optimizer", "adam")
     max_epochs = args.fit_epochs or args.epochs
+    if fit_opt in ("trust-krylov", "trust-ncg"):
+        # Second-order trust region (scipy) over the active θ (+ bkg) params.
+        tr_params = [p for g in groups for p in g["params"]]
+        args.trust_method = fit_opt
+        return _run_trust_region(args, model, tr_params, train_loader, stats,
+                                 step2, stage_name="fit", mc_as_data=mc_as_data)
     if fit_opt in ("adam+lbfgs", "soap+lbfgs"):
         # Two-phase hybrid: base optimiser to its normal stopping, then L-BFGS
         # polish warm-started from it (params are at the reloaded best after the
@@ -2780,7 +2978,8 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "for all of (A,e,M,a,c); the net's output reference scaling "
                    "sets the relative A,e,M vs a,c magnitudes.")
     p.add_argument("--fit-optimizer",
-                   choices=("adam", "soap", "lbfgs", "adam+lbfgs", "soap+lbfgs"),
+                   choices=("adam", "soap", "lbfgs", "adam+lbfgs", "soap+lbfgs",
+                            "trust-krylov", "trust-ncg"),
                    default="adam",
                    help="Stage-2 (θ + background) optimizer. 'adam' (default): "
                    "torch.optim.Adam, the historical choice. 'soap': SOAP "
@@ -2839,6 +3038,31 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "L-BFGS polish epochs in phase 2 (each = one optim.step(closure) "
                    "of up to --lbfgs-max-iter inner iterations), warm-started from "
                    "the phase-1 Adam/SOAP result.")
+    # SciPy second-order trust region (trust-krylov / trust-ncg).
+    p.add_argument("--trust-gtol", type=float, default=1e-6,
+                   help="(--fit-optimizer trust-krylov/ncg) Gradient-norm "
+                   "convergence tolerance (the exhaustive-minimisation stopping "
+                   "criterion; the gradient is exact on the FULL sample).")
+    p.add_argument("--trust-hvp", choices=("reuse", "recompute"), default="reuse",
+                   help="(trust-*) Exact (true-Hessian) HVP scheme — H is never "
+                   "formed. 'reuse' (scheme A, default): build the differentiable "
+                   "gradient g_S once per step (create_graph) and RETAIN its graph; "
+                   "each Krylov HVP is one second backward, NO data pass/forward "
+                   "per HVP — cheapest, but the whole subset graph stays resident "
+                   "(memory ∝ subset, not chunkable). 'recompute' (scheme B): "
+                   "re-do forward+double-backward per HVP, chunked over events "
+                   "(--trust-hvp-chunk) so peak memory is bounded — the only "
+                   "scheme that scales to large/full Hessian samples.")
+    p.add_argument("--hess-subsample-events", type=int, default=0,
+                   help="(trust-*) Cap on events used for the HVP/Hessian subset "
+                   "(0 = full sample). The GRADIENT is always exact on the full "
+                   "sample; subsampling only the Hessian is safe because the "
+                   "full-objective trust ratio test corrects a noisy H_S (it only "
+                   "costs iterations, never convergence). The subset is FIXED "
+                   "across all HVPs of a step (operator consistency for Krylov).")
+    p.add_argument("--trust-hvp-chunk", type=int, default=4096,
+                   help="(--trust-hvp recompute) Events per forward+double-backward "
+                   "chunk, bounding the resident graph memory.")
     p.add_argument("--soap-precondition-frequency", type=int, default=10,
                    help="(--fit-optimizer soap) Optimizer steps between SOAP's "
                    "preconditioner eigendecompositions. Cheap here (tiny θ "
