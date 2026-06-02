@@ -18,6 +18,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import shutil
 import sys
 import time
 from typing import List
@@ -155,7 +156,7 @@ def _make_scheduler(args, optim, epochs):
     return None, "none"
 
 
-def _make_fit_optimizer(args, groups):
+def _make_fit_optimizer(args, groups, minibatch_loop=False, kind=None):
     """Build the stage-2 optimizer over ``groups`` (list of {params, lr} dicts)
     per ``--fit-optimizer``. 'adam' (default): the historical torch.optim.Adam.
     'soap': SOAP (Shampoo-in-the-Adam-eigenbasis) from pytorch_optimizer — a
@@ -164,14 +165,50 @@ def _make_fit_optimizer(args, groups):
     weights especially) converge more completely than diagonal Adam toward the
     local minimum. Per-group lrs, the plateau scheduler, _lr_str, and the
     bootstrap reset all work unchanged (SOAP keeps the param_groups interface).
+    'lbfgs': torch.optim.LBFGS with a strong-Wolfe line search — a quasi-Newton
+    full-batch minimiser purpose-built for EXHAUSTIVE descent on a smooth
+    deterministic objective (the stage-2 NLL is deterministic: fixed pseudo-data,
+    seeded smear, all events summed). It builds a curvature model from the
+    gradient history and line-searches to a tiny gradient norm in few outer
+    iterations, handling the A/e, a/c ill-conditioning natively. REQUIRES the
+    closure / full-batch loop in _run_epochs (driven there); torch.optim.LBFGS
+    also rejects per-parameter groups, so the groups are flattened to one param
+    list (the per-group lrs don't apply — the line search auto-scales the step;
+    the O(1) THETA_SCALE_REF / SMEAR_VAR_SCALE rescaling still conditions θ).
+
+    ``minibatch_loop=True`` (the bootstrap's per-replica refit, which steps without
+    a closure) → 'lbfgs' falls back to Adam with a note, since LBFGS needs the
+    closure loop.
 
     Note: SOAP preconditions WITHIN each parameter tensor, so it complements but
     does not replace --theta-whiten, whose analytic eigenbasis couples the small
     CROSS-tensor degeneracies (A/e, a/c, scale/smear) that live across the tiny
-    binned-θ tensors. The two can be combined."""
-    kind = getattr(args, "fit_optimizer", "adam")
+    binned-θ tensors. The two can be combined.
+
+    'adam+lbfgs' / 'soap+lbfgs': a two-phase HYBRID (orchestrated in train_stage2,
+    not here) — run Adam/SOAP to its normal stopping for robust bulk descent
+    (Adam/SOAP escape the near-flat θ≈0 start that stalls L-BFGS's line search,
+    but, normalising by the gradient RMS, plateau the NLL with a non-negligible
+    gradient), THEN warm-start L-BFGS for --lbfgs-final-epochs to polish to a
+    tight gradient norm (which Adam/SOAP structurally cannot reach). ``kind``
+    lets the caller request a specific phase ('adam'/'soap'/'lbfgs') overriding
+    --fit-optimizer."""
+    if kind is None:
+        kind = getattr(args, "fit_optimizer", "adam")
+    if kind == "lbfgs" and minibatch_loop:
+        print("  note: --fit-optimizer lbfgs needs the closure loop; the "
+              "bootstrap refit falls back to Adam.")
+        kind = "adam"
     if kind == "adam":
         return torch.optim.Adam(groups)
+    if kind == "lbfgs":
+        flat = [p for g in groups for p in g["params"]]
+        return torch.optim.LBFGS(
+            flat, lr=float(args.lbfgs_lr), max_iter=int(args.lbfgs_max_iter),
+            history_size=int(args.lbfgs_history_size),
+            line_search_fn="strong_wolfe",
+            tolerance_grad=float(args.lbfgs_tolerance_grad),
+            tolerance_change=float(args.lbfgs_tolerance_change))
     if kind == "soap":
         try:
             from pytorch_optimizer import SOAP
@@ -783,7 +820,12 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
     # The streaming loader has no __len__; learn the batch count on epoch 1 so
     # epochs ≥2 show a true percentage-complete bar.
     n_batches_total = None
-    sched, sched_kind = _make_scheduler(args, optim, epochs)
+    # L-BFGS governs its own step via the line search; an external LR scheduler
+    # would fight it, so disable scheduling for L-BFGS (early-stop still applies).
+    if isinstance(optim, torch.optim.LBFGS):
+        sched, sched_kind = None, "none"
+    else:
+        sched, sched_kind = _make_scheduler(args, optim, epochs)
     if sched_kind != "none":
         print(f"  lr schedule: {sched_kind}"
               + (f" (factor={args.lr_reduce_factor:g}, patience={args.lr_reduce_patience}, "
@@ -805,42 +847,107 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
         }
 
     prof_steps = int(getattr(args, "profile_steps", 0) or 0)
+    is_lbfgs = isinstance(optim, torch.optim.LBFGS)
     for epoch in range(1, epochs + 1):
         t0 = time.time(); model.train()
         tr_sum = 0.0; tr_w = 0.0; n_seen = 0
         lr_str = _lr_str(optim)
         prof = _StepProfiler(device, prof_steps) if prof_steps > 0 else None
-        # total=n_batches_total → tqdm renders a % bar (None on epoch 1).
-        bar = tqdm(train_loader, total=n_batches_total,
-                   desc=f"[{stage_name}] epoch {epoch:>3}/{epochs}",
-                   leave=False, disable=not args.progress, unit="batch")
-        for batch in bar:
+        if is_lbfgs:
+            # Full-batch closure: one optim.step(closure) per "epoch" runs up to
+            # --lbfgs-max-iter quasi-Newton inner iterations, each re-evaluating
+            # the WEIGHTED-MEAN NLL + grad over the WHOLE loader (the objective is
+            # deterministic, so this is a fixed smooth function of θ). The strong-
+            # Wolfe line search guarantees descent; convergence is to a tiny
+            # gradient norm, not a plateau heuristic.
+            closure_stats = {"call": 0}
+            lbfgs_params = [p for g in optim.param_groups for p in g["params"]]
+
+            def closure():
+                # GRADIENT ACCUMULATION: backward EACH batch and free its graph
+                # immediately, accumulating only the scalar Σw-weighted total —
+                # never holding the whole-dataset autograd graph at once (doing so
+                # exhausts GPU memory → the CUDA allocator NVML assert). Σw is
+                # θ-independent (fixed weights × mask), so grad(Σw·nll/Σw) =
+                # (Σ_batch grad of Σw_batch·meanNLL_batch)/Σw — i.e. sum the
+                # per-batch grads then rescale by 1/Σw at the end.
+                optim.zero_grad(set_to_none=True)
+                closure_stats["call"] += 1
+                call = closure_stats["call"]
+                s = 0.0; w = 0.0; nb = 0
+                # Per-pass progress: each closure call is one full-batch
+                # eval/line-search probe (up to --lbfgs-max-iter per epoch); the
+                # bar tracks batches within the pass + running mean NLL.
+                cbar = tqdm(train_loader, total=n_batches_total,
+                            desc=f"[{stage_name}] ep{epoch:>3} pass {call}",
+                            leave=False, disable=not args.progress, unit="batch")
+                for batch in cbar:
+                    batch = _move_batch(batch, device)
+                    loss, sw = step_fn(model, batch)   # weighted-MEAN NLL over batch
+                    nb += 1
+                    if sw <= 0 or not torch.isfinite(loss):
+                        continue
+                    (loss * sw).backward()             # accumulates into .grad; frees graph
+                    s += float(loss.item()) * sw; w += sw
+                    cbar.set_postfix_str(f"nll={s / max(w, 1e-30):+.4f}")
+                cbar.close()
+                if w <= 0:
+                    raise RuntimeError(
+                        f"L-BFGS closure: no usable batches [{stage_name}] "
+                        f"epoch {epoch}")
+                inv_w = 1.0 / w
+                for p in lbfgs_params:                 # rescale Σw·Σ → weighted mean
+                    if p.grad is not None:
+                        p.grad.mul_(inv_w)
+                gnorm = sum(float((p.grad.detach()**2).sum())
+                            for p in lbfgs_params if p.grad is not None) ** 0.5
+                closure_stats["s"] = s; closure_stats["w"] = w; closure_stats["nb"] = nb
+                # Always-visible one-liner per pass (survives --no-progress): the
+                # full-batch passes are slow, so report mean NLL + |g| as each lands.
+                print(f"  [{stage_name}] ep{epoch:>3} pass {call:>2}: "
+                      f"nll={s * inv_w:+.5f}  |g|={gnorm:.3e}", flush=True)
+                # L-BFGS only needs the scalar objective value (it reads .grad from
+                # the params); return it as a detached tensor on the right device.
+                return torch.as_tensor(s * inv_w, dtype=torch.float32, device=device)
+
+            optim.step(closure)
+            tr_sum = closure_stats["s"]; tr_w = closure_stats["w"]; n_seen = closure_stats["nb"]
+            # gradient-norm convergence readout (the L-BFGS stopping signal)
+            gsq = sum(float((p.grad.detach()**2).sum()) for g in optim.param_groups
+                      for p in g["params"] if p.grad is not None)
+            lr_str = f"|g|={gsq**0.5:.2e}"
+        else:
+            # total=n_batches_total → tqdm renders a % bar (None on epoch 1).
+            bar = tqdm(train_loader, total=n_batches_total,
+                       desc=f"[{stage_name}] epoch {epoch:>3}/{epochs}",
+                       leave=False, disable=not args.progress, unit="batch")
+            for batch in bar:
+                if prof is not None:
+                    prof.mark_iter_start()
+                batch = _move_batch(batch, device)
+                if prof is not None:
+                    prof.after_move()
+                optim.zero_grad(set_to_none=True)
+                loss, sw = step_fn(model, batch)
+                n_seen += 1
+                if sw <= 0:
+                    continue
+                if not torch.isfinite(loss):
+                    if args.nan_on_step == "raise":
+                        raise RuntimeError(f"non-finite loss [{stage_name}] epoch {epoch}")
+                    if args.nan_on_step == "skip":
+                        bar.set_postfix_str("SKIP NaN"); continue
+                if prof is not None:
+                    prof.after_forward()
+                loss.backward()
+                optim.step()
+                if prof is not None:
+                    prof.after_backward()
+                tr_sum += float(loss.item()) * sw; tr_w += sw
+                bar.set_postfix_str(f"nll={tr_sum / max(tr_w, 1e-30):+.4f} lr={lr_str}")
+            bar.close()
             if prof is not None:
-                prof.mark_iter_start()
-            batch = _move_batch(batch, device)
-            if prof is not None:
-                prof.after_move()
-            optim.zero_grad(set_to_none=True)
-            loss, sw = step_fn(model, batch)
-            n_seen += 1
-            if sw <= 0:
-                continue
-            if not torch.isfinite(loss):
-                if args.nan_on_step == "raise":
-                    raise RuntimeError(f"non-finite loss [{stage_name}] epoch {epoch}")
-                if args.nan_on_step == "skip":
-                    bar.set_postfix_str("SKIP NaN"); continue
-            if prof is not None:
-                prof.after_forward()
-            loss.backward()
-            optim.step()
-            if prof is not None:
-                prof.after_backward()
-            tr_sum += float(loss.item()) * sw; tr_w += sw
-            bar.set_postfix_str(f"nll={tr_sum / max(tr_w, 1e-30):+.4f} lr={lr_str}")
-        bar.close()
-        if prof is not None:
-            prof.report(stage_name, epoch)
+                prof.report(stage_name, epoch)
         if n_batches_total is None:
             n_batches_total = n_seen   # exact count for the % bar from epoch 2 on
         train_nll = tr_sum / max(tr_w, 1e-30)
@@ -995,8 +1102,6 @@ def train_stage2(args, model, train_loader, val_loader, stats,
             groups.append({"params": [model.theta_smear], "lr": args.fit_smear_lr}); tags.append("θ_smear")
         print(f"  optimizer groups: {', '.join(tags)}  "
               f"(lr mlp={args.fit_mlp_lr:g} scale={args.fit_scale_lr:g} smear={args.fit_smear_lr:g})")
-    optim = _make_fit_optimizer(args, groups)
-    print(f"  optimizer: {getattr(args, 'fit_optimizer', 'adam')}")
     print(f"  signal density: #2 direct-eval (advection + probability-flow smear, "
           f"flow_steps={getattr(args, 'smear_flow_steps', 1)}, n_iter="
           f"{args.continuity_n_iter}); normalised by construction")
@@ -1012,9 +1117,52 @@ def train_stage2(args, model, train_loader, val_loader, stats,
         sw = float(w.sum().clamp_min(1e-30))
         return (w * per).sum() / sw, sw
 
+    fit_opt = getattr(args, "fit_optimizer", "adam")
+    max_epochs = args.fit_epochs or args.epochs
+    if fit_opt in ("adam+lbfgs", "soap+lbfgs"):
+        # Two-phase hybrid: base optimiser to its normal stopping, then L-BFGS
+        # polish warm-started from it (params are at the reloaded best after the
+        # first _run_epochs). Groups depend only on the (unchanged) model state,
+        # so they're rebuilt fresh for each phase's optimiser.
+        base = fit_opt.split("+")[0]
+        print(f"  optimizer: HYBRID {fit_opt} — phase 1 = {base} (≤{max_epochs} "
+              f"epochs), phase 2 = lbfgs (≤{getattr(args, 'lbfgs_final_epochs', 1)} "
+              f"epochs, warm-started)")
+        print(f"  --- phase 1: {base} ---")
+        optim = _make_fit_optimizer(args, groups, kind=base)
+        best1 = _run_epochs(args, model, optim, train_loader, val_loader, stats,
+                            step_fn=step2, ckpt_prefix="fit", stage_name="fit",
+                            epochs=max_epochs, monitor="train")
+        # Snapshot phase-1's best so a stalled/regressing L-BFGS polish can't
+        # leave a WORSE checkpoint (phase 2 starts best_val=inf and would
+        # otherwise overwrite fit_best.pt on its first epoch regardless).
+        fit_best = os.path.join(args.output, "fit_best.pt")
+        ph1_ckpt = os.path.join(args.output, "fit_phase1_best.pt")
+        if os.path.exists(fit_best):
+            shutil.copyfile(fit_best, ph1_ckpt)
+        print(f"  --- phase 2: lbfgs polish (warm-started from {base}, "
+              f"phase-1 best train_nll={best1:+.5f}) ---")
+        optim = _make_fit_optimizer(args, groups, kind="lbfgs")
+        best2 = _run_epochs(args, model, optim, train_loader, val_loader, stats,
+                            step_fn=step2, ckpt_prefix="fit", stage_name="fit",
+                            epochs=int(getattr(args, "lbfgs_final_epochs", 1)),
+                            monitor="train")
+        if best1 < best2 and os.path.exists(ph1_ckpt):
+            # L-BFGS polish regressed — restore phase-1's checkpoint + weights.
+            print(f"  L-BFGS polish did not improve (phase1={best1:+.5f} < "
+                  f"phase2={best2:+.5f}); keeping phase-1 result.")
+            shutil.copyfile(ph1_ckpt, fit_best)
+            ck = torch.load(fit_best, map_location=args.device, weights_only=False)
+            model.load_state_dict(ck["state_dict"])
+            best2 = best1
+        if os.path.exists(ph1_ckpt):
+            os.remove(ph1_ckpt)
+        return best2
+    optim = _make_fit_optimizer(args, groups)
+    print(f"  optimizer: {fit_opt}")
     return _run_epochs(args, model, optim, train_loader, val_loader, stats,
                        step_fn=step2, ckpt_prefix="fit", stage_name="fit",
-                       epochs=args.fit_epochs or args.epochs, monitor="train")
+                       epochs=max_epochs, monitor="train")
 
 
 def train_loop(args: argparse.Namespace) -> int:
@@ -1294,7 +1442,7 @@ def run_bootstrap_continuity(args, model, shard_files, stats, device, *,
             groups.append({"params": [model.theta_scale], "lr": args.fit_scale_lr})
         if model.smearing_enabled:
             groups.append({"params": [model.theta_smear], "lr": args.fit_smear_lr})
-        optim = _make_fit_optimizer(args, groups)  # fresh optimizer state, re-raised LR
+        optim = _make_fit_optimizer(args, groups, minibatch_loop=True)  # fresh state (Adam/SOAP; LBFGS→Adam here)
         sched, sched_kind = _make_scheduler(args, optim, max_epochs)  # same as nominal
         seed = args.bootstrap_seed + b
         best = float("inf"); no_improve = 0; used = 0
@@ -2595,7 +2743,9 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    help="Stage-2 Adam lr for the θ ThetaNet (--theta-mlp). One lr "
                    "for all of (A,e,M,a,c); the net's output reference scaling "
                    "sets the relative A,e,M vs a,c magnitudes.")
-    p.add_argument("--fit-optimizer", choices=("adam", "soap"), default="adam",
+    p.add_argument("--fit-optimizer",
+                   choices=("adam", "soap", "lbfgs", "adam+lbfgs", "soap+lbfgs"),
+                   default="adam",
                    help="Stage-2 (θ + background) optimizer. 'adam' (default): "
                    "torch.optim.Adam, the historical choice. 'soap': SOAP "
                    "(Shampoo in the Adam eigenbasis, from pytorch_optimizer) — a "
@@ -2612,7 +2762,47 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "which couples the small cross-tensor degeneracies (A/e, a/c, "
                    "scale/smear); the two can be combined. Per-group lrs / plateau "
                    "schedule / bootstrap reset are unchanged. Requires the "
-                   "pytorch_optimizer package.")
+                   "pytorch_optimizer package. 'lbfgs': torch.optim.LBFGS with a "
+                   "strong-Wolfe line search — a quasi-Newton FULL-BATCH minimiser "
+                   "for exhaustive descent on the (deterministic) stage-2 NLL: "
+                   "each epoch runs one optim.step(closure) of up to "
+                   "--lbfgs-max-iter inner iterations, re-evaluating the "
+                   "weighted-mean NLL+grad over the WHOLE loader, converging to a "
+                   "tiny gradient norm (reported as |g|=… in place of lr). Best "
+                   "for the small, degenerate BINNED θ fit; the line search "
+                   "auto-scales the step so the per-group lrs / plateau schedule "
+                   "don't apply. The bootstrap refit (minibatch) falls back to "
+                   "Adam. Pairs well with --theta-whiten. 'adam+lbfgs' / "
+                   "'soap+lbfgs': two-phase HYBRID — Adam/SOAP to its normal "
+                   "stopping (robust bulk descent; escapes the near-flat θ≈0 "
+                   "start that stalls L-BFGS's line search), THEN L-BFGS warm-"
+                   "started for --lbfgs-final-epochs to polish to a tight "
+                   "gradient norm (which Adam/SOAP, normalising by the gradient "
+                   "RMS, structurally cannot reach). If the L-BFGS polish "
+                   "regresses, the phase-1 result is restored.")
+    p.add_argument("--lbfgs-lr", type=float, default=1.0,
+                   help="(--fit-optimizer lbfgs) Initial step scale; with the "
+                   "strong-Wolfe line search 1.0 is standard (the search rescales "
+                   "it). The O(1) THETA_SCALE_REF/SMEAR_VAR_SCALE rescaling keeps "
+                   "θ well-conditioned for this.")
+    p.add_argument("--lbfgs-max-iter", type=int, default=20,
+                   help="(--fit-optimizer lbfgs) Quasi-Newton inner iterations per "
+                   "epoch (per optim.step(closure)); each is one full-batch "
+                   "NLL+grad pass. Total work ≈ --fit-epochs × this.")
+    p.add_argument("--lbfgs-history-size", type=int, default=20,
+                   help="(--fit-optimizer lbfgs) Number of (s,y) curvature pairs "
+                   "kept for the inverse-Hessian approximation.")
+    p.add_argument("--lbfgs-tolerance-grad", type=float, default=1e-9,
+                   help="(--fit-optimizer lbfgs) Gradient-norm convergence "
+                   "tolerance for the inner iterations (exhaustive → small).")
+    p.add_argument("--lbfgs-tolerance-change", type=float, default=1e-12,
+                   help="(--fit-optimizer lbfgs) Min objective/param change per "
+                   "inner step before the line search declares convergence.")
+    p.add_argument("--lbfgs-final-epochs", type=int, default=1,
+                   help="(--fit-optimizer adam+lbfgs / soap+lbfgs) Number of "
+                   "L-BFGS polish epochs in phase 2 (each = one optim.step(closure) "
+                   "of up to --lbfgs-max-iter inner iterations), warm-started from "
+                   "the phase-1 Adam/SOAP result.")
     p.add_argument("--soap-precondition-frequency", type=int, default=10,
                    help="(--fit-optimizer soap) Optimizer steps between SOAP's "
                    "preconditioner eigendecompositions. Cheap here (tiny θ "
