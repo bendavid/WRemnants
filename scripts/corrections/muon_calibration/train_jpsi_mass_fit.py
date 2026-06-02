@@ -1077,7 +1077,13 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
     device = args.device
     method = getattr(args, "trust_method", "trust-krylov")
     hvp_mode = getattr(args, "trust_hvp", "reuse")
-    hvp_chunk = max(1, int(getattr(args, "trust_hvp_chunk", 4096)))
+    # 0 (default) → no sub-batch chunking: a double-backward HVP is only ~2× a
+    # plain gradient in peak memory (it holds the forward activations + the
+    # retained create_graph backward graph), so if a full-batch GRADIENT fits —
+    # which it must, the training step runs full batches — the full-batch HVP
+    # fits too. Sub-chunking the batch is pure Python/kernel overhead for the
+    # same total compute; only set >0 if genuinely memory-bound.
+    hvp_chunk = int(getattr(args, "trust_hvp_chunk", 0) or 0)
     hsub = int(getattr(args, "hess_subsample_events", 0) or 0)   # 0 = full sample
     sub_str = (f"{hsub:,}" if hsub > 0 else "full")
     max_iter = int(args.fit_epochs or args.epochs)
@@ -1238,16 +1244,19 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
         v = torch.as_tensor(v_np, dtype=torch.float32, device=device)
         hv = torch.zeros(n_par, device=device, dtype=torch.float64); w = 0.0
         # NB tqdm ticks once per CHUNK (hvp_chunk events), not per loader batch —
-        # a full-sample recompute HVP is ceil(Σevents/hvp_chunk) chunk-passes, so
-        # the count is (#batches × batch_size/hvp_chunk), much larger than #batches.
+        # hvp_chunk<=0 → whole batch (no sub-batch chunking); tqdm then ticks once
+        # per loader batch (a double-backward HVP fits at ~2× a full-batch
+        # gradient). Only >0 sub-chunks the batch (more, smaller passes) for the
+        # rare memory-bound case.
+        chunk_str = (f"{hvp_chunk}/chunk" if hvp_chunk > 0 else "whole-batch")
         bar = _pbar(f"[{stage_name}] HVP #{ctr['hvp']} (recompute, "
-                    f"{sub_str} events, {hvp_chunk}/chunk)")
+                    f"{sub_str} events, {chunk_str})")
         for batch in _hess_batches():
             batch = _move_batch(batch, device)
-            # chunk the batch's events to bound the resident graph
             n = int(batch["mll"].shape[0])
-            for c0 in range(0, n, hvp_chunk):
-                sub = {k: (val[c0:c0 + hvp_chunk] if torch.is_tensor(val)
+            step = n if hvp_chunk <= 0 else hvp_chunk
+            for c0 in range(0, n, step):
+                sub = {k: (val[c0:c0 + step] if torch.is_tensor(val)
                            and val.shape[:1] == (n,) else val)
                        for k, val in batch.items()}
                 term, sw = _per_event_term(sub)      # Σw·NLL (float64 reduction)
@@ -3293,9 +3302,13 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "full-objective trust ratio test corrects a noisy H_S (it only "
                    "costs iterations, never convergence). The subset is FIXED "
                    "across all HVPs of a step (operator consistency for Krylov).")
-    p.add_argument("--trust-hvp-chunk", type=int, default=4096,
-                   help="(--trust-hvp recompute) Events per forward+double-backward "
-                   "chunk, bounding the resident graph memory.")
+    p.add_argument("--trust-hvp-chunk", type=int, default=0,
+                   help="(--trust-hvp recompute / trust-ncg,krylov) Events per "
+                   "forward+double-backward chunk. 0 (default) = WHOLE BATCH (no "
+                   "sub-batch chunking): a double-backward HVP peaks at only ~2× a "
+                   "plain gradient, so if a full-batch gradient fits the full-batch "
+                   "HVP fits too — sub-chunking is pure overhead for the same "
+                   "compute. Set >0 only if genuinely memory-bound.")
     p.add_argument("--soap-precondition-frequency", type=int, default=10,
                    help="(--fit-optimizer soap) Optimizer steps between SOAP's "
                    "preconditioner eigendecompositions. Cheap here (tiny θ "
