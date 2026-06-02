@@ -377,26 +377,37 @@ def _hessian_block_loop(g_full, params, active_idx, n_act):
     return H
 
 
-def _hessian_block_batched(g_active, params, active_idx, n_act):
-    """Per-batch active Hessian block ``[n_act, n_act]`` in ONE vectorised second
-    backward via ``is_grads_batched`` (vmaps the per-row vjp over the identity
-    basis). Faster than the loop but holds ~n_act copies of the backward graph,
-    and the engine's vmap may not support every op in this double-backward path
-    (the inner ``autograd.grad`` of the change-of-variables Jacobian, the
-    fixed-point clamps) — the caller falls back to the loop on failure/OOM."""
-    eye = torch.eye(n_act, device=g_active.device, dtype=g_active.dtype)
-    rows = torch.autograd.grad(
-        g_active, params, grad_outputs=eye,
-        is_grads_batched=True, retain_graph=True, allow_unused=True)
-    parts = []
-    for ri, p in zip(rows, params):
-        if ri is None:
-            parts.append(torch.zeros(n_act, p.numel(),
-                                     device=g_active.device, dtype=g_active.dtype))
-        else:
-            parts.append(ri.reshape(n_act, -1))
-    row_full = torch.cat(parts, dim=1)        # [n_act, n_full]
-    return row_full[:, active_idx]            # [n_act, n_act]
+def _hessian_block_batched(g_active, params, active_idx, n_act, chunk=None):
+    """Per-batch active Hessian block ``[n_act, n_act]`` via ``is_grads_batched``
+    (vmaps the per-row vjp over the identity basis), in row CHUNKS of ``chunk``
+    (default: all ``n_act`` at once). Vectorising ALL rows holds ~n_act copies of
+    the backward graph — fine for the small binned/output table (n_act ~ tens)
+    but catastrophic when the background MLP is marginalised in (n_act ~ 1000s),
+    so the caller passes a chunk to bound memory. The engine's vmap may not
+    support every op in this double-backward path (the inner ``autograd.grad`` of
+    the change-of-variables Jacobian, the fixed-point clamps) — the caller falls
+    back to the per-row loop on failure/OOM."""
+    c = int(chunk) if chunk else n_act
+    H = torch.zeros((n_act, n_act), device=g_active.device, dtype=g_active.dtype)
+    for r0 in range(0, n_act, max(1, c)):
+        r1 = min(r0 + c, n_act)
+        nb = r1 - r0
+        eye = torch.zeros((nb, n_act), device=g_active.device, dtype=g_active.dtype)
+        eye[torch.arange(nb, device=g_active.device),
+            torch.arange(r0, r1, device=g_active.device)] = 1.0
+        rows = torch.autograd.grad(
+            g_active, params, grad_outputs=eye,
+            is_grads_batched=True, retain_graph=True, allow_unused=True)
+        parts = []
+        for ri, p in zip(rows, params):
+            if ri is None:
+                parts.append(torch.zeros(nb, p.numel(),
+                                         device=g_active.device, dtype=g_active.dtype))
+            else:
+                parts.append(ri.reshape(nb, -1))
+        row_full = torch.cat(parts, dim=1)        # [nb, n_full]
+        H[r0:r1] = row_full[:, active_idx]        # [nb, n_act]
+    return H
 
 
 def compute_fisher_info_continuity(
@@ -1982,7 +1993,7 @@ def _run_empirical_fisher_mlp(args, model, shard_files, stats, device) -> None:
 def compute_output_fisher_2d(model, loader, device, *, method="empirical",
                              n_phi=4, eta_edges=None, mc_as_data=False, n_iter=2,
                              chunk_events=64, max_events=0, progress=True,
-                             marginalize_bkg=False):
+                             marginalize_bkg=False, vectorized=True):
     """OUTPUT-space Fisher for --theta-mlp: reparametrise θ as a 2-D (η-bin ×
     φ-bin) TABLE seeded from the net at the bin centres, with the per-muon lookup
     reading that table, so the data's information about the per-(η,φ) OUTPUTS is
@@ -2080,6 +2091,7 @@ def compute_output_fisher_2d(model, loader, device, *, method="empirical",
     H = torch.zeros((n_act, n_act), device=device) if need_H else None
     J = torch.zeros((n_act, n_act), device=device) if need_J else None
     sw = 0.0; seen = 0; hit = False
+    use_batched = bool(vectorized) and need_H  # vectorise the observed-H rows
     try:
         bar = tqdm(loader, desc=f"out-fisher({method})", disable=not progress, unit="batch")
         for batch in bar:
@@ -2118,7 +2130,31 @@ def compute_output_fisher_2d(model, loader, device, *, method="empirical",
                     g = torch.autograd.grad(nll, params, create_graph=True,
                                             retain_graph=True)
                     g_full = torch.cat([gi.reshape(-1) for gi in g])
-                    H += _hessian_block_loop(g_full, params, active_idx, n_act).detach()
+                    # Vectorised second backward (one vmapped vjp over the n_act
+                    # identity rows) — collapses n_act serial row-passes to one,
+                    # at ~n_act× backward-graph memory. Fall back to the per-row
+                    # loop once on any engine/vmap failure or OOM (the inner
+                    # autograd.grad of the gh_qop change-of-variables Jacobian +
+                    # fixed-point clamps may be unsupported by vmap).
+                    if use_batched:
+                        try:
+                            g_active = g_full[active_idx]
+                            Hb = _hessian_block_batched(
+                                g_active, params, active_idx, n_act,
+                                chunk=max(1, chunk_events))
+                        except (RuntimeError, NotImplementedError) as e:
+                            use_batched = False
+                            if str(device).startswith("cuda"):
+                                torch.cuda.empty_cache()
+                            bar.write(
+                                f"  note: vectorised Hessian unavailable "
+                                f"({type(e).__name__}: "
+                                f"{str(e).splitlines()[0][:80]}); "
+                                f"using the per-row loop")
+                            Hb = _hessian_block_loop(g_full, params, active_idx, n_act)
+                    else:
+                        Hb = _hessian_block_loop(g_full, params, active_idx, n_act)
+                    H += Hb.detach()
             sw += float(w_d.sum()); seen += nd
             bar.set_postfix_str(f"events={seen:,}")
         bar.close()
@@ -2310,7 +2346,7 @@ def _run_output_fisher_mlp(args, model, shard_files, stats, device) -> None:
         eta_edges=stats.eta_edges, mc_as_data=args.validation,
         n_iter=args.continuity_n_iter, chunk_events=args.empirical_fisher_chunk,
         max_events=args.empirical_fisher_max_events, progress=args.progress,
-        marginalize_bkg=marg_bkg)
+        marginalize_bkg=marg_bkg, vectorized=args.fisher_vectorized)
     n_act = layout["n_sa"] + layout["n_ca"]
     n_theta_act = layout.get("n_theta_act", n_act)
     # Scale H/J to full subset Σw if the event budget capped them (both ∝ Σw).
@@ -3086,7 +3122,8 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "Faster but holds ~n_param copies of the backward graph; "
                    "automatically falls back to the loop on engine failure / OOM. "
                    "Use --no-fisher-vectorized to force the loop. Also governs the "
-                   "per-event score in --empirical-fisher.")
+                   "per-event score in --empirical-fisher and the observed-Hessian "
+                   "rows in --output-fisher-method observed/sandwich.")
     # Joint (theta, phi) empirical Fisher: J = Σ w_i s_i s_iᵀ over θ + the MLP,
     # PSD → pinv covariance (background-included, Hessian-free, no negative σ).
     p.add_argument("--empirical-fisher", action="store_true",
