@@ -195,10 +195,16 @@ def _make_fit_optimizer(args, groups, minibatch_loop=False, kind=None):
     --fit-optimizer."""
     if kind is None:
         kind = getattr(args, "fit_optimizer", "adam")
-    if kind in ("lbfgs", "trust-krylov", "trust-ncg") and minibatch_loop:
-        print(f"  note: --fit-optimizer {kind} needs its own driver loop; the "
-              "bootstrap refit falls back to Adam.")
-        kind = "adam"
+    # Hybrids ('adam+lbfgs', 'soap+trust-krylov', …) and the closure/scipy-driven
+    # optimisers need their own driver loop; the minibatch bootstrap refit can
+    # only use a plain step-based optimiser, so fall back to the base (adam/soap)
+    # or adam.
+    if minibatch_loop and ("+" in kind or kind in ("lbfgs", "trust-krylov",
+                                                    "trust-ncg")):
+        base = kind.split("+")[0]
+        kind = base if base in ("adam", "soap") else "adam"
+        print(f"  note: --fit-optimizer {getattr(args, 'fit_optimizer', '')} "
+              f"needs its own driver loop; the bootstrap refit uses {kind}.")
     if kind == "adam":
         return torch.optim.Adam(groups)
     if kind == "lbfgs":
@@ -1385,37 +1391,44 @@ def train_stage2(args, model, train_loader, val_loader, stats,
         args.trust_method = fit_opt
         return _run_trust_region(args, model, tr_params, train_loader, stats,
                                  step2, stage_name="fit", mc_as_data=mc_as_data)
-    if fit_opt in ("adam+lbfgs", "soap+lbfgs"):
-        # Two-phase hybrid: base optimiser to its normal stopping, then L-BFGS
-        # polish warm-started from it (params are at the reloaded best after the
-        # first _run_epochs). Groups depend only on the (unchanged) model state,
-        # so they're rebuilt fresh for each phase's optimiser.
-        base = fit_opt.split("+")[0]
+    if "+" in fit_opt:
+        # Two-phase hybrid base+polish: run the base optimiser (adam/soap) to its
+        # normal stopping for robust bulk descent, then warm-start the polish
+        # (lbfgs / trust-krylov / trust-ncg — both reach a tighter gradient norm
+        # than Adam/SOAP can) from the reloaded best. Groups depend only on the
+        # (unchanged) model state, so they're rebuilt fresh per phase.
+        base, polish = fit_opt.split("+", 1)
+        is_trust = polish in ("trust-krylov", "trust-ncg")
+        n2 = (max_epochs if is_trust          # trust uses --fit-epochs as its iter cap
+              else int(getattr(args, "lbfgs_final_epochs", 1)))
         print(f"  optimizer: HYBRID {fit_opt} — phase 1 = {base} (≤{max_epochs} "
-              f"epochs), phase 2 = lbfgs (≤{getattr(args, 'lbfgs_final_epochs', 1)} "
-              f"epochs, warm-started)")
+              f"epochs), phase 2 = {polish} (warm-started)")
         print(f"  --- phase 1: {base} ---")
         optim = _make_fit_optimizer(args, groups, kind=base)
         best1 = _run_epochs(args, model, optim, train_loader, val_loader, stats,
                             step_fn=step2, ckpt_prefix="fit", stage_name="fit",
                             epochs=max_epochs, monitor="train")
-        # Snapshot phase-1's best so a stalled/regressing L-BFGS polish can't
-        # leave a WORSE checkpoint (phase 2 starts best_val=inf and would
-        # otherwise overwrite fit_best.pt on its first epoch regardless).
+        # Snapshot phase-1's best so a stalled/regressing polish can't leave a
+        # WORSE checkpoint (phase 2 may overwrite fit_best.pt regardless).
         fit_best = os.path.join(args.output, "fit_best.pt")
         ph1_ckpt = os.path.join(args.output, "fit_phase1_best.pt")
         if os.path.exists(fit_best):
             shutil.copyfile(fit_best, ph1_ckpt)
-        print(f"  --- phase 2: lbfgs polish (warm-started from {base}, "
+        print(f"  --- phase 2: {polish} polish (warm-started from {base}, "
               f"phase-1 best train_nll={best1:+.5f}) ---")
-        optim = _make_fit_optimizer(args, groups, kind="lbfgs")
-        best2 = _run_epochs(args, model, optim, train_loader, val_loader, stats,
-                            step_fn=step2, ckpt_prefix="fit", stage_name="fit",
-                            epochs=int(getattr(args, "lbfgs_final_epochs", 1)),
-                            monitor="train")
+        if is_trust:
+            tr_params = [p for g in groups for p in g["params"]]
+            args.trust_method = polish
+            best2 = _run_trust_region(args, model, tr_params, train_loader, stats,
+                                      step2, stage_name="fit", mc_as_data=mc_as_data)
+        else:
+            optim = _make_fit_optimizer(args, groups, kind="lbfgs")
+            best2 = _run_epochs(args, model, optim, train_loader, val_loader, stats,
+                                step_fn=step2, ckpt_prefix="fit", stage_name="fit",
+                                epochs=n2, monitor="train")
         if best1 < best2 and os.path.exists(ph1_ckpt):
-            # L-BFGS polish regressed — restore phase-1's checkpoint + weights.
-            print(f"  L-BFGS polish did not improve (phase1={best1:+.5f} < "
+            # Polish regressed — restore phase-1's checkpoint + weights.
+            print(f"  {polish} polish did not improve (phase1={best1:+.5f} < "
                   f"phase2={best2:+.5f}); keeping phase-1 result.")
             shutil.copyfile(ph1_ckpt, fit_best)
             ck = torch.load(fit_best, map_location=args.device, weights_only=False)
@@ -3036,7 +3049,9 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "sets the relative A,e,M vs a,c magnitudes.")
     p.add_argument("--fit-optimizer",
                    choices=("adam", "soap", "lbfgs", "adam+lbfgs", "soap+lbfgs",
-                            "trust-krylov", "trust-ncg"),
+                            "trust-krylov", "trust-ncg",
+                            "adam+trust-krylov", "soap+trust-krylov",
+                            "adam+trust-ncg", "soap+trust-ncg"),
                    default="adam",
                    help="Stage-2 (θ + background) optimizer. 'adam' (default): "
                    "torch.optim.Adam, the historical choice. 'soap': SOAP "
@@ -3064,14 +3079,16 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "for the small, degenerate BINNED θ fit; the line search "
                    "auto-scales the step so the per-group lrs / plateau schedule "
                    "don't apply. The bootstrap refit (minibatch) falls back to "
-                   "Adam. Pairs well with --theta-whiten. 'adam+lbfgs' / "
-                   "'soap+lbfgs': two-phase HYBRID — Adam/SOAP to its normal "
-                   "stopping (robust bulk descent; escapes the near-flat θ≈0 "
-                   "start that stalls L-BFGS's line search), THEN L-BFGS warm-"
-                   "started for --lbfgs-final-epochs to polish to a tight "
-                   "gradient norm (which Adam/SOAP, normalising by the gradient "
-                   "RMS, structurally cannot reach). If the L-BFGS polish "
-                   "regresses, the phase-1 result is restored.")
+                   "Adam. Pairs well with --theta-whiten. HYBRIDS "
+                   "'{adam,soap}+{lbfgs,trust-krylov,trust-ncg}': two-phase — "
+                   "Adam/SOAP to its normal stopping (robust bulk descent; "
+                   "escapes the near-flat θ≈0 start that stalls L-BFGS's line "
+                   "search), THEN the second-order polish warm-started from it "
+                   "(L-BFGS for --lbfgs-final-epochs, or the trust-region driver "
+                   "for --fit-epochs iters) to reach a tight gradient norm that "
+                   "Adam/SOAP — normalising by the gradient RMS — structurally "
+                   "cannot. If the polish regresses, the phase-1 result is "
+                   "restored.")
     p.add_argument("--lbfgs-lr", type=float, default=1.0,
                    help="(--fit-optimizer lbfgs) Initial step scale; with the "
                    "strong-Wolfe line search 1.0 is standard (the search rescales "
