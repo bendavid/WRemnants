@@ -1237,8 +1237,11 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
         ctr["hvp"] += 1; ctr["hvp_since"] += 1
         v = torch.as_tensor(v_np, dtype=torch.float32, device=device)
         hv = torch.zeros(n_par, device=device, dtype=torch.float64); w = 0.0
+        # NB tqdm ticks once per CHUNK (hvp_chunk events), not per loader batch —
+        # a full-sample recompute HVP is ceil(Σevents/hvp_chunk) chunk-passes, so
+        # the count is (#batches × batch_size/hvp_chunk), much larger than #batches.
         bar = _pbar(f"[{stage_name}] HVP #{ctr['hvp']} (recompute, "
-                    f"{sub_str} events)")
+                    f"{sub_str} events, {hvp_chunk}/chunk)")
         for batch in _hess_batches():
             batch = _move_batch(batch, device)
             # chunk the batch's events to bound the resident graph
