@@ -45,6 +45,7 @@ if _HERE not in sys.path:
     sys.path.insert(0, _HERE)
 
 from train_muon_response_flow import FlowWithLogProb, build_flow  # noqa: E402
+from compact_flow import CompactMatchedFlow  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -835,17 +836,34 @@ class JpsiMassMixtureModel(nn.Module):
         # Two-stage continuity design: the flow models only the nominal shape
         # p₀(m|muon_kin) at θ=0 — it never conditions on θ (the θ-dependence is
         # supplied analytically in stage 2, see ``data_nll_continuity``).
-        flow_inner = build_flow(
-            n_features=1,
-            n_cond=N_MUON_KIN,
-            n_transforms=flow_n_transforms,
-            hidden_features=flow_hidden_features,
-            n_hidden_layers=flow_n_hidden_layers,
-            architecture=self.flow_arch,
-            gf_components=flow_gf_components,
-            nsf_bins=flow_nsf_bins,
-        )
-        self.flow = FlowWithLogProb(flow_inner)
+        # ``compact``: uniform-base compact 1-D flow on the standardised mass
+        # window with C²-matched analytic tails (see compact_flow.py). Exactly
+        # normalised over the window (Z=1, no out-of-window mass gauge freedom →
+        # no spurious far-tail structure), C∞ interior, and smoothly evaluable
+        # just outside the window (the scale un-kick / smear / norm-Z all reach
+        # there). The window edges are the standardised [m_lo, m_hi].
+        self.flow_is_compact = (self.flow_arch == "compact")
+        if self.flow_is_compact:
+            a_std = (float(m_lo) - float(mll_mean)) / float(mll_std)
+            b_std = (float(m_hi) - float(mll_mean)) / float(mll_std)
+            self.flow = CompactMatchedFlow(
+                n_cond=N_MUON_KIN, a=a_std, b=b_std,
+                hidden_features=flow_hidden_features,
+                n_layers=flow_n_hidden_layers,
+                n_components=flow_gf_components,
+            )
+        else:
+            flow_inner = build_flow(
+                n_features=1,
+                n_cond=N_MUON_KIN,
+                n_transforms=flow_n_transforms,
+                hidden_features=flow_hidden_features,
+                n_hidden_layers=flow_n_hidden_layers,
+                architecture=self.flow_arch,
+                gf_components=flow_gf_components,
+                nsf_bins=flow_nsf_bins,
+            )
+            self.flow = FlowWithLogProb(flow_inner)
 
         # Background-fraction MLP conditions on the same kinematics as the
         # flow (muon_kin), minus the nuisances.
@@ -1985,9 +2003,14 @@ class JpsiMassMixtureModel(nn.Module):
         CDF transforms trivially: ``F_data(m) = F_data_std(m_std)``. Returns
         ``[B]`` log-CDF values clamped from below for log safety."""
         m_std = self._standardise_mll(m).clamp(
-            -MLL_STD_FLOW_CLAMP, MLL_STD_FLOW_CLAMP).unsqueeze(-1)
+            -MLL_STD_FLOW_CLAMP, MLL_STD_FLOW_CLAMP)
+        if getattr(self, "flow_is_compact", False):
+            # Compact flow: the cumulative is built in (and includes the matched
+            # tails), so the window-integral differences F(unkick_hi)-F(unkick_lo)
+            # are exact. No Φ — the transform already IS the (renormalised) CDF.
+            return self.flow.log_cdf(m_std, mk)
         dist = self.flow.flow(mk)
-        z = dist.transform(m_std).squeeze(-1)
+        z = dist.transform(m_std.unsqueeze(-1)).squeeze(-1)
         F = 0.5 * (1.0 + torch.erf(z / math.sqrt(2.0)))
         return F.clamp(min=1e-30).log()
 

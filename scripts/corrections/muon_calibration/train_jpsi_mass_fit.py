@@ -3639,12 +3639,18 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     # during warmup.
     # Flow / MLP hyperparams
     p.add_argument(
-        "--flow-arch", choices=("gf", "nsf"), default="gf",
+        "--flow-arch", choices=("gf", "nsf", "compact"), default="gf",
         help="Signal flow architecture: 'gf' = Gaussianization flow (default) — "
         "C∞-smooth density, so the continuity score/Hessian have no knot kinks. "
         "'nsf' = neural rational-quadratic spline flow — bounded (linear tails "
         "outside ±5), avoids the erf/exp saturation the GF needs guards for, but "
-        "only C¹ (the score kinks at the spline knots).",
+        "only C¹ (the score kinks at the spline knots). "
+        "'compact' = uniform-base compact flow on the mass window (logistic-"
+        "mixture CDF) with C²-matched analytic tails (compact_flow.py): EXACTLY "
+        "normalised over [m_lo,m_hi] (Z=1, no out-of-window mass gauge freedom → "
+        "no spurious far-tail structure), C∞ in the interior, and smoothly "
+        "evaluable just outside the window for the un-kick/smear/Z. "
+        "--gf-components sets the number of mixture components.",
     )
     p.add_argument(
         "--nsf-bins", type=int, default=8,
