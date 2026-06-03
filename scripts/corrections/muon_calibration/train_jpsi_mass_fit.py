@@ -1439,13 +1439,34 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
     optim = torch.optim.Adam(model.flow.parameters(), lr=args.lr,
                              weight_decay=args.weight_decay)
     print(f"  optimizer: flow ({sum(p.numel() for p in model.flow.parameters()):,} params), lr={args.lr:g}")
+    window_norm = not getattr(args, "no_flow_window_norm", False)
+    if window_norm:
+        print(f"  likelihood: TRUNCATED  -(logp0 - logZ_window), "
+              f"Z = F0({model.m_hi:g}|c) - F0({model.m_lo:g}|c)  "
+              f"(consistent with stage-2 flow_cdf; the frozen flow is the "
+              f"truncated-MLE on the mass window)")
+    else:
+        print("  likelihood: full-support -logp0 (--no-flow-window-norm; the flow "
+              "leaks mass outside the window and stage-2 truncates inconsistently "
+              "→ biases the overall scale A)")
 
     def step1(model, batch):
         idx = (~batch["is_data_mask"]).nonzero(as_tuple=True)[0]
         if idx.numel() == 0:
             return torch.zeros((), dtype=torch.float64,
                                device=batch["mll"].device), 0.0
-        logp = model.log_p_nominal(batch["mll"][idx], batch["cond_std"][idx])
+        m = batch["mll"][idx]
+        mk = batch["cond_std"][idx]
+        logp = model.log_p_nominal(m, mk)
+        if window_norm:
+            # Subtract the per-event window log-normaliser so stage 1 fits the
+            # TRUNCATED density on [m_lo, m_hi] — the same normalisation stage 2
+            # applies via flow_cdf (at θ=0). Removes the full-support-vs-truncated
+            # mismatch that biases the overall scale A.
+            log_F_hi = model._flow_log_cdf(m.new_full(m.shape, float(model.m_hi)), mk)
+            log_F_lo = model._flow_log_cdf(m.new_full(m.shape, float(model.m_lo)), mk)
+            log_Z = (log_F_hi.exp() - log_F_lo.exp()).clamp_min(1e-30).log()
+            logp = logp - log_Z
         w = batch["w"][idx].double()                 # float64 reduction: the model
         sw = float(w.sum().clamp_min(1e-30))         # runs at --precision, but the
         return -(w * logp.double()).sum() / sw, sw   # Σw·NLL sum + its backward are
@@ -3210,6 +3231,15 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "the base values that get modulated.")
     p.add_argument("--flow-epochs", type=int, default=0,
                    help="Max epochs for stage 1 (0 → use --epochs).")
+    p.add_argument("--no-flow-window-norm", action="store_true",
+                   help="Disable the stage-1 window (truncation) normalization. "
+                   "By DEFAULT stage 1 maximises the TRUNCATED likelihood "
+                   "logp₀ − logZ_window (Z = F0(m_hi|c) − F0(m_lo|c)), matching "
+                   "stage 2's flow_cdf norm at θ=0 so the frozen flow is the "
+                   "truncated-MLE on the [m_lo,m_hi] window. Without it stage 1 "
+                   "fits a full-support density to windowed data and stage 2 then "
+                   "truncates inconsistently — biasing the overall scale A "
+                   "(~5e-5). Set this flag only to reproduce the old behaviour.")
     p.add_argument("--fit-epochs", type=int, default=0,
                    help="Max epochs for stage 2 (0 → use --epochs).")
     p.add_argument("--fit-scale-lr", type=float, default=0.1,
