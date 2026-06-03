@@ -1263,7 +1263,10 @@ def plot_pulls(
     evals, m_centers_np, eta_slice_edges, m_lo: float, m_hi: float,
     output_dir: str,
 ):
-    """Per-bin (data − model)/√model pulls; expect ~N(0,1) if model is OK."""
+    """Per-bin (data − model)/√(Σw²) pulls; expect ~N(0,1) if model is OK. The
+    denominator is the WEIGHTED per-bin error √(Σw²) (not the Poisson √model,
+    which mis-scales pulls for weighted MC pseudo-data — inflating the std and
+    biasing the mean)."""
     pseudo = bool(evals.get("mc_as_data", False))
     label = "pseudo-data" if pseudo else "data"
     m_edges = np.concatenate([
@@ -1293,22 +1296,30 @@ def plot_pulls(
         data_hist, _ = np.histogram(
             evals["mll_data"][data_mask], bins=m_edges, weights=w_sel,
         )
+        # Per-bin error for WEIGHTED (pseudo-)data is √(Σw²), NOT √(Σw)=√model:
+        # with event weights Var[bin] = Σw² ≠ mean, so the Poisson √model
+        # normalisation mis-scales the pull (inflates the std away from 1 and
+        # biases the mean). The model curve is the smooth expectation, so its own
+        # variance is negligible vs the data's; floor by 1 effective count's
+        # worth (the bin's mean weight²) so empty/√0 bins don't blow up.
+        sumw2_hist, _ = np.histogram(
+            evals["mll_data"][data_mask], bins=m_edges, weights=w_sel ** 2,
+        )
         signal_curve, p0_curve, p1_curve = _model_pred_histograms(
             evals, m_edges, m_lo, m_hi, data_mask,
         )
         total_curve = signal_curve + p0_curve + p1_curve
 
         with np.errstate(divide="ignore", invalid="ignore"):
-            pulls = (data_hist - total_curve) / np.sqrt(
-                np.where(total_curve > 0, total_curve, np.nan)
-            )
+            err = np.sqrt(np.where(sumw2_hist > 0, sumw2_hist, np.nan))
+            pulls = (data_hist - total_curve) / err
         pulls_finite = pulls[np.isfinite(pulls)]
 
         fig, (ax_b, ax_h) = plt.subplots(1, 2, figsize=(10, 4))
         ax_b.stem(m_centers_np, pulls, markerfmt="ko", basefmt="grey", linefmt="k-")
         ax_b.axhline(0, color="grey", lw=0.5)
         ax_b.set_xlabel("m_ll [GeV]")
-        ax_b.set_ylabel(f"({label} − model) / √model")
+        ax_b.set_ylabel(f"({label} − model) / √(Σw²)")
         ax_b.set_title(
             f"per-bin pulls{' (MC pseudo-data)' if pseudo else ''} — {tag}"
             + (f"  |η₊| ∈ [{slice_def[0]:.1f}, {slice_def[1]:.1f}]" if slice_def else "")
