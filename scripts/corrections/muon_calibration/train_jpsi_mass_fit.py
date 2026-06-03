@@ -21,6 +21,7 @@ import os
 import shutil
 import sys
 import time
+from dataclasses import replace
 from typing import List
 
 import numpy as np
@@ -602,16 +603,17 @@ def _fisher_save_dict(H: torch.Tensor, layout: dict, model: JpsiMassMixtureModel
     # θ_scale block in the 24×3×24×3 layout (consumed by the diagnostics for ±1σ
     # bands + the correlation heatmap). This is the scale block of the JOINT
     # inverse, so it carries the θ_scale↔θ_smear correlation.
-    if n_scale == 72:
-        out["hessian_24_3_24_3"] = H[:72, :72].view(24, 3, 24, 3)
+    n_eta_s = model.theta_scale.shape[0]          # generic η-bin count (was 24)
+    if n_scale == 3 * n_eta_s:
+        out["hessian_24_3_24_3"] = H[:n_scale, :n_scale].view(n_eta_s, 3, n_eta_s, 3)
         if cov is not None:
             # θ_scale is O(1); physical (A,e,M) = θ·THETA_SCALE_REF → rescale the
             # covariance block to PHYSICAL units (cov_phys = cov·ref⊗ref).
-            ref72 = torch.tensor(list(THETA_SCALE_REF) * 24, dtype=cov.dtype)
-            cov_scale = cov[:72, :72] * ref72.unsqueeze(0) * ref72.unsqueeze(1)
-            out["covariance_24_3_24_3"] = cov_scale.view(24, 3, 24, 3)
+            refN = torch.tensor(list(THETA_SCALE_REF) * n_eta_s, dtype=cov.dtype)
+            cov_scale = cov[:n_scale, :n_scale] * refN.unsqueeze(0) * refN.unsqueeze(1)
+            out["covariance_24_3_24_3"] = cov_scale.view(n_eta_s, 3, n_eta_s, 3)
             out["sigma_scale_24_3"] = torch.sqrt(
-                torch.clamp(torch.diag(cov_scale), min=0.0)).view(24, 3)
+                torch.clamp(torch.diag(cov_scale), min=0.0)).view(n_eta_s, 3)
     # PHYSICAL σ on the smear a/c per η-bin. The fit param θ_smear is O(1); the
     # physical qop-variance coefficient is `effective(θ)·SMEAR_VAR_SCALE`, where
     # `effective` is the identity ('linear'), `softplus` ('softplus'), or `θ²`
@@ -670,6 +672,13 @@ def _setup_common(args, *, stats_override=None):
         print("error: no Arrow shards found under --inputs", file=sys.stderr)
         return None
     print(f"discovered {len(shard_files)} shard(s)")
+    # Resolve the binned-θ η binning. The flags default to None so we can tell an
+    # explicit request from the 24/±2.4 default: when stats come from a checkpoint
+    # or --stats-in, an explicit --n-eta-bins/--eta-range rebuilds stats.eta_edges
+    # (the binning is independent of the flow), otherwise the loaded edges are kept.
+    eta_bins_req = args.n_eta_bins is not None or args.eta_range is not None
+    n_eta_bins = int(args.n_eta_bins) if args.n_eta_bins is not None else 24
+    eta_range = float(args.eta_range) if args.eta_range is not None else 2.4
     if stats_override is not None:
         stats = stats_override
         print("using preproc stats from the flow checkpoint")
@@ -679,8 +688,17 @@ def _setup_common(args, *, stats_override=None):
         print(f"loaded preproc stats from {args.stats_in}")
     else:
         t0 = time.time()
-        stats = compute_jpsi_mass_stats(shard_files, m_lo=args.m_lo, m_hi=args.m_hi)
-        print(f"computed preproc stats in {time.time() - t0:.1f}s")
+        eta_edges = np.linspace(-eta_range, eta_range, n_eta_bins + 1, dtype=np.float64)
+        stats = compute_jpsi_mass_stats(shard_files, m_lo=args.m_lo, m_hi=args.m_hi,
+                                        eta_edges=eta_edges)
+        print(f"computed preproc stats in {time.time() - t0:.1f}s "
+              f"({n_eta_bins} η-bins over ±{eta_range:g})")
+        eta_bins_req = False  # freshly computed with the requested binning already
+    if eta_bins_req:
+        eta_edges = np.linspace(-eta_range, eta_range, n_eta_bins + 1, dtype=np.float64)
+        stats = replace(stats, eta_edges=eta_edges)
+        print(f"  overriding binned-θ η binning: {n_eta_bins} bins over ±{eta_range:g} "
+              "(flow conditioning is unaffected)")
     print(f"  mll: μ={stats.mll_mean:.4f}  σ={stats.mll_std:.4f}  "
           f"window [{stats.m_lo}, {stats.m_hi}]")
     os.makedirs(args.output, exist_ok=True)
@@ -815,6 +833,11 @@ def _build_model(args, stats, device):
         theta_whiten=getattr(args, "theta_whiten", False),
         theta_whiten_max_rho=getattr(args, "theta_whiten_max_rho", 0.99),
         k_moments=stats.k_moments,
+        # binned θ tables must match the stats' η binning (b_pm is bucketized
+        # against stats.eta_edges in the loader) — derive from the edges, not the
+        # N_ETA_BINS default, so --n-eta-bins (or a --stats-in with different
+        # binning) is honoured.
+        n_eta_bins=len(stats.eta_edges) - 1,
     ).to(device)
 
 
@@ -1731,13 +1754,14 @@ def _bootstrap_save_dict(cov, mean, TH, eff_smears, conv_epochs, model, smear_co
         "convergence_epochs": conv_epochs,
         "param_space": "scale: linear (A,e,M); smear: raw pre-softplus theta_smear",
     }
-    if n_scale == 72:
+    n_eta_s = model.theta_scale.shape[0]
+    if n_scale == 3 * n_eta_s:
         # θ_scale O(1) → physical (A,e,M) = θ·THETA_SCALE_REF; cov_phys = cov·ref⊗ref.
-        ref72 = torch.tensor(list(THETA_SCALE_REF) * 24, dtype=cov.dtype)
-        cov_scale = cov[:72, :72] * ref72.unsqueeze(0) * ref72.unsqueeze(1)
-        out["covariance_24_3_24_3"] = cov_scale.view(24, 3, 24, 3)
+        refN = torch.tensor(list(THETA_SCALE_REF) * n_eta_s, dtype=cov.dtype)
+        cov_scale = cov[:n_scale, :n_scale] * refN.unsqueeze(0) * refN.unsqueeze(1)
+        out["covariance_24_3_24_3"] = cov_scale.view(n_eta_s, 3, n_eta_s, 3)
         out["sigma_scale_24_3"] = torch.sqrt(
-            torch.clamp(torch.diag(cov_scale), min=0.0)).view(24, 3)
+            torch.clamp(torch.diag(cov_scale), min=0.0)).view(n_eta_s, 3)
     # Physical smear σ straight from the replicas' effective_theta_smear (already
     # physical) — the bootstrap gives the effective-space spread exactly.
     if smear_cols and eff_smears:
@@ -1926,13 +1950,14 @@ def _theta_cov_extras(cov_theta: torch.Tensor, model, smear_cols, n_scale: int) 
     θ_scale block in the 24×3×24×3 layout, its √diag σ, and the delta-method
     effective σ for the raw θ_smear. Shared by the Fisher / empirical builders."""
     out: dict = {}
-    if n_scale == 72:
+    n_eta_s = model.theta_scale.shape[0]
+    if n_scale == 3 * n_eta_s:
         # θ_scale O(1) → physical (A,e,M) = θ·THETA_SCALE_REF; cov_phys = cov·ref⊗ref.
-        ref72 = torch.tensor(list(THETA_SCALE_REF) * 24, dtype=cov_theta.dtype)
-        cs = cov_theta[:72, :72] * ref72.unsqueeze(0) * ref72.unsqueeze(1)
-        out["covariance_24_3_24_3"] = cs.view(24, 3, 24, 3)
+        refN = torch.tensor(list(THETA_SCALE_REF) * n_eta_s, dtype=cov_theta.dtype)
+        cs = cov_theta[:n_scale, :n_scale] * refN.unsqueeze(0) * refN.unsqueeze(1)
+        out["covariance_24_3_24_3"] = cs.view(n_eta_s, 3, n_eta_s, 3)
         out["sigma_scale_24_3"] = torch.sqrt(
-            torch.clamp(torch.diag(cs), min=0.0)).view(24, 3)
+            torch.clamp(torch.diag(cs), min=0.0)).view(n_eta_s, 3)
     if smear_cols:
         n_eta, n_comp = model.theta_smear.shape
         cv = cov_theta[n_scale:, n_scale:]
@@ -2839,9 +2864,9 @@ def _run_output_fisher_mlp(args, model, shard_files, stats, device) -> None:
         for i, ci in enumerate(sc_cols):
             for j, cj in enumerate(sc_cols):
                 cov_s[:, ci, :, cj] = Cs[:, i, :, j]
-        cs2 = cov_s.reshape(72, 72)                       # symmetrise ULP asymmetry
+        cs2 = cov_s.reshape(n_eta * 3, n_eta * 3)         # symmetrise ULP asymmetry
         cov_s = (0.5 * (cs2 + cs2.T)).reshape(n_eta, 3, n_eta, 3)
-        out["covariance_24_3_24_3"] = torch.tensor(cov_s, dtype=torch.float32).view(24, 3, 24, 3)
+        out["covariance_24_3_24_3"] = torch.tensor(cov_s, dtype=torch.float32).view(n_eta, 3, n_eta, 3)
         out["sigma_scale_24_3"] = torch.sqrt(torch.clamp(
             torch.tensor(np.einsum('icic->ic', cov_s)), min=0.0)).float()
         # FULL 2-D (η,φ) covariance [n_eta,nphi,ncol-in-3, …] embedded in 3-col.
@@ -2859,9 +2884,9 @@ def _run_output_fisher_mlp(args, model, shard_files, stats, device) -> None:
         for i, ci in enumerate(cc_cols):
             for j, cj in enumerate(cc_cols):
                 cov_c[:, ci, :, cj] = Cc[:, i, :, j] * sv[ci] * sv[cj]   # → physical
-        cc2 = cov_c.reshape(48, 48)                       # symmetrise ULP asymmetry
+        cc2 = cov_c.reshape(n_eta * 2, n_eta * 2)         # symmetrise ULP asymmetry
         cov_c = (0.5 * (cc2 + cc2.T)).reshape(n_eta, 2, n_eta, 2)
-        out["covariance_smear_24_2_24_2"] = torch.tensor(cov_c, dtype=torch.float32).view(24, 2, 24, 2)
+        out["covariance_smear_24_2_24_2"] = torch.tensor(cov_c, dtype=torch.float32).view(n_eta, 2, n_eta, 2)
         sig_sm = torch.sqrt(torch.clamp(
             torch.tensor(np.einsum('icic->ic', cov_c)), min=0.0)).float()
         out["sigma_smear_eff_24_2"] = sig_sm
@@ -3379,6 +3404,20 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    help="Lower edge of the m_ll fit window [GeV].")
     p.add_argument("--m-hi", type=float, default=3.28, dest="m_hi",
                    help="Upper edge of the m_ll fit window [GeV].")
+    p.add_argument("--n-eta-bins", type=int, default=None,
+                   help="Number of η bins for the BINNED θ parameters (and the "
+                   "diagnostics' per-η tables), spanning ±--eta-range. Default 24 "
+                   "(uniform over ±2.4). The model's binned θ tables, the per-event "
+                   "η-bin index, the Fisher/bootstrap per-η covariance, and the "
+                   "diagnostics all derive their bin count from the resulting "
+                   "stats.eta_edges. The binned-θ η binning is independent of the "
+                   "flow (which conditions on continuous η), so passing this in the "
+                   "fit stage rebuilds stats.eta_edges even when stats come from a "
+                   "flow --checkpoint or --stats-in. Has no effect on --theta-mlp "
+                   "(continuous in η).")
+    p.add_argument("--eta-range", type=float, default=None,
+                   help="Half-range of the η binning: bins span [−R, +R] with "
+                   "--n-eta-bins uniform bins (default R=2.4, the muon acceptance).")
     # Scale transform + smear init + noise sampling
     p.add_argument(
         "--qop-floor-frac", type=float, default=0.0,

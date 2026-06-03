@@ -104,6 +104,7 @@ def load_model_from_checkpoint(checkpoint_path: str, device: str):
         norm_correction=args.get("norm_correction", "none"),
         background_enabled=not bool(args.get("no_background", False)),
         theta_mode=("mlp" if args.get("theta_mlp", False) else "binned"),
+        n_eta_bins=len(stats.eta_edges) - 1,
         cond_basis=args.get("cond_basis", "muon_kin"),
         theta_mlp_hidden=args.get("theta_mlp_hidden", 32),
         theta_mlp_layers=args.get("theta_mlp_layers", 2),
@@ -1409,6 +1410,17 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "~2·n_fitted extra grid evaluations per event, which is the "
                    "slowest diagnostic for the qop smear operator — pair with "
                    "--max-events for a quick look.")
+    p.add_argument("--theta-scan-points", type=int, default=25,
+                   help="Number of scan points for the single-η-bin θ_scale "
+                   "likelihood scan (theta_scale_likelihood_scan.png). The scan "
+                   "is auto-enabled only for binned θ with a single η bin "
+                   "(--n-eta-bins 1); each point re-evaluates the data NLL over "
+                   "the cached (pseudo-)data.")
+    p.add_argument("--theta-scan-nsigma", type=float, default=4.0,
+                   help="Half-width of the θ_scale likelihood scan, in Fisher σ "
+                   "(falls back to ±10 raw units when no covariance is available).")
+    p.add_argument("--no-theta-scan", action="store_true",
+                   help="Skip the single-η-bin θ_scale likelihood scan.")
     return p.parse_args(argv)
 
 
@@ -1703,6 +1715,131 @@ def plot_param_sensitivity(model, loader, stats, m_centers, out_dir, *,
         print(f"  wrote param_sensitivity_{v} ({ns} slices)")
 
 
+@torch.no_grad()
+def plot_theta_scale_likelihood_scan(
+    model, loader, device, output_dir, *,
+    scale_fit_params: str,
+    mc_as_data: bool,
+    n_iter: int = 2,
+    max_events: int = 0,
+    sigma_scale: "np.ndarray | None" = None,
+    inject_ref: "np.ndarray | None" = None,
+    n_points: int = 25,
+    n_sigma: float = 4.0,
+) -> None:
+    """1-D NLL likelihood scan over each active θ_scale component.
+
+    Intended for the SINGLE-η-bin binned-θ fit (``--n-eta-bins 1``), where the
+    three scale nuisances (A, e, M) are global numbers and a direct scan of the
+    objective is both cheap and the most transparent uncertainty diagnostic.
+
+    Caches the (pseudo-)data once, then for every fit parameter listed in
+    ``scale_fit_params`` sweeps that component over a window — ±``n_sigma``·σ from
+    the Fisher covariance when available, otherwise a default ±10 raw units —
+    holding the others at the fit value, and re-accumulates the weighted data NLL
+    (``data_nll_continuity``, exactly the stage-2 objective). The scan curve, the
+    fit minimum, the injected truth (if any) and the Gaussian (Fisher) parabola
+    are overlaid, directly exposing the curvature and any non-parabolicity / bias
+    of the global scale parameters.
+    """
+    comp_index = {"A": 0, "e": 1, "M": 2}
+    comp_label = {"A": "A", "e": "e [GeV]", "M": "M"}
+    active = [c for c in ("A", "e", "M") if c in (scale_fit_params or "")]
+    if not active:
+        print("  θ_scale scan: no active scale fit params; skipping.")
+        return
+    ref_phys = np.asarray(THETA_SCALE_REF, dtype=np.float64)   # (1e-4, 1e-3, 1e-5)
+
+    # Cache the (pseudo-)data the fit used (one host→device pass), keeping only
+    # the tensors the continuity NLL needs.
+    cache = []
+    seen = 0
+    keys = ("mll", "pt_pm", "eta_pm", "phi_pm", "q_pm", "b_pm", "cond_std", "w")
+    for batch in loader:
+        if max_events > 0 and seen >= max_events:
+            break
+        batch = _move_batch(batch, device)
+        dm = (~batch["is_data_mask"]) if mc_as_data else batch["is_data_mask"]
+        seen += int(batch["mll"].shape[0])
+        if not bool(dm.any()):
+            continue
+        entry = {k: batch[k] for k in keys}
+        entry["dm"] = dm
+        cache.append(entry)
+    if not cache:
+        print("  θ_scale scan: no data rows found; skipping.")
+        return
+
+    def total_nll() -> float:
+        acc = 0.0
+        for b in cache:
+            per = model.data_nll_continuity(
+                b["mll"], b["pt_pm"], b["eta_pm"], b["phi_pm"], b["q_pm"],
+                b["b_pm"], b["cond_std"], b["dm"], n_iter=n_iter)
+            w = b["w"] * b["dm"].to(b["w"].dtype)
+            acc += float((w.double() * per.double()).sum().item())
+        return acc
+
+    fit_raw = model.theta_scale.detach().clone()    # [1, 3] raw O(1) params
+
+    results = []
+    for c in active:
+        j = comp_index[c]
+        center_raw = float(fit_raw[0, j].item())
+        sig_phys = None
+        if sigma_scale is not None:
+            s = float(sigma_scale[0, j])
+            if np.isfinite(s) and s > 0:
+                sig_phys = s
+        if sig_phys is not None:
+            sig_raw = sig_phys / ref_phys[j]
+            hw_raw = n_sigma * sig_raw
+        else:
+            sig_raw = None
+            hw_raw = 10.0   # default raw half-window when no Fisher σ available
+        xs_raw = np.linspace(center_raw - hw_raw, center_raw + hw_raw, int(n_points))
+        nlls = np.empty(xs_raw.shape[0], dtype=np.float64)
+        for k, xr in enumerate(xs_raw):
+            model.theta_scale[0, j] = float(xr)
+            nlls[k] = total_nll()
+        model.theta_scale[0, j] = center_raw   # restore the fit value
+        dnll = nlls - float(np.min(nlls))
+        parab = None if sig_raw is None else 0.5 * ((xs_raw - center_raw) / sig_raw) ** 2
+        results.append(dict(
+            comp=c, x_phys=xs_raw * ref_phys[j], dnll=dnll,
+            fit_phys=center_raw * ref_phys[j], sig_phys=sig_phys,
+            inj_phys=(float(inject_ref[0, j]) if inject_ref is not None else None),
+            parab=parab))
+
+    n = len(results)
+    fig, axes = plt.subplots(n, 1, figsize=(7, 3.0 * n), squeeze=False)
+    axes = axes[:, 0]
+    for ax, r in zip(axes, results):
+        ax.plot(r["x_phys"], r["dnll"], "o-", color="k", ms=3, lw=1.2,
+                label="NLL scan")
+        if r["parab"] is not None:
+            ax.plot(r["x_phys"], r["parab"], color="C0", ls="-", lw=1.2,
+                    label="Gaussian (Fisher)")
+        ax.axvline(r["fit_phys"], color="C2", lw=1.0, label="fit")
+        if r["inj_phys"] is not None:
+            ax.axvline(r["inj_phys"], color="C3", lw=1.2, ls="--", label="injected")
+        ax.axhline(0.5, color="0.6", lw=0.8, ls=":")   # 1σ crossing
+        xlab = comp_label[r["comp"]]
+        if r["sig_phys"] is not None:
+            xlab += f"   (σ_Fisher = {r['sig_phys']:.2e})"
+        ax.set_xlabel(xlab)
+        ax.set_ylabel("ΔNLL")
+        ax.set_ylim(bottom=0.0)
+        ax.grid(True, alpha=0.3)
+        ax.legend(loc="best", fontsize=7)
+    axes[0].set_title("θ_scale likelihood scan (single η-bin)")
+    fig.tight_layout()
+    path = os.path.join(output_dir, "theta_scale_likelihood_scan.png")
+    fig.savefig(path, dpi=120)
+    plt.close(fig)
+    print(f"  wrote {path}")
+
+
 def main() -> int:
     args = parse_args()
     out_dir = args.output or os.path.join(
@@ -1848,14 +1985,18 @@ def main() -> int:
             print(f"  fit EDM (½ gᵀV g) = {edm:.3e}")
         cov_pt = f.get("covariance_24_3_24_3")
         if cov_pt is not None:
-            cov_scale_flat = cov_pt.reshape(72, 72).cpu().numpy()
-            sigma_scale = np.sqrt(np.maximum(np.diag(cov_scale_flat), 0.0)).reshape(24, 3)
+            # generic η-bin count from the saved [n_eta,3,n_eta,3] tensor (the
+            # "24_3" key name is historical; n_eta is set by --n-eta-bins).
+            n_eta_s = int(cov_pt.shape[0])
+            cov_scale_flat = cov_pt.reshape(3 * n_eta_s, 3 * n_eta_s).cpu().numpy()
+            sigma_scale = np.sqrt(np.maximum(np.diag(cov_scale_flat), 0.0)).reshape(n_eta_s, 3)
         ss = f.get("sigma_smear_eff_24_2")
         if ss is not None:
             sigma_smear = ss.cpu().numpy()
         cs_pt = f.get("covariance_smear_24_2_24_2")
         if cs_pt is not None:
-            cov_smear_flat = cs_pt.reshape(48, 48).cpu().numpy()
+            n_eta_c = int(cs_pt.shape[0])
+            cov_smear_flat = cs_pt.reshape(2 * n_eta_c, 2 * n_eta_c).cpu().numpy()
         # Full 2-D (η,φ) output covariance + occupancy weights (output-fisher),
         # for the φ-RESOLVED Fisher band and the SAMPLE-weighted η-average on the
         # θ-vs-φ plots. Present only for the output-space Fisher.
@@ -2023,6 +2164,19 @@ def main() -> int:
             slice_labels=mlp_slice_labels,
             sigma_band=(model.theta_mode == "mlp"),
         )
+        # Single-η-bin binned θ: the global (A, e, M) scale params are cheap to
+        # scan directly, so add a 1-D NLL likelihood scan (the most transparent
+        # uncertainty diagnostic — exposes curvature + any non-parabolicity).
+        if (not args.no_theta_scan and model.theta_mode == "binned"
+                and model.theta_scale.shape[0] == 1):
+            print("plotting θ_scale likelihood scan (single η-bin)...")
+            plot_theta_scale_likelihood_scan(
+                model, loader, device, out_dir,
+                scale_fit_params=model.scale_fit_params,
+                mc_as_data=mc_as_data, n_iter=args.continuity_n_iter,
+                max_events=args.max_events, sigma_scale=sigma_scale,
+                inject_ref=inject_ref_np, n_points=args.theta_scan_points,
+                n_sigma=args.theta_scan_nsigma)
     else:
         print("  --disable-scale: skipping theta_scale_vs_eta")
     if model.smearing_enabled:
@@ -2169,7 +2323,8 @@ def main() -> int:
             # blocks of the 72×72 θ_scale covariance).
             cov_ae = None
             if cov_scale_flat is not None:
-                c4 = cov_scale_flat.reshape(24, 3, 24, 3)
+                ne = cov_scale_flat.shape[0] // 3
+                c4 = cov_scale_flat.reshape(ne, 3, ne, 3)
                 cov_ae = np.stack([c4[b, :2, b, :2] for b in range(c4.shape[0])])
             _whitened_plot(sg, ss, sl, THETA_SCALE_REF[:2], ij, E_s, l_s,
                            "theta_scale_whitened_vs_eta", ("A", "e"), cov_phys=cov_ae)
@@ -2181,7 +2336,8 @@ def main() -> int:
             ij = inject_smear_ref_np
             cov_ac = None
             if cov_smear_flat is not None:
-                c4 = cov_smear_flat.reshape(24, 2, 24, 2)
+                ne = cov_smear_flat.shape[0] // 2
+                c4 = cov_smear_flat.reshape(ne, 2, ne, 2)
                 cov_ac = np.stack([c4[b, :, b, :] for b in range(c4.shape[0])])
             _whitened_plot(cg, cs, csl, [SMEAR_VAR_SCALE_A, SMEAR_VAR_SCALE_C],
                            ij, E_c, l_c, "theta_smear_whitened_vs_eta", ("a", "c"),
