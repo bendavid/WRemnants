@@ -3650,7 +3650,10 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         "normalised over [m_lo,m_hi] (Z=1, no out-of-window mass gauge freedom → "
         "no spurious far-tail structure), C∞ in the interior, and smoothly "
         "evaluable just outside the window for the un-kick/smear/Z. "
-        "--gf-components sets the number of mixture components.",
+        "--gf-components sets the number of mixture components: this is a SINGLE "
+        "mixture (not composed layers like gf), so it needs MORE components — use "
+        "~32 (K=8 under-fits the sharp J/ψ peak; ~32 matches/beats gf at fewer "
+        "epochs; ~64 needs more epochs).",
     )
     p.add_argument(
         "--nsf-bins", type=int, default=8,
