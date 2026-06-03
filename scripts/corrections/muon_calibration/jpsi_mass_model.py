@@ -851,6 +851,7 @@ class JpsiMassMixtureModel(nn.Module):
                 hidden_features=flow_hidden_features,
                 n_layers=flow_n_hidden_layers,
                 n_components=flow_gf_components,
+                n_transforms=flow_n_transforms,   # composed depth, as for gf
             )
         else:
             flow_inner = build_flow(

@@ -1439,8 +1439,15 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
     optim = torch.optim.Adam(model.flow.parameters(), lr=args.lr,
                              weight_decay=args.weight_decay)
     print(f"  optimizer: flow ({sum(p.numel() for p in model.flow.parameters()):,} params), lr={args.lr:g}")
-    window_norm = not getattr(args, "no_flow_window_norm", False)
-    if window_norm:
+    # The compact flow is intrinsically window-normalised (∫_window p₀ ≡ 1 by
+    # construction), so the window-norm correction is identically 0 — skip it
+    # (avoids a pointless per-batch CDF evaluation/autograd at the edges).
+    compact = getattr(model, "flow_is_compact", False)
+    window_norm = (not getattr(args, "no_flow_window_norm", False)) and not compact
+    if compact:
+        print("  likelihood: -logp0 (compact flow — already normalised over the "
+              "window by construction; window-norm term ≡ 0, skipped)")
+    elif window_norm:
         print(f"  likelihood: TRUNCATED  -(logp0 - logZ_window), "
               f"Z = F0({model.m_hi:g}|c) - F0({model.m_lo:g}|c)  "
               f"(consistent with stage-2 flow_cdf; the frozen flow is the "
@@ -3645,15 +3652,15 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         "'nsf' = neural rational-quadratic spline flow — bounded (linear tails "
         "outside ±5), avoids the erf/exp saturation the GF needs guards for, but "
         "only C¹ (the score kinks at the spline knots). "
-        "'compact' = uniform-base compact flow on the mass window (logistic-"
-        "mixture CDF) with C²-matched analytic tails (compact_flow.py): EXACTLY "
-        "normalised over [m_lo,m_hi] (Z=1, no out-of-window mass gauge freedom → "
-        "no spurious far-tail structure), C∞ in the interior, and smoothly "
-        "evaluable just outside the window for the un-kick/smear/Z. "
-        "--gf-components sets the number of mixture components: this is a SINGLE "
-        "mixture (not composed layers like gf), so it needs MORE components — use "
-        "~32 (K=8 under-fits the sharp J/ψ peak; ~32 matches/beats gf at fewer "
-        "epochs; ~64 needs more epochs).",
+        "'compact' = uniform-base COMPOSED compact flow on the mass window "
+        "(--flow-n-transforms composed logistic-mixture-CDF layers [0,1]→[0,1], "
+        "same depth idea as gf but on a bounded domain) with C²-matched analytic "
+        "tails (compact_flow.py): EXACTLY normalised over [m_lo,m_hi] (Z=1, no "
+        "out-of-window mass gauge freedom and no wasted capacity outside → no "
+        "spurious far-tail structure), C∞ in the interior, and smoothly evaluable "
+        "just outside the window for the un-kick/smear/Z (matched-Gaussian tail, "
+        "edge derivatives via autograd). Depth = --flow-n-transforms (as gf); "
+        "--gf-components sets the per-layer mixture size.",
     )
     p.add_argument(
         "--nsf-bins", type=int, default=8,
