@@ -1422,7 +1422,10 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    help="Half-width of the θ_scale likelihood scan, in Fisher σ "
                    "(falls back to ±10 raw units when no covariance is available).")
     p.add_argument("--no-theta-scan", action="store_true",
-                   help="Skip the single-η-bin θ_scale likelihood scan.")
+                   help="Skip the single-η-bin θ_scale likelihood scan entirely "
+                   "(the loader build + all passes). This is the slowest "
+                   "diagnostic — it runs n_points forward+backward passes over the "
+                   "FULL fitted sample — so use this to skip it when iterating.")
     return p.parse_args(argv)
 
 
