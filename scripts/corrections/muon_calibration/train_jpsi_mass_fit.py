@@ -1465,7 +1465,9 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
               f"(paired: twins share the event's conditioning → conditional "
               f"ratio, no p(c) leakage). Optimal logit = log p0(m|c) − log u; "
               f"the density is window-normalised IN EXPECTATION (calibration "
-              f"reported after training)")
+              f"reported after training). Twin noise: fresh per training "
+              f"epoch, FIXED (batch-seeded) on the validation pass so the "
+              f"monitored BCE is deterministic in the weights")
     elif compact:
         print("  likelihood: -logp0 (compact flow — already normalised over the "
               "window by construction; window-norm term ≡ 0, skipped)")
@@ -1494,8 +1496,23 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
             # uniform init, decreasing as the classifier learns the ratio).
             m_std = model._standardise_mll(m).clamp(
                 -MLL_STD_FLOW_CLAMP, MLL_STD_FLOW_CLAMP)
+            gen = None
+            if not model.training:
+                # VALIDATION pass (model.eval() set by _run_epochs): fixed
+                # noise so the monitored BCE is a deterministic function of
+                # the weights — fresh twins each epoch would jitter the
+                # val metric and pollute the early-stop/best-checkpoint
+                # comparisons. Seeded from the batch content (count + first/
+                # last mass; hash of numeric tuples is process-independent),
+                # so the same val batch draws the same twins every epoch.
+                # Training keeps fresh noise (resampling integrates over the
+                # noise class across epochs).
+                seed = hash((int(m_std.numel()), float(m_std[0].item()),
+                             float(m_std[-1].item()))) & 0x7FFFFFFFFFFFFFFF
+                gen = torch.Generator(device=m_std.device)
+                gen.manual_seed(seed)
             loss_ev = model.flow.nce_loss(
-                m_std, mk, n_noise=args.nce_noise_ratio)
+                m_std, mk, n_noise=args.nce_noise_ratio, generator=gen)
             w = batch["w"][idx].double()
             sw = float(w.sum().clamp_min(1e-30))
             return (w * loss_ev.double()).sum() / sw, sw

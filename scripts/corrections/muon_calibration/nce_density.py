@@ -138,7 +138,8 @@ class NCEDensity(nn.Module):
 
     # ---- stage-1 training objective ------------------------------------------
     def nce_loss(self, x: torch.Tensor, c: torch.Tensor,
-                 n_noise: int = 8) -> torch.Tensor:
+                 n_noise: int = 8,
+                 generator: torch.Generator | None = None) -> torch.Tensor:
         """Per-event paired NCE binary cross-entropy, [B].
 
         Each event (x, c) is classified against ``n_noise`` uniform-mass twins
@@ -147,12 +148,19 @@ class NCEDensity(nn.Module):
         joint-p(c) leakage). Twin losses are averaged (weight 1/n_noise each)
         so the per-event class totals are balanced → prior odds 1 → the optimal
         logit is log[p₀(x|c)·(b−a)] pointwise. At zero-init (logit ≡ 0) the
-        loss is exactly 2·log 2."""
+        loss is exactly 2·log 2.
+
+        ``generator``: optional RNG for the twin masses. Training wants fresh
+        noise every epoch (resampling integrates over the noise class);
+        VALIDATION should pass a deterministically seeded generator so the
+        monitored BCE is a deterministic function of the weights — otherwise
+        the early-stop/best-checkpoint comparisons across epochs are polluted
+        by noise-resampling jitter."""
         x = x.reshape(-1)
         B = x.shape[0]
         k = int(n_noise)
         u = self.a + (self.b - self.a) * torch.rand(
-            B, k, device=x.device, dtype=x.dtype)
+            B, k, device=x.device, dtype=x.dtype, generator=generator)
         xs = torch.cat([x.unsqueeze(-1), u], dim=1)                # [B, 1+k]
         cs = c.unsqueeze(1).expand(B, 1 + k, c.shape[-1]).reshape(-1, c.shape[-1])
         lg = self.logit(xs.reshape(-1), cs).reshape(B, 1 + k)
@@ -219,6 +227,18 @@ def _selftest():
     Fv = net.log_cdf(xb, cb).exp()
     assert Fv[0] < Fv[1] < Fv[2] < Fv[3]
     print(f"out-of-window probes monotone: {[f'{v:.6f}' for v in Fv.tolist()]}")
+
+    # 3b) seeded generator → deterministic loss (the validation-pass mode);
+    #     default (fresh) noise → varies.
+    g1 = torch.Generator(); g1.manual_seed(1234)
+    g2 = torch.Generator(); g2.manual_seed(1234)
+    l1 = net.nce_loss(x, c, n_noise=4, generator=g1)
+    l2 = net.nce_loss(x, c, n_noise=4, generator=g2)
+    assert torch.equal(l1, l2)
+    l3 = net.nce_loss(x, c, n_noise=4)
+    l4 = net.nce_loss(x, c, n_noise=4)
+    assert not torch.equal(l3, l4)
+    print("seeded nce_loss deterministic; unseeded resamples")
 
     # 4) gradients reach every parameter through both the loss and log_cdf.
     loss = net.nce_loss(x, c, n_noise=4).sum()
