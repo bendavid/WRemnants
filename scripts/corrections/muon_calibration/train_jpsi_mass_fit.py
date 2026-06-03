@@ -892,6 +892,7 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
         t0 = time.time(); model.train()
         tr_sum = 0.0; tr_w = 0.0; n_seen = 0
         lr_str = _lr_str(optim)
+        epoch_gnorm = None   # Σw-weighted gradient norm of the mean NLL (convergence)
         prof = _StepProfiler(device, prof_steps) if prof_steps > 0 else None
         if is_lbfgs:
             # Full-batch closure: one optim.step(closure) per "epoch" runs up to
@@ -961,6 +962,13 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
             bar = tqdm(train_loader, total=n_batches_total,
                        desc=f"[{stage_name}] epoch {epoch:>3}/{epochs}",
                        leave=False, disable=not args.progress, unit="batch")
+            # Σw-weighted gradient accumulator (float64) → the full-dataset
+            # gradient of the MEAN NLL, ‖g‖ = ‖Σ_b sw_b·∇meanNLL_b‖ / Σw. Like
+            # the reported train_nll it averages over the epoch's moving θ, so it
+            # is a per-epoch convergence readout, not the gradient at a fixed θ
+            # (it → the true ‖g‖ as θ stops moving near the optimum).
+            fit_params = [p for grp in optim.param_groups for p in grp["params"]]
+            g_acc = {}
             for batch in bar:
                 if prof is not None:
                     prof.mark_iter_start()
@@ -980,12 +988,21 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
                 if prof is not None:
                     prof.after_forward()
                 loss.backward()
+                for p in fit_params:                  # accumulate BEFORE the step
+                    if p.grad is not None:
+                        if p not in g_acc:
+                            g_acc[p] = torch.zeros(p.numel(), dtype=torch.float64,
+                                                   device=p.device)
+                        g_acc[p].add_(p.grad.detach().reshape(-1).double(), alpha=sw)
                 optim.step()
                 if prof is not None:
                     prof.after_backward()
                 tr_sum += float(loss.item()) * sw; tr_w += sw
                 bar.set_postfix_str(f"nll={tr_sum / max(tr_w, 1e-30):+.4f} lr={lr_str}")
             bar.close()
+            if g_acc:
+                gsq = sum(float(v.pow(2).sum()) for v in g_acc.values())
+                epoch_gnorm = (gsq ** 0.5) / max(tr_w, 1e-30)
             if prof is not None:
                 prof.report(stage_name, epoch)
         if n_batches_total is None:
@@ -1024,8 +1041,9 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
                 extra = (f" θ_scale‖∞={model.theta_scale.abs().max().item():.3e}"
                          f" θ_smear‖∞={model.theta_smear.abs().max().item():.3e}")
         val_str = f"val_nll={val_nll:+.4f} " if monitor == "val" else ""
+        g_str = f"|g|={epoch_gnorm:.2e} " if epoch_gnorm is not None else ""
         print(f"[{stage_name}] epoch {epoch:>3}: train_nll={train_nll:+.4f} "
-              f"(Δ={d_str}) {val_str}(Σw={v_w:.2e}) lr={lr_str} "
+              f"(Δ={d_str}) {val_str}(Σw={v_w:.2e}) lr={lr_str} {g_str}"
               f"dt={time.time()-t0:.1f}s{extra}")
         prev_train_nll = train_nll
 
