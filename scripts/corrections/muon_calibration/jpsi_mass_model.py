@@ -46,6 +46,7 @@ if _HERE not in sys.path:
 
 from train_muon_response_flow import FlowWithLogProb, build_flow  # noqa: E402
 from compact_flow import CompactMatchedFlow  # noqa: E402
+from nce_density import NCEDensity  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -611,6 +612,7 @@ class JpsiMassMixtureModel(nn.Module):
         flow_gf_components: int = 8,
         flow_nsf_bins: int = 8,
         compact_learn_weights: bool = False,
+        nce_quad_nodes: int = 64,
         mlp_hidden: int = 32,
         mlp_n_layers: int = 2,
         n_eta_bins: int = N_ETA_BINS,
@@ -844,6 +846,13 @@ class JpsiMassMixtureModel(nn.Module):
         # just outside the window (the scale un-kick / smear / norm-Z all reach
         # there). The window edges are the standardised [m_lo, m_hi].
         self.flow_is_compact = (self.flow_arch == "compact")
+        # ``nce``: classifier-vs-uniform (noise-contrastive) density — an
+        # unconstrained MLP logit trained with BCE against window-uniform
+        # twins in stage 1 (see nce_density.py). Absolute window-normalised
+        # density in expectation (no Z gauge drift, truncation exact by
+        # construction); the CDF (window Z) is per-event Gauss-Legendre
+        # quadrature instead of analytic.
+        self.flow_is_nce = (self.flow_arch == "nce")
         if self.flow_is_compact:
             a_std = (float(m_lo) - float(mll_mean)) / float(mll_std)
             b_std = (float(m_hi) - float(mll_mean)) / float(mll_std)
@@ -854,6 +863,15 @@ class JpsiMassMixtureModel(nn.Module):
                 n_components=flow_gf_components,
                 n_transforms=flow_n_transforms,   # composed depth, as for gf
                 learn_weights=compact_learn_weights,
+            )
+        elif self.flow_is_nce:
+            a_std = (float(m_lo) - float(mll_mean)) / float(mll_std)
+            b_std = (float(m_hi) - float(mll_mean)) / float(mll_std)
+            self.flow = NCEDensity(
+                n_cond=N_MUON_KIN, a=a_std, b=b_std,
+                hidden_features=flow_hidden_features,
+                n_layers=flow_n_hidden_layers,
+                quad_nodes=nce_quad_nodes,
             )
         else:
             flow_inner = build_flow(
@@ -2011,6 +2029,13 @@ class JpsiMassMixtureModel(nn.Module):
             # Compact flow: the cumulative is built in (and includes the matched
             # tails), so the window-integral differences F(unkick_hi)-F(unkick_lo)
             # are exact. No Φ — the transform already IS the (renormalised) CDF.
+            return self.flow.log_cdf(m_std, mk)
+        if getattr(self, "flow_is_nce", False):
+            # NCE density: no analytic CDF — per-event Gauss-Legendre quadrature
+            # F₀(x) = 1 + ∫_a^x p̂₀. The +1 offset (positivity for the small
+            # below-window probes) makes this valid for CDF DIFFERENCES only,
+            # which is how every consumer uses it (window Z, stage-1 norm,
+            # display norm).
             return self.flow.log_cdf(m_std, mk)
         dist = self.flow.flow(mk)
         z = dist.transform(m_std.unsqueeze(-1)).squeeze(-1)

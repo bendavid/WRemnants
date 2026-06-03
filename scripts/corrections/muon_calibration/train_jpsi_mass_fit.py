@@ -39,7 +39,8 @@ from jpsi_mass_arrow_loader import (
     discover_shards,
 )
 from jpsi_mass_model import (
-    JpsiMassMixtureModel, SMEAR_VAR_SCALE_A, SMEAR_VAR_SCALE_C, THETA_SCALE_REF)
+    JpsiMassMixtureModel, MLL_STD_FLOW_CLAMP, SMEAR_VAR_SCALE_A,
+    SMEAR_VAR_SCALE_C, THETA_SCALE_REF)
 
 
 # ---------------------------------------------------------------------------
@@ -781,6 +782,7 @@ def _inject_smear_np(args, n_eta):
 _FLOW_ARCH_KEYS = (
     "flow_arch", "flow_n_transforms", "flow_hidden", "flow_n_hidden",
     "gf_components", "nsf_bins", "cond_basis", "compact_learn_weights",
+    "nce_quad_nodes",
 )
 
 
@@ -824,6 +826,7 @@ def _build_model(args, stats, device):
         flow_hidden_features=args.flow_hidden, flow_n_hidden_layers=args.flow_n_hidden,
         flow_gf_components=args.gf_components, flow_nsf_bins=args.nsf_bins,
         compact_learn_weights=getattr(args, "compact_learn_weights", False),
+        nce_quad_nodes=getattr(args, "nce_quad_nodes", 64),
         mlp_hidden=args.mlp_hidden, mlp_n_layers=args.mlp_n_layers,
         smearing_enabled=not args.disable_smearing,
         scale_enabled=not args.disable_scale,
@@ -1453,8 +1456,17 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
     # construction), so the window-norm correction is identically 0 — skip it
     # (avoids a pointless per-batch CDF evaluation/autograd at the edges).
     compact = getattr(model, "flow_is_compact", False)
-    window_norm = (not getattr(args, "no_flow_window_norm", False)) and not compact
-    if compact:
+    nce = getattr(model, "flow_is_nce", False)
+    window_norm = ((not getattr(args, "no_flow_window_norm", False))
+                   and not compact and not nce)
+    if nce:
+        print(f"  likelihood: NCE binary cross-entropy — classifier vs "
+              f"{args.nce_noise_ratio} uniform-on-window twins per event "
+              f"(paired: twins share the event's conditioning → conditional "
+              f"ratio, no p(c) leakage). Optimal logit = log p0(m|c) − log u; "
+              f"the density is window-normalised IN EXPECTATION (calibration "
+              f"reported after training)")
+    elif compact:
         print("  likelihood: -logp0 (compact flow — already normalised over the "
               "window by construction; window-norm term ≡ 0, skipped)")
     elif window_norm:
@@ -1474,6 +1486,19 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
                                device=batch["mll"].device), 0.0
         m = batch["mll"][idx]
         mk = batch["cond_std"][idx]
+        if nce:
+            # Paired NCE BCE (not an NLL): real (m_std, c) vs uniform twins
+            # sharing c. Same Σw-weighted float64 reduction as the NLL path so
+            # the epoch monitor/early-stop machinery applies unchanged (the
+            # monitored metric is the weighted-mean BCE; 2·log2 ≈ 1.386 at the
+            # uniform init, decreasing as the classifier learns the ratio).
+            m_std = model._standardise_mll(m).clamp(
+                -MLL_STD_FLOW_CLAMP, MLL_STD_FLOW_CLAMP)
+            loss_ev = model.flow.nce_loss(
+                m_std, mk, n_noise=args.nce_noise_ratio)
+            w = batch["w"][idx].double()
+            sw = float(w.sum().clamp_min(1e-30))
+            return (w * loss_ev.double()).sum() / sw, sw
         logp = model.log_p_nominal(m, mk)
         if window_norm:
             # Subtract the per-event window log-normaliser so stage 1 fits the
@@ -1491,9 +1516,52 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
         # accumulates per-event grad contributions in float64, cast to the fp32
         # leaf only at the end). Benefits adam/soap/lbfgs alike (all call step_fn).
 
-    return _run_epochs(args, model, optim, train_loader, val_loader, stats,
+    best = _run_epochs(args, model, optim, train_loader, val_loader, stats,
                        step_fn=step1, ckpt_prefix="flow", stage_name="flow",
                        epochs=args.flow_epochs or args.epochs)
+    if nce:
+        # _run_epochs reloaded the best checkpoint, so this reports the flow
+        # state stage 2 will actually use.
+        _report_nce_calibration(args, model,
+                                val_loader if val_loader is not None
+                                else train_loader)
+    return best
+
+
+@torch.no_grad()
+def _report_nce_calibration(args, model, loader, max_events: int = 100_000):
+    """Post-stage-1 NCE calibration check: Z₀(c) = ∫_window p̂₀(m|c) dm per
+    event (quadrature CDF difference at the window edges). A calibrated
+    classifier has Z₀ ≈ 1. An m-independent miscalibration δ(c) is GAUGE for
+    the stage-2 window-normalised fit — it cancels exactly in log p − log Z
+    when Z is computed from the same density — and shifts only the mixture
+    fractions at first order; its size is the NCE training-quality flag."""
+    model.eval()
+    device = args.device
+    zs = []
+    n = 0
+    for batch in loader:
+        batch = _move_batch(batch, device)
+        idx = (~batch["is_data_mask"]).nonzero(as_tuple=True)[0]
+        if idx.numel() == 0:
+            continue
+        mk = batch["cond_std"][idx]
+        m_hi = batch["mll"].new_full((idx.numel(),), float(model.m_hi))
+        m_lo = batch["mll"].new_full((idx.numel(),), float(model.m_lo))
+        z = (model._flow_log_cdf(m_hi, mk).exp()
+             - model._flow_log_cdf(m_lo, mk).exp())
+        zs.append(z.double().cpu())
+        n += int(idx.numel())
+        if n >= max_events:
+            break
+    if not zs:
+        print("  NCE calibration: no events available to check Z0")
+        return
+    z = torch.cat(zs)
+    print(f"  NCE calibration ({z.numel():,} events): Z0 = ∫_window p̂0 "
+          f"mean={z.mean():.4f} std={z.std():.4f} "
+          f"min={z.min():.4f} max={z.max():.4f}  (target 1; an m-independent "
+          f"offset is gauge for the window-normalised stage-2 fit)")
 
 
 def train_stage2(args, model, train_loader, val_loader, stats,
@@ -3257,7 +3325,9 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "truncated-MLE on the [m_lo,m_hi] window. Without it stage 1 "
                    "fits a full-support density to windowed data and stage 2 then "
                    "truncates inconsistently — biasing the overall scale A "
-                   "(~5e-5). Set this flag only to reproduce the old behaviour.")
+                   "(~5e-5). Set this flag only to reproduce the old behaviour. "
+                   "Ignored for --flow-arch compact (Z≡1 by construction) and "
+                   "nce (BCE objective; window-normalised in expectation).")
     p.add_argument("--fit-epochs", type=int, default=0,
                    help="Max epochs for stage 2 (0 → use --epochs).")
     p.add_argument("--fit-scale-lr", type=float, default=0.1,
@@ -3657,7 +3727,7 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     # during warmup.
     # Flow / MLP hyperparams
     p.add_argument(
-        "--flow-arch", choices=("gf", "nsf", "compact"), default="gf",
+        "--flow-arch", choices=("gf", "nsf", "compact", "nce"), default="gf",
         help="Signal flow architecture: 'gf' = Gaussianization flow (default) — "
         "C∞-smooth density, so the continuity score/Hessian have no knot kinks. "
         "'nsf' = neural rational-quadratic spline flow — bounded (linear tails "
@@ -3671,7 +3741,18 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         "spurious far-tail structure), C∞ in the interior, and smoothly evaluable "
         "just outside the window for the un-kick/smear/Z (matched-Gaussian tail, "
         "edge derivatives via autograd). Depth = --flow-n-transforms (as gf); "
-        "--gf-components sets the per-layer mixture size.",
+        "--gf-components sets the per-layer mixture size. "
+        "'nce' = noise-contrastive (classifier-vs-uniform) density "
+        "(nce_density.py): a plain MLP logit trained in stage 1 with BCE "
+        "against --nce-noise-ratio uniform-mass twins per event (twins share "
+        "the event's conditioning → conditional ratio, no p(c) leakage); "
+        "log p0 = logit − log(window). Truncation is exact by construction "
+        "(trained on the windowed population vs window-uniform — no full-"
+        "support/truncated mismatch, no out-of-window Z gauge drift), the "
+        "logit is C∞ and extrapolates smoothly past the edges; the window Z "
+        "is per-event Gauss-Legendre quadrature (--nce-quad-nodes) instead "
+        "of an analytic CDF. MLP size from --flow-hidden/--flow-n-hidden "
+        "(--flow-n-transforms/--gf-components unused).",
     )
     p.add_argument(
         "--nsf-bins", type=int, default=8,
@@ -3693,6 +3774,19 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "matching gf's equal-weight Gaussianization layers. When "
                    "loading a compact flow checkpoint the setting is adopted "
                    "from it (inferred from the head shape for older checkpoints).")
+    p.add_argument("--nce-noise-ratio", type=int, default=8,
+                   help="(--flow-arch nce) Uniform-mass noise twins per event in "
+                   "the stage-1 NCE BCE. Each twin shares its event's exact "
+                   "conditioning (paired → conditional ratio) and gets weight "
+                   "w/k, so per-event class totals are balanced (prior odds 1 "
+                   "→ logit = log p0/u pointwise). More twins reduce the "
+                   "noise-class variance of the loss (and the Z0 calibration "
+                   "spread) at linear cost in stage-1 MLP evals.")
+    p.add_argument("--nce-quad-nodes", type=int, default=64,
+                   help="(--flow-arch nce) Gauss-Legendre nodes for the "
+                   "per-event quadrature CDF (window Z, stage-2 flow_cdf norm "
+                   "correction, display normalisation). Adopted from the "
+                   "checkpoint on reload like the other flow-arch keys.")
     p.add_argument("--mlp-hidden", type=int, default=32,
                    help="Hidden width of the data-branch mixture MLP.")
     p.add_argument("--mlp-n-layers", type=int, default=2,

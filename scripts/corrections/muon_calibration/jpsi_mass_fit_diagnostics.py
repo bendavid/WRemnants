@@ -113,6 +113,7 @@ def load_model_from_checkpoint(checkpoint_path: str, device: str):
             "compact_learn_weights",
             infer_learn_weights(ckpt["state_dict"],
                                 int(args.get("gf_components", 8)))),
+        nce_quad_nodes=args.get("nce_quad_nodes", 64),
         cond_basis=args.get("cond_basis", "muon_kin"),
         theta_mlp_hidden=args.get("theta_mlp_hidden", 32),
         theta_mlp_layers=args.get("theta_mlp_layers", 2),
