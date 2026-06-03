@@ -1741,6 +1741,12 @@ def plot_theta_scale_likelihood_scan(
     fit minimum, the injected truth (if any) and the Gaussian (Fisher) parabola
     are overlaid, directly exposing the curvature and any non-parabolicity / bias
     of the global scale parameters.
+
+    The scan runs the model in **float64**: the per-event NLL is otherwise
+    computed in fp32 (the training --precision), and summed over the full
+    (often millions of events) dataset the fp32 per-term round-off (~N·ε) shifts
+    unpredictably between adjacent scan points, producing a spuriously spiky
+    curve. fp64 removes that round-off so the curve reflects the true objective.
     """
     comp_index = {"A": 0, "e": 1, "M": 2}
     comp_label = {"A": "A", "e": "e [GeV]", "M": "M"}
@@ -1751,7 +1757,8 @@ def plot_theta_scale_likelihood_scan(
     ref_phys = np.asarray(THETA_SCALE_REF, dtype=np.float64)   # (1e-4, 1e-3, 1e-5)
 
     # Cache the (pseudo-)data the fit used (one host→device pass), keeping only
-    # the tensors the continuity NLL needs.
+    # the tensors the continuity NLL needs. Float tensors are upcast to float64
+    # to match the float64 model forward (see the docstring on spikiness).
     cache = []
     seen = 0
     keys = ("mll", "pt_pm", "eta_pm", "phi_pm", "q_pm", "b_pm", "cond_std", "w")
@@ -1763,12 +1770,18 @@ def plot_theta_scale_likelihood_scan(
         seen += int(batch["mll"].shape[0])
         if not bool(dm.any()):
             continue
-        entry = {k: batch[k] for k in keys}
+        entry = {k: (batch[k].double() if batch[k].is_floating_point() else batch[k])
+                 for k in keys}
         entry["dm"] = dm
         cache.append(entry)
     if not cache:
         print("  θ_scale scan: no data rows found; skipping.")
         return
+
+    # Run the model forward in float64 for the scan to kill fp32 round-off noise
+    # (restored to the original dtype at the end).
+    orig_dtype = next(model.parameters()).dtype
+    model.double()
 
     def total_nll() -> float:
         acc = 0.0
@@ -1777,7 +1790,7 @@ def plot_theta_scale_likelihood_scan(
                 b["mll"], b["pt_pm"], b["eta_pm"], b["phi_pm"], b["q_pm"],
                 b["b_pm"], b["cond_std"], b["dm"], n_iter=n_iter)
             w = b["w"] * b["dm"].to(b["w"].dtype)
-            acc += float((w.double() * per.double()).sum().item())
+            acc += float((w * per).sum().item())
         return acc
 
     fit_raw = model.theta_scale.detach().clone()    # [1, 3] raw O(1) params
@@ -1797,6 +1810,13 @@ def plot_theta_scale_likelihood_scan(
         else:
             sig_raw = None
             hw_raw = 10.0   # default raw half-window when no Fisher σ available
+        # Always keep the injected truth in frame (with 30% margin): the Fisher σ
+        # can be far too tight when the likelihood is flat, which would otherwise
+        # push the injected value — and the closure penalty ΔNLL(injected) — off
+        # the edge of the plot.
+        inj_raw = (None if inject_ref is None else float(inject_ref[0, j]) / ref_phys[j])
+        if inj_raw is not None:
+            hw_raw = max(hw_raw, 1.3 * abs(inj_raw - center_raw))
         xs_raw = np.linspace(center_raw - hw_raw, center_raw + hw_raw, int(n_points))
         nlls = np.empty(xs_raw.shape[0], dtype=np.float64)
         for k, xr in enumerate(xs_raw):
@@ -1810,6 +1830,11 @@ def plot_theta_scale_likelihood_scan(
             fit_phys=center_raw * ref_phys[j], sig_phys=sig_phys,
             inj_phys=(float(inject_ref[0, j]) if inject_ref is not None else None),
             parab=parab))
+
+    # Restore the model to its original (training) precision for the rest of the
+    # diagnostics.
+    if orig_dtype == torch.float32:
+        model.float()
 
     n = len(results)
     fig, axes = plt.subplots(n, 1, figsize=(7, 3.0 * n), squeeze=False)
