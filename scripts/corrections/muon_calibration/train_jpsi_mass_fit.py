@@ -1093,6 +1093,19 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
     return best_val
 
 
+class _TrustNonFiniteStep(RuntimeError):
+    """scipy's trust-region subproblem proposed a non-finite (NaN/inf) iterate.
+
+    Seen with trust-krylov near convergence: once ‖g‖ approaches the fp32
+    per-event noise floor the Krylov (trlib) inner solve iterates on noise-
+    dominated curvature and can break down, returning a NaN step (scipy emits
+    'invalid value encountered in multiply' from m.solve). The objective is
+    then evaluated at NaN θ — every batch is non-finite, which used to
+    surface as a misleading 'no usable batches'. Raised by the fun/grad/HVP
+    wrappers on a non-finite x so the driver can stop cleanly and keep the
+    best tracked iterate (the fit is effectively converged at the floor)."""
+
+
 def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
                       stage_name="fit", mc_as_data=False):
     # ``step_fn`` is accepted for call-site parity with _run_epochs but UNUSED:
@@ -1187,6 +1200,9 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
 
     # ---- full-sample exact objective + gradient (one pass/step, detached) ----
     def _fun_and_grad(x_np):
+        if not np.isfinite(x_np).all():
+            raise _TrustNonFiniteStep(
+                "objective requested at a non-finite iterate")
         _set_flat(x_np)
         model.zero_grad(set_to_none=True)
         ctr["fg"] += 1
@@ -1219,8 +1235,11 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
                   f"‖g‖={gnorm:.3e}  (HVPs since last iter: {ctr['hvp_since']})",
                   flush=True)
         ctr["hvp_since"] = 0
-        return float(s * inv_w), (gacc * inv_w).double().cpu().numpy()
+        g_np = (gacc * inv_w).double().cpu().numpy()
+        _fun_and_grad.last_g = g_np
+        return float(s * inv_w), g_np
     _fun_and_grad.last_nll = float("inf")
+    _fun_and_grad.last_g = None
 
     # ---- Hessian subset loader: a fixed, deterministic subset of S events ----
     def _hess_batches():
@@ -1275,6 +1294,8 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
         # x-only check would reuse a stale graph → "modified by an inplace op"
         # version error). Within one subproblem solve scipy makes no fun calls,
         # so versions are stable and the retained graph is reused across HVPs.
+        if not np.isfinite(x_np).all():
+            raise _TrustNonFiniteStep("HVP requested at a non-finite iterate")
         if (state["gS"] is None or state["x_key"] != _arr_key(x_np)
                 or state["ver"] != _param_versions()):
             _set_flat(x_np)
@@ -1285,14 +1306,30 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
         hv = torch.autograd.grad(state["gS"], params, grad_outputs=v,
                                  retain_graph=True, allow_unused=True)
         hv = _flat_grad(hv) / state["wS"]
+        hv = _sanitize_hv(hv)
         ctr["hvp"] += 1; ctr["hvp_since"] += 1
         if verbose and ctr["hvp_since"] % 10 == 0:
             print(f"  [{stage_name}] Krylov HVP {ctr['hvp_since']} this "
                   f"subproblem ({ctr['hvp']} total)", flush=True)
         return hv.detach().double().cpu().numpy()
 
+    # Never hand scipy's subproblem a non-finite curvature: zero the bad
+    # entries (a damped operator — the FULL-sample ratio test still rejects
+    # any bad step, only the inner solve quality degrades) and say so.
+    def _sanitize_hv(hv):
+        bad = ~torch.isfinite(hv)
+        if bool(bad.any()):
+            print(f"  [{stage_name}] WARNING: HVP produced "
+                  f"{int(bad.sum())}/{hv.numel()} non-finite entries — zeroed "
+                  f"(noise-floor curvature; full-sample ratio test keeps the "
+                  f"step safe)", flush=True)
+            hv = torch.nan_to_num(hv, nan=0.0, posinf=0.0, neginf=0.0)
+        return hv
+
     # Scheme B: recompute forward+double-backward per HVP, chunked over events.
     def _hvp_recompute(x_np, v_np):
+        if not np.isfinite(x_np).all():
+            raise _TrustNonFiniteStep("HVP requested at a non-finite iterate")
         _set_flat(x_np)
         ctr["hvp"] += 1; ctr["hvp_since"] += 1
         v = torch.as_tensor(v_np, dtype=torch.float32, device=device)
@@ -1328,7 +1365,7 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
         if verbose and ctr["hvp_since"] % 10 == 0:
             print(f"  [{stage_name}] Krylov HVP {ctr['hvp_since']} this "
                   f"subproblem ({ctr['hvp']} total)", flush=True)
-        return (hv / w).double().cpu().numpy()
+        return _sanitize_hv(hv / w).double().cpu().numpy()
 
     # trust-exact wants the FULL Hessian matrix (n_par×n_par), accumulated over
     # the subset and assembled with the vectorised batched second-backward (same
@@ -1340,6 +1377,8 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
 
     def _full_hessian(x_np):
         nonlocal _h_use_batched
+        if not np.isfinite(x_np).all():
+            raise _TrustNonFiniteStep("Hessian requested at a non-finite iterate")
         _set_flat(x_np)
         H = torch.zeros((n_par, n_par), device=device, dtype=torch.float64)
         w = 0.0
@@ -1408,16 +1447,40 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
               f"nll={nll:+.6f}  (cum: {ctr['fg']} f/grad evals, "
               f"{ctr['gS']} graph builds, {ctr['hvp']} HVPs)", flush=True)
 
-    if use_exact_hess:
-        res = _scipy_min(
-            _fun_and_grad, x0, method=method, jac=True, hess=_full_hessian,
-            callback=_callback,
-            options={"maxiter": max_iter, "gtol": float(args.trust_gtol)})
-    else:
-        res = _scipy_min(
-            _fun_and_grad, x0, method=method, jac=True, hessp=hessp,
-            callback=_callback,
-            options={"maxiter": max_iter, "gtol": float(args.trust_gtol)})
+    try:
+        if use_exact_hess:
+            res = _scipy_min(
+                _fun_and_grad, x0, method=method, jac=True, hess=_full_hessian,
+                callback=_callback,
+                options={"maxiter": max_iter, "gtol": float(args.trust_gtol)})
+        else:
+            res = _scipy_min(
+                _fun_and_grad, x0, method=method, jac=True, hessp=hessp,
+                callback=_callback,
+                options={"maxiter": max_iter, "gtol": float(args.trust_gtol)})
+    except _TrustNonFiniteStep as e:
+        # The trust-region subproblem broke down and proposed a NaN/inf step
+        # (trust-krylov/trlib iterating on noise-dominated curvature once ‖g‖
+        # nears the fp32 per-event noise floor — scipy's 'invalid value
+        # encountered in multiply'). The accepted iterates are all valid (the
+        # ratio test only ever accepts genuine full-sample descent), so stop
+        # here and keep the best tracked one: the fit is effectively converged
+        # at that floor. To push further: looser --trust-gtol (stop before the
+        # floor), --trust-method trust-ncg (CG inner solve degrades more
+        # gracefully than the Lanczos tridiagonalisation), or --precision fp64.
+        from types import SimpleNamespace
+        fb_nll = min(best["nll"], _fun_and_grad.last_nll)
+        print(f"  [{stage_name}] WARNING: trust-region subproblem breakdown "
+              f"({e}) after {ctr['iter']} iters — stopping and keeping the "
+              f"best tracked iterate (nll={fb_nll:+.6f}). See the comment at "
+              f"this handler for remedies.", flush=True)
+        res = SimpleNamespace(
+            fun=fb_nll, x=best["x"],
+            jac=(_fun_and_grad.last_g if _fun_and_grad.last_g is not None
+                 else np.zeros(n_par)),
+            nit=ctr["iter"], success=False,
+            message="aborted: non-finite trust-region step (subproblem "
+                    "breakdown at the gradient noise floor)")
     # Use the best iterate seen (scipy returns the last, which the ratio test
     # guarantees is ≤ start, but the callback-tracked best is safest).
     x_final = best["x"] if best["nll"] <= float(res.fun) else res.x
