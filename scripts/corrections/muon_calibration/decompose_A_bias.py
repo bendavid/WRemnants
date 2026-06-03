@@ -64,6 +64,17 @@ ap.add_argument("--batch-size", type=int, default=65536)
 ap.add_argument("--max-batches", type=int, default=0,
                 help="0 = full sample (recommended). >0 truncates (fast but the "
                      "inhomogeneous shards make a prefix non-representative).")
+ap.add_argument("--match", choices=("flow", "fit", "all"), default="flow",
+                help="Which event set to evaluate on, reproduced from the "
+                     "checkpoint's training config (the loader split/half/"
+                     "event_fraction are deterministic, so this is the EXACT same "
+                     "set). 'flow' (default) = the stage-1 flow TRAIN split "
+                     "(split=train, val/holdout fractions and flow half from the "
+                     "checkpoint) — so the baseline gradient isolates flow "
+                     "in-window fidelity with no train/test statistical gap. "
+                     "'fit' = the stage-2 fit events (all events of the fit half, "
+                     "no val/holdout) — the actual injected-closure data. "
+                     "'all' = every event (legacy behaviour).")
 args = ap.parse_args()
 
 sys.path.insert(0, args.repo)
@@ -89,9 +100,36 @@ n_eta = len(stats.eta_edges) - 1
 inj = None
 if args.inject is not None:
     inj = np.zeros((n_eta, 3), dtype=np.float64); inj[:, 0] = args.inject
+
+# Reproduce the training event set from the checkpoint so the baseline gradient
+# isolates flow fidelity (no train/test statistical gap). The loader's split /
+# half / event_fraction are all deterministic, so matching these args yields the
+# EXACT same events the flow (or fit) saw.
+validation = bool(targs.get("validation", False))
+no_split = bool(targs.get("no_validation_split", False))
+def _half(which):  # mirrors train_jpsi_mass_fit._validation_half
+    if not validation or no_split:
+        return None
+    return 0 if which == "flow" else 1
+if args.match == "flow":
+    half = _half("flow")
+    vf = float(targs.get("val_fraction", 0.1))
+    hf = float(targs.get("holdout_fraction", 0.05))
+    sel = "stage-1 flow TRAIN split"
+elif args.match == "fit":
+    half = _half("fit"); vf = 0.0; hf = 0.0
+    sel = "stage-2 fit events (all of the fit half)"
+else:  # all
+    half = None; vf = 0.0; hf = 0.0
+    sel = "ALL events"
+efrac = float(targs.get("event_fraction", 1.0) or 1.0)
+print(f"event set: --match={args.match} → {sel}  "
+      f"(split=train half={half} val_fraction={vf:g} holdout_fraction={hf:g} "
+      f"event_fraction={efrac:g})")
 loader = JpsiMassArrowLoader(
     T.discover_shards([args.shards]), stats, batch_size=args.batch_size,
-    split="train", val_fraction=0.0, holdout_fraction=0.0, drop_last=False,
+    split="train", val_fraction=vf, holdout_fraction=hf, drop_last=False,
+    half=half, event_fraction=efrac,
     inject_theta_scale=inj, inject_theta_smear=None,
     inject_seed=int(targs.get("inject_smear_seed", 12345)),
     cond_basis=targs.get("cond_basis", "muon_kin"))
