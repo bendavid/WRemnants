@@ -123,14 +123,8 @@ def _make_amp(precision: str, device: str):
 
 def _stage_precision(args, which: str) -> str:
     """Resolve the compute precision for a stage: --flow-precision /
-    --fit-precision override --precision. bf16/fp16 (autocast) are not wired
-    into this trainer — they fall back to fp32 with a warning."""
-    p = getattr(args, f"{which}_precision", None) or args.precision
-    if p in ("bf16", "fp16"):
-        print(f"  WARNING: --precision {p} (autocast) is not wired into this "
-              f"trainer; the {which} stage runs plain fp32 instead")
-        return "fp32"
-    return p
+    --fit-precision override --precision."""
+    return getattr(args, f"{which}_precision", None) or args.precision
 
 
 def _apply_stage_precision(args, model, which: str) -> torch.dtype:
@@ -149,11 +143,20 @@ def _apply_stage_precision(args, model, which: str) -> torch.dtype:
     in float64 arithmetic). Downcasting fp64-trained weights into an fp32
     stage rounds them once (the usual fp32 representation). The nce flow's
     float64 Gauss-Legendre buffers self-heal after any fp32 cast (see
-    nce_density.log_cdf)."""
+    nce_density.log_cdf).
+
+    bf16/fp16 are AUTOCAST modes: the model keeps fp32 master weights (the
+    dtype returned here is float32) and the epoch-loop forward passes run
+    under torch.amp.autocast (fp16 adds a GradScaler). The float64 Σw·NLL
+    reductions inside the step functions are untouched — autocast never
+    downcasts float64 ops. The precision-critical drivers (trust-region,
+    Fisher, bootstrap re-fits' scipy paths) ignore autocast by design."""
     p = _stage_precision(args, which)
     dtype = torch.float64 if p == "fp64" else torch.float32
     model.to(dtype)
-    print(f"  [{which}] compute precision: {p}")
+    note = {"bf16": " (autocast; fp32 master weights)",
+            "fp16": " (autocast + GradScaler; fp32 master weights)"}.get(p, "")
+    print(f"  [{which}] compute precision: {p}{note}")
     return dtype
 
 
@@ -909,7 +912,8 @@ def _build_model(args, stats, device):
 
 
 def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
-                step_fn, ckpt_prefix, stage_name, epochs, monitor="val"):
+                step_fn, ckpt_prefix, stage_name, epochs, monitor="val",
+                precision="fp32"):
     """Generic weighted-NLL epoch loop with best/last checkpoints + early-stop.
     ``step_fn(model, batch) -> (loss, sum_w)`` returns the batch's weighted-mean
     NLL (scalar tensor) over the rows the stage uses and the corresponding Σw.
@@ -919,11 +923,34 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
     training NLL itself — stage 2 uses ALL events with no held-out split, so the
     train-NLL plateau is the convergence signal; the val pass is skipped). The
     per-epoch line always reports the train NLL and its change from the previous
-    epoch. Returns the best monitored metric."""
+    epoch. Returns the best monitored metric.
+
+    ``precision`` (the stage's resolved --precision): fp32/fp64 run plain (the
+    model/batches already carry the dtype); bf16/fp16 wrap every step_fn
+    forward (train AND val, so the monitored metric matches what the optimiser
+    sees) in torch.amp.autocast with fp32 master weights. fp16 additionally
+    uses a GradScaler — scale → backward → unscale_ (so the |g| accumulator
+    reads TRUE gradients) → step (skipped by the scaler on inf/nan grads
+    during scale warm-up) → update. The float64 Σw·NLL reductions inside the
+    step functions are untouched (autocast never downcasts float64 ops).
+    L-BFGS + fp16 is refused: GradScaler cannot wrap a line-search closure
+    (use bf16, which needs no scaler, or adam)."""
     best_val = float("inf"); no_improve = 0; prev_train_nll = None
     best_ckpt = os.path.join(args.output, f"{ckpt_prefix}_best.pt")
     last_ckpt = os.path.join(args.output, f"{ckpt_prefix}_last.pt")
     device = args.device
+    amp_ctx, scaler = _make_amp(precision, device)
+    use_scaler = bool(scaler.is_enabled())
+    if precision == "fp16" and isinstance(optim, torch.optim.LBFGS):
+        raise RuntimeError(
+            "--precision fp16 with the L-BFGS optimiser is unsupported: the "
+            "GradScaler cannot wrap a line-search closure (the scale would "
+            "change between the closure's probe evaluations). Use bf16 (same "
+            "speed, no scaler needed) or an adam/soap phase.")
+    if precision in ("bf16", "fp16"):
+        print(f"  [{stage_name}] autocast: {precision} forward passes "
+              f"(fp32 master weights; float64 reductions untouched"
+              + ("; GradScaler loss scaling)" if use_scaler else ")"))
     # The streaming loader has no __len__; learn the batch count on epoch 1 so
     # epochs ≥2 show a true percentage-complete bar.
     n_batches_total = None
@@ -991,7 +1018,8 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
                             leave=False, disable=not args.progress, unit="batch")
                 for batch in cbar:
                     batch = _move_batch(batch, device, _model_dtype(model))
-                    loss, sw = step_fn(model, batch)   # weighted-MEAN NLL over batch
+                    with amp_ctx():                    # bf16 autocast (fp16+LBFGS refused)
+                        loss, sw = step_fn(model, batch)   # weighted-MEAN NLL over batch
                     nb += 1
                     if sw <= 0 or not torch.isfinite(loss):
                         continue
@@ -1045,25 +1073,41 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
                 if prof is not None:
                     prof.after_move()
                 optim.zero_grad(set_to_none=True)
-                loss, sw = step_fn(model, batch)
+                with amp_ctx():
+                    loss, sw = step_fn(model, batch)
                 n_seen += 1
                 if sw <= 0:
                     continue
                 if not torch.isfinite(loss):
+                    # fp16 forward overflow is not fixable by loss scaling
+                    # (scaling acts on the backward); skip the batch instead
+                    # of raising so the run survives isolated overflows.
+                    if use_scaler:
+                        bar.set_postfix_str("SKIP non-finite (fp16 fwd)"); continue
                     if args.nan_on_step == "raise":
                         raise RuntimeError(f"non-finite loss [{stage_name}] epoch {epoch}")
                     if args.nan_on_step == "skip":
                         bar.set_postfix_str("SKIP NaN"); continue
                 if prof is not None:
                     prof.after_forward()
-                loss.backward()
+                # scale → backward → unscale_ → step → update: identity for
+                # fp32/fp64/bf16 (scaler disabled — scale() passes through,
+                # unscale_() no-ops, step() calls optim.step()). For fp16 the
+                # unscale_ BEFORE the |g| accumulation makes p.grad the TRUE
+                # gradient, and scaler.step skips the update on inf/nan grads
+                # (scale warm-up) with update() shrinking the scale.
+                scaler.scale(loss).backward()
+                scaler.unscale_(optim)
                 for p in fit_params:                  # accumulate BEFORE the step
                     if p.grad is not None:
+                        if use_scaler and not bool(torch.isfinite(p.grad).all()):
+                            continue                  # skipped-step grads (fp16)
                         if p not in g_acc:
                             g_acc[p] = torch.zeros(p.numel(), dtype=torch.float64,
                                                    device=p.device)
                         g_acc[p].add_(p.grad.detach().reshape(-1).double(), alpha=sw)
-                optim.step()
+                scaler.step(optim)
+                scaler.update()
                 if prof is not None:
                     prof.after_backward()
                 tr_sum += float(loss.item()) * sw; tr_w += sw
@@ -1084,7 +1128,9 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
             model.eval(); v_sum = 0.0; v_w = 0.0
             for batch in val_loader:
                 batch = _move_batch(batch, device, _model_dtype(model))
-                with torch.enable_grad():
+                with torch.enable_grad(), amp_ctx():
+                    # same autocast as training so the monitored metric is
+                    # measured in the precision the optimiser actually sees
                     loss, sw = step_fn(model, batch)
                 if sw <= 0:
                     continue
@@ -1198,6 +1244,10 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
     except ImportError as e:
         raise RuntimeError(f"--fit-optimizer trust-* requires scipy ({e})")
     device = args.device
+    if _stage_precision(args, "fit") in ("bf16", "fp16"):
+        print("  trust-region: autocast IGNORED — the driver needs exact "
+              "full-precision gradients/HVPs (runs at the model dtype, fp32); "
+              "bf16/fp16 apply only to the epoch-based optimiser paths")
     method = getattr(args, "trust_method", "trust-krylov")
     hvp_mode = getattr(args, "trust_hvp", "reuse")
     # 0 (default) → no sub-batch chunking: a double-backward HVP is only ~2× a
@@ -1688,7 +1738,8 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
 
     best = _run_epochs(args, model, optim, train_loader, val_loader, stats,
                        step_fn=step1, ckpt_prefix="flow", stage_name="flow",
-                       epochs=args.flow_epochs or args.epochs)
+                       epochs=args.flow_epochs or args.epochs,
+                       precision=_stage_precision(args, "flow"))
     if nce:
         # _run_epochs reloaded the best checkpoint, so this reports the flow
         # state stage 2 will actually use.
@@ -1835,7 +1886,8 @@ def train_stage2(args, model, train_loader, val_loader, stats,
         optim = _make_fit_optimizer(args, groups, kind=base)
         best1 = _run_epochs(args, model, optim, train_loader, val_loader, stats,
                             step_fn=step2, ckpt_prefix="fit", stage_name="fit",
-                            epochs=max_epochs, monitor="train")
+                            epochs=max_epochs, monitor="train",
+                            precision=_stage_precision(args, "fit"))
         # Snapshot phase-1's best so a stalled/regressing polish can't leave a
         # WORSE checkpoint (phase 2 may overwrite fit_best.pt regardless).
         fit_best = os.path.join(args.output, "fit_best.pt")
@@ -1853,7 +1905,8 @@ def train_stage2(args, model, train_loader, val_loader, stats,
             optim = _make_fit_optimizer(args, groups, kind="lbfgs")
             best2 = _run_epochs(args, model, optim, train_loader, val_loader, stats,
                                 step_fn=step2, ckpt_prefix="fit", stage_name="fit",
-                                epochs=n2, monitor="train")
+                                epochs=n2, monitor="train",
+                                precision=_stage_precision(args, "fit"))
         if best1 < best2 and os.path.exists(ph1_ckpt):
             # Polish regressed — restore phase-1's checkpoint + weights.
             print(f"  {polish} polish did not improve (phase1={best1:+.5f} < "
@@ -1869,7 +1922,8 @@ def train_stage2(args, model, train_loader, val_loader, stats,
     print(f"  optimizer: {fit_opt}")
     return _run_epochs(args, model, optim, train_loader, val_loader, stats,
                        step_fn=step2, ckpt_prefix="fit", stage_name="fit",
-                       epochs=max_epochs, monitor="train")
+                       epochs=max_epochs, monitor="train",
+                       precision=_stage_precision(args, "fit"))
 
 
 def train_loop(args: argparse.Namespace) -> int:
@@ -4138,9 +4192,19 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         "stage-2 fit (the float64 Σ-reductions already removed the summation "
         "part; this removes the per-event part — e.g. lets trust-krylov "
         "converge to a small --trust-gtol instead of breaking down at the "
-        "floor). ~2× memory and slower GPU matmuls. bf16/fp16 (autocast) are "
-        "NOT wired into this trainer — accepted for CLI parity but run as "
-        "fp32 with a warning.",
+        "floor). ~2× memory and slower GPU matmuls. bf16/fp16 = mixed "
+        "precision: fp32 master weights with torch.amp.autocast around the "
+        "epoch-loop forward passes (train AND the monitored val pass); fp16 "
+        "adds a GradScaler (scale→backward→unscale→step, with the |g| "
+        "accumulator reading TRUE unscaled gradients and warm-up inf steps "
+        "skipped by the scaler). The float64 Σw·NLL reductions are untouched "
+        "(autocast never downcasts float64). NOT applied to the precision-"
+        "critical drivers — trust-region, Fisher, bootstrap run at the model "
+        "dtype. fp16+L-BFGS is refused (a GradScaler cannot wrap a line-"
+        "search closure; use bf16 or adam). NB the stage-2 fit targets "
+        "~1e-5-level effects: bf16/fp16 there is for throughput experiments, "
+        "not final fits — bf16's ~3 decimal digits put the per-event noise "
+        "orders of magnitude above the closure target.",
     )
     p.add_argument(
         "--flow-precision", choices=("fp32", "fp64", "bf16", "fp16"),
