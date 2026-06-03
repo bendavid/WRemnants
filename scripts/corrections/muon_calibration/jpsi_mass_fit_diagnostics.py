@@ -150,6 +150,16 @@ def _tilt_density_on_grid(
             mg.reshape(-1), rep(mk), pt_g, rep(eta), rep(phi), rep(q), rep(b),
             n_iter=n_iter)
         out[start:end] = lp.reshape(sub, G)
+    # Window-normalize per event, exactly as the fit does in data_nll_continuity:
+    # subtract logZ = log ∫_window p_θ (a per-event scalar, constant over the mass
+    # grid), so the displayed signal density integrates to 1 over [m_lo,m_hi] and
+    # the closure curve matches the data. Essential once the stage-1 flow is
+    # window-normalized (the truncated training no longer pins ∫_window p₀ to 1,
+    # so the bare density is off by Z); a no-op for a full-support flow (Z≈1).
+    if getattr(model, "norm_correction", "none") != "none":
+        logZ = model._norm_correction_log_Z(
+            m_obs, mk, pt, eta, phi, q, b, n_iter=n_iter)            # [n]
+        out = out - logZ.view(n, 1)
     return out
 
 
@@ -185,6 +195,18 @@ def _nominal_density_on_grid(model, batch, idx, m_centers_dev, *, chunk_events=4
             mke = mk[start:end].unsqueeze(1).expand(
                 sub, G, mk.shape[-1]).reshape(sub * G, -1)
         out[start:end] = model.log_p_nominal(mg.reshape(-1), mke).reshape(sub, G)
+    # Window-normalize the θ=0 nominal template the same way stage-1 trains it
+    # (truncated): subtract logZ_window = log(F0(m_hi|c) − F0(m_lo|c)), the
+    # per-event window mass of the frozen flow (constant over the grid), so the
+    # nominal curve is a proper density on [m_lo,m_hi]. No-op for a full-support
+    # flow (Z≈1); required once the flow is window-normalized (Z≠1). Uses the
+    # observed (θ=0) conditioning.
+    if getattr(model, "norm_correction", "none") != "none":
+        m_hi = mk.new_full((n,), float(model.m_hi))
+        m_lo = mk.new_full((n,), float(model.m_lo))
+        logZ = (model._flow_log_cdf(m_hi, mk).exp()
+                - model._flow_log_cdf(m_lo, mk).exp()).clamp_min(1e-30).log()
+        out = out - logZ.view(n, 1)
     return out
 
 
