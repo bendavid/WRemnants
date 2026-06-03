@@ -1859,10 +1859,11 @@ def plot_theta_scale_likelihood_scan(
         ax.legend(loc="best", fontsize=7)
     axes[0].set_title("θ_scale likelihood scan (single η-bin)")
     fig.tight_layout()
-    path = os.path.join(output_dir, "theta_scale_likelihood_scan.png")
-    fig.savefig(path, dpi=120)
+    for ext in ("png", "pdf"):
+        fig.savefig(os.path.join(output_dir, f"theta_scale_likelihood_scan.{ext}"),
+                    dpi=120)
     plt.close(fig)
-    print(f"  wrote {path}")
+    print(f"  wrote {os.path.join(output_dir, 'theta_scale_likelihood_scan.png')} (+ .pdf)")
 
 
 def main() -> int:
