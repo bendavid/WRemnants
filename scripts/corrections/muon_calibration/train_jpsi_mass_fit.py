@@ -481,6 +481,7 @@ def compute_fisher_info_continuity(
     n_iter: int = 2,
     progress: bool = True,
     vectorized: bool = True,
+    hess_chunk: int = 0,
 ):
     """Observed (plug-in) Fisher information for the two-stage continuity fit,
     over ``theta_scale`` + the ACTIVE ``theta_smear`` columns jointly, with the
@@ -561,9 +562,13 @@ def compute_fisher_info_continuity(
         grad += g_active.detach()
         # Vectorised second backward (one vmapped vjp over the identity basis);
         # fall back to the per-row loop on any engine failure / OOM, once.
+        # ``hess_chunk`` (--fisher-hessian-chunk) bounds the vmap width: the
+        # batched vjp holds ~chunk copies of the batch's backward graph, which
+        # for large graphs (nce quadrature window-Z, fp64) is the memory peak.
         if use_batched:
             try:
-                Hb = _hessian_block_batched(g_active, params, active_idx, n_act)
+                Hb = _hessian_block_batched(g_active, params, active_idx, n_act,
+                                            chunk=(hess_chunk or None))
             except (RuntimeError, NotImplementedError) as e:
                 use_batched = False
                 if device.startswith("cuda"):
@@ -2074,7 +2079,8 @@ def _run_fisher_continuity(args, model, shard_files, stats, device) -> None:
     H, layout = compute_fisher_info_continuity(
         model, loader, device, mc_as_data=args.validation,
         n_iter=args.continuity_n_iter,
-        progress=args.progress, vectorized=args.fisher_vectorized)
+        progress=args.progress, vectorized=args.fisher_vectorized,
+        hess_chunk=int(getattr(args, "fisher_hessian_chunk", 0) or 0))
     out = _fisher_save_dict(H, layout, model)
     path = os.path.join(args.output, "fisher_info.pt")
     torch.save(out, path)
@@ -4049,6 +4055,17 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "and the Fisher/bootstrap use ALL events (no val/holdout split), "
                    "so 'train' == 'all' here and 'val'/'holdout' are EMPTY — keep "
                    "the default 'train'.")
+    p.add_argument("--fisher-hessian-chunk", type=int, default=0,
+                   help="(--fisher-info) Hessian ROWS per vmapped second-"
+                   "backward pass. 0 (default) = all active rows at once "
+                   "(the historical behaviour) — the batched vjp then holds "
+                   "~n_active copies of the batch's backward graph, which is "
+                   "the memory peak when that graph is large (nce quadrature "
+                   "window-Z, fp64, big --batch-size). Set e.g. 8-16 to bound "
+                   "peak memory at ~chunk copies for the same total compute; "
+                   "--no-fisher-vectorized (per-row loop) is the chunk=1 "
+                   "limit. The event dimension is bounded separately by "
+                   "--batch-size (the Fisher loader uses it directly).")
     p.add_argument("--fisher-vectorized", default=True,
                    action=argparse.BooleanOptionalAction,
                    help="(two-stage) Compute the Hessian with one vmapped "
