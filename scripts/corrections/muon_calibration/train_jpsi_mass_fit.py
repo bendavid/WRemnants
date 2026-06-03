@@ -99,7 +99,9 @@ def _make_amp(precision: str, device: str):
         amp_device_type = "xpu"
     else:
         amp_device_type = "cpu"
-    if precision == "fp32":
+    if precision in ("fp32", "fp64"):
+        # fp64 is handled by casting the model + batches (_apply_stage_precision
+        # / _move_batch), not by autocast: autocast disabled, no GradScaler.
         amp_dtype = torch.float32
         amp_enabled = False
     elif precision == "bf16":
@@ -119,11 +121,60 @@ def _make_amp(precision: str, device: str):
     return amp_ctx, scaler
 
 
-def _move_batch(batch: dict, device: str) -> dict:
-    return {
-        k: v.to(device, non_blocking=device.startswith("cuda"))
-        for k, v in batch.items()
-    }
+def _stage_precision(args, which: str) -> str:
+    """Resolve the compute precision for a stage: --flow-precision /
+    --fit-precision override --precision. bf16/fp16 (autocast) are not wired
+    into this trainer — they fall back to fp32 with a warning."""
+    p = getattr(args, f"{which}_precision", None) or args.precision
+    if p in ("bf16", "fp16"):
+        print(f"  WARNING: --precision {p} (autocast) is not wired into this "
+              f"trainer; the {which} stage runs plain fp32 instead")
+        return "fp32"
+    return p
+
+
+def _apply_stage_precision(args, model, which: str) -> torch.dtype:
+    """Cast the model to the stage's compute precision and report it.
+
+    fp64 is a REAL double-precision mode: the model parameters/buffers (cast
+    here) and the batch float tensors (cast in ``_move_batch`` via its dtype
+    argument) all run in float64. This removes the PER-EVENT fp32 round-off
+    that sets the ~1e-5 ‖g‖ noise floor of the stage-2 fit — the float64
+    Σw-reductions already in place removed the summation part, this removes
+    the rest (e.g. trust-krylov can then converge to a small --trust-gtol
+    instead of breaking down on noise-dominated curvature at the floor).
+
+    Stage crossing is exact where it matters: an fp32-trained flow checkpoint
+    loaded into an fp64 fit is upcast LOSSLESSLY (identical weights, evaluated
+    in float64 arithmetic). Downcasting fp64-trained weights into an fp32
+    stage rounds them once (the usual fp32 representation). The nce flow's
+    float64 Gauss-Legendre buffers self-heal after any fp32 cast (see
+    nce_density.log_cdf)."""
+    p = _stage_precision(args, which)
+    dtype = torch.float64 if p == "fp64" else torch.float32
+    model.to(dtype)
+    print(f"  [{which}] compute precision: {p}")
+    return dtype
+
+
+def _model_dtype(model) -> torch.dtype:
+    """The model's current compute dtype (what _move_batch must cast to)."""
+    return next(model.parameters()).dtype
+
+
+def _move_batch(batch: dict, device: str,
+                dtype: torch.dtype | None = None) -> dict:
+    """Move a loader batch to ``device``; with ``dtype`` (the model's compute
+    dtype) also cast the FLOATING tensors to it (int/bool/index tensors are
+    untouched). The loader emits float32; the fp32→fp64 upcast is exact."""
+    nb = device.startswith("cuda")
+    out = {}
+    for k, v in batch.items():
+        v = v.to(device, non_blocking=nb)
+        if dtype is not None and v.is_floating_point() and v.dtype != dtype:
+            v = v.to(dtype)
+        out[k] = v
+    return out
 
 
 def _lr_str(optim: torch.optim.Optimizer) -> str:
@@ -479,14 +530,17 @@ def compute_fisher_info_continuity(
     active_idx = torch.tensor(active_idx, dtype=torch.long, device=device)
     n_act = int(active_idx.numel())
 
-    H = torch.zeros((n_act, n_act), device=device, dtype=torch.float32)
-    grad = torch.zeros(n_act, device=device, dtype=torch.float32)  # Σ ∂(NLL)/∂θ
+    # float64 accumulators: with --fit-precision fp64 the per-batch grads come
+    # in float64 (an fp32 in-place += would raise); for fp32 runs the upcast
+    # accumulation only reduces the cross-batch summation noise.
+    H = torch.zeros((n_act, n_act), device=device, dtype=torch.float64)
+    grad = torch.zeros(n_act, device=device, dtype=torch.float64)  # Σ ∂(NLL)/∂θ
     sw = 0.0
     seen = 0
     use_batched = bool(vectorized)  # may flip to False after a fallback
     bar = tqdm(loader, desc="fisher", disable=not progress, unit="batch")
     for batch in bar:
-        batch = _move_batch(batch, device)
+        batch = _move_batch(batch, device, _model_dtype(model))
         data_mask = ~batch["is_data_mask"] if mc_as_data else batch["is_data_mask"]
         if not bool(data_mask.any()):
             continue
@@ -936,7 +990,7 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
                             desc=f"[{stage_name}] ep{epoch:>3} pass {call}",
                             leave=False, disable=not args.progress, unit="batch")
                 for batch in cbar:
-                    batch = _move_batch(batch, device)
+                    batch = _move_batch(batch, device, _model_dtype(model))
                     loss, sw = step_fn(model, batch)   # weighted-MEAN NLL over batch
                     nb += 1
                     if sw <= 0 or not torch.isfinite(loss):
@@ -962,7 +1016,9 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
                       f"nll={s * inv_w:+.5f}  |g|={gnorm:.3e}", flush=True)
                 # L-BFGS only needs the scalar objective value (it reads .grad from
                 # the params); return it as a detached tensor on the right device.
-                return torch.as_tensor(s * inv_w, dtype=torch.float32, device=device)
+                # float64 so the line-search comparisons aren't quantised at the
+                # fp32 ULP when the NLL changes are tiny near convergence.
+                return torch.as_tensor(s * inv_w, dtype=torch.float64, device=device)
 
             optim.step(closure)
             tr_sum = closure_stats["s"]; tr_w = closure_stats["w"]; n_seen = closure_stats["nb"]
@@ -985,7 +1041,7 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
             for batch in bar:
                 if prof is not None:
                     prof.mark_iter_start()
-                batch = _move_batch(batch, device)
+                batch = _move_batch(batch, device, _model_dtype(model))
                 if prof is not None:
                     prof.after_move()
                 optim.zero_grad(set_to_none=True)
@@ -1027,7 +1083,7 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
         if monitor == "val" and val_loader is not None:
             model.eval(); v_sum = 0.0; v_w = 0.0
             for batch in val_loader:
-                batch = _move_batch(batch, device)
+                batch = _move_batch(batch, device, _model_dtype(model))
                 with torch.enable_grad():
                     loss, sw = step_fn(model, batch)
                 if sw <= 0:
@@ -1154,10 +1210,27 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
     hsub = int(getattr(args, "hess_subsample_events", 0) or 0)   # 0 = full sample
     sub_str = (f"{hsub:,}" if hsub > 0 else "full")
     max_iter = int(args.fit_epochs or args.epochs)
-    # Flat parameter vector ↔ the active θ (+ bkg) params.
-    shapes = [p.shape for p in params]
-    numels = [int(p.numel()) for p in params]
-    n_par = int(sum(numels))
+    # Flat parameter vector ↔ the active θ (+ bkg) params. Masked-out θ-table
+    # columns (scale_fit_params / smear_fit_params) are EXCLUDED from the
+    # vector handed to scipy: they have exactly zero gradient AND zero
+    # curvature (the masks zero them in the forward), so passing them gives
+    # the trust-region subproblem an exactly singular subspace for no benefit
+    # — trlib's Lanczos breaks down more readily when exact-zero directions
+    # mix with noise-level curvature. (Adam shrugs at frozen zeros; a Newton
+    # solver doesn't.)
+    def _param_mask(p):
+        if p is getattr(model, "theta_scale", None):
+            return model.scale_param_mask.bool().expand_as(p).reshape(-1)
+        if p is getattr(model, "theta_smear", None):
+            return model.smear_param_mask.bool().expand_as(p).reshape(-1)
+        return torch.ones(p.numel(), dtype=torch.bool, device=p.device)
+    masks = [_param_mask(p) for p in params]
+    n_active = [int(m.sum()) for m in masks]
+    n_par = int(sum(n_active))
+    n_total = int(sum(p.numel() for p in params))
+    if n_par != n_total:
+        print(f"  trust-region: {n_par} active of {n_total} params "
+              f"(masked inert θ columns excluded from the scipy vector)")
     verbose = bool(getattr(args, "progress", True))
     # Evaluation counters (objective/grad passes, g_S rebuilds, Krylov HVPs) — the
     # trust-region inner solve is otherwise silent, so a slow step looks like a
@@ -1168,18 +1241,20 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
         return tqdm(total=None, desc=desc, leave=False,
                     disable=not verbose, unit="batch")
 
+    p_dtype = params[0].dtype          # fp32 or fp64 per --fit-precision
+
     def _set_flat(x_np):
-        x = torch.as_tensor(x_np, dtype=torch.float32, device=device)
+        x = torch.as_tensor(x_np, dtype=p_dtype, device=device)
         off = 0
         with torch.no_grad():
-            for p, n, sh in zip(params, numels, shapes):
-                p.copy_(x[off:off + n].view(sh)); off += n
+            for p, msk, n in zip(params, masks, n_active):
+                p.view(-1)[msk] = x[off:off + n]; off += n
         return x
 
     def _flat_grad(grads):
         return torch.cat([
-            (g if g is not None else torch.zeros_like(p)).reshape(-1)
-            for g, p in zip(grads, params)])
+            (g if g is not None else torch.zeros_like(p)).reshape(-1)[msk]
+            for g, p, msk in zip(grads, params, masks)])
 
     # Per-event NLL + weights for ONE batch, reduced in FLOAT64. The model
     # (flow + gh_qop) runs at --precision; we upcast the per-event log-density to
@@ -1215,7 +1290,7 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
         gacc = torch.zeros(n_par, device=device, dtype=torch.float64)
         bar = _pbar(f"[{stage_name}] grad pass #{ctr['fg']} (full sample)")
         for batch in train_loader:
-            batch = _move_batch(batch, device)
+            batch = _move_batch(batch, device, _model_dtype(model))
             term, sw = _per_event_term(batch)        # Σw·NLL (float64), Σw
             nb = int(batch["mll"].shape[0]); nev += nb; bar.update(1)
             if sw <= 0 or not torch.isfinite(term):
@@ -1267,7 +1342,7 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
         bar = _pbar(f"[{stage_name}] HVP graph build #{ctr['gS']} "
                     f"({sub_str} events)")
         for batch in _hess_batches():
-            batch = _move_batch(batch, device)
+            batch = _move_batch(batch, device, _model_dtype(model))
             term, sw = _per_event_term(batch)        # Σw·NLL (float64), Σw
             nev += int(batch["mll"].shape[0]); bar.update(1)
             if sw <= 0 or not torch.isfinite(term):
@@ -1296,13 +1371,21 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
         # so versions are stable and the retained graph is reused across HVPs.
         if not np.isfinite(x_np).all():
             raise _TrustNonFiniteStep("HVP requested at a non-finite iterate")
+        if not np.isfinite(v_np).all():
+            # Observed sequence: trlib's Lanczos gets a ~zero curvature along
+            # its Krylov directions, divides by the ~zero β, and hands back a
+            # NaN vector — H·(NaN v) would then masquerade as 'our HVP is
+            # broken'. Diagnose it as what it is and abort to the recovery.
+            raise _TrustNonFiniteStep(
+                "subproblem handed a non-finite Krylov vector (Lanczos "
+                "breakdown on ~zero curvature)")
         if (state["gS"] is None or state["x_key"] != _arr_key(x_np)
                 or state["ver"] != _param_versions()):
             _set_flat(x_np)
             _build_reuse_grad()
             state["x_key"] = _arr_key(x_np)
             state["ver"] = _param_versions()
-        v = torch.as_tensor(v_np, dtype=torch.float32, device=device)
+        v = torch.as_tensor(v_np, dtype=p_dtype, device=device)
         hv = torch.autograd.grad(state["gS"], params, grad_outputs=v,
                                  retain_graph=True, allow_unused=True)
         hv = _flat_grad(hv) / state["wS"]
@@ -1330,9 +1413,13 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
     def _hvp_recompute(x_np, v_np):
         if not np.isfinite(x_np).all():
             raise _TrustNonFiniteStep("HVP requested at a non-finite iterate")
+        if not np.isfinite(v_np).all():
+            raise _TrustNonFiniteStep(
+                "subproblem handed a non-finite Krylov vector (Lanczos "
+                "breakdown on ~zero curvature)")
         _set_flat(x_np)
         ctr["hvp"] += 1; ctr["hvp_since"] += 1
-        v = torch.as_tensor(v_np, dtype=torch.float32, device=device)
+        v = torch.as_tensor(v_np, dtype=p_dtype, device=device)
         hv = torch.zeros(n_par, device=device, dtype=torch.float64); w = 0.0
         # NB tqdm ticks once per CHUNK (hvp_chunk events), not per loader batch —
         # hvp_chunk<=0 → whole batch (no sub-batch chunking); tqdm then ticks once
@@ -1343,7 +1430,7 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
         bar = _pbar(f"[{stage_name}] HVP #{ctr['hvp']} (recompute, "
                     f"{sub_str} events, {chunk_str})")
         for batch in _hess_batches():
-            batch = _move_batch(batch, device)
+            batch = _move_batch(batch, device, _model_dtype(model))
             n = int(batch["mll"].shape[0])
             step = n if hvp_chunk <= 0 else hvp_chunk
             for c0 in range(0, n, step):
@@ -1355,7 +1442,7 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
                 if sw <= 0 or not torch.isfinite(term):
                     continue
                 g = torch.autograd.grad(term, params, create_graph=True)
-                gflat = _flat_grad(g)                 # float32 (fp32 param leaves)
+                gflat = _flat_grad(g)                 # param dtype (--fit-precision)
                 hvc = torch.autograd.grad(gflat, params, grad_outputs=v,
                                           retain_graph=False, allow_unused=True)
                 hv += _flat_grad(hvc).detach().double(); w += sw
@@ -1372,7 +1459,9 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
     # _hessian_block_batched used by the observed output-fisher), with a per-row
     # loop fallback. The reduction is float64 (per-event term upcast). Feasible
     # only when n_par is small (binned θ); a guard warns/blocks for large n_par.
-    _h_active_idx = torch.arange(n_par, device=device)
+    # Indices of the ACTIVE (unmasked) entries within the full concatenated
+    # parameter flat — the rows/cols of the exact Hessian scipy sees.
+    _h_active_idx = torch.cat(masks).nonzero().squeeze(1).to(device)
     _h_use_batched = bool(getattr(args, "fisher_vectorized", True))
 
     def _full_hessian(x_np):
@@ -1384,7 +1473,7 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
         w = 0.0
         bar = _pbar(f"[{stage_name}] Hessian build (exact, {sub_str} events)")
         for batch in _hess_batches():
-            batch = _move_batch(batch, device)
+            batch = _move_batch(batch, device, _model_dtype(model))
             term, sw = _per_event_term(batch)        # Σw·NLL (float64 reduction)
             bar.update(1)
             if sw <= 0 or not torch.isfinite(term):
@@ -1425,7 +1514,8 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
             f"params; e.g. --theta-mlp). Use trust-krylov (Hessian-free HVP) or "
             f"raise --trust-exact-max-par if you really intend this.")
     hessp = _hvp_reuse if hvp_mode == "reuse" else _hvp_recompute
-    x0 = torch.cat([p.detach().reshape(-1) for p in params]).double().cpu().numpy()
+    x0 = torch.cat([p.detach().reshape(-1)[msk]
+                    for p, msk in zip(params, masks)]).double().cpu().numpy()
     if use_exact_hess:
         print(f"  optimizer: {method} (2nd-order trust region) — full-sample exact "
               f"gradient; FULL {n_par}×{n_par} Hessian (vectorised second-backward, "
@@ -1621,7 +1711,7 @@ def _report_nce_calibration(args, model, loader, max_events: int = 100_000):
     zs = []
     n = 0
     for batch in loader:
-        batch = _move_batch(batch, device)
+        batch = _move_batch(batch, device, _model_dtype(model))
         idx = (~batch["is_data_mask"]).nonzero(as_tuple=True)[0]
         if idx.numel() == 0:
             continue
@@ -1877,8 +1967,15 @@ def train_loop(args: argparse.Namespace) -> int:
                                          val_fraction=0.0, holdout_fraction=0.0)
 
     if args.stage in ("both", "flow"):
+        _apply_stage_precision(args, model, "flow")
         train_stage1(args, model, s1_train, s1_val, stats)
     if args.stage in ("both", "fit"):
+        # Covers the Fisher/bootstrap passes below too. In 'both' mode this
+        # casts the just-trained flow to the fit precision (fp32→fp64 is a
+        # lossless embedding; the frozen flow is the same function, evaluated
+        # in higher-precision arithmetic). With --stage fit the flow weights
+        # were already loaded into the model above; same casting applies.
+        _apply_stage_precision(args, model, "fit")
         train_stage2(args, model, s2_train, s2_val, stats, mc_as_data=args.validation)
         if args.fisher_info:
             _run_fisher_continuity(args, model, shard_files, stats, device)
@@ -2076,7 +2173,7 @@ def run_bootstrap_continuity(args, model, shard_files, stats, device, *,
                         disable=not args.progress, unit="batch")
             for batch in ebar:
                 n_seen += 1
-                batch = _move_batch(batch, device)
+                batch = _move_batch(batch, device, _model_dtype(model))
                 data_mask = ~batch["is_data_mask"] if mc_as_data else batch["is_data_mask"]
                 if not bool(data_mask.any()):
                     continue
@@ -2247,14 +2344,17 @@ def compute_empirical_fisher_joint(
     active_idx = torch.tensor(active_idx, dtype=torch.long, device=device)
     n_act = int(active_idx.numel())
 
-    J = torch.zeros((n_act, n_act), device=device, dtype=torch.float32)
+    # float64: per-event grads arrive in the model dtype (fp64 with
+    # --fit-precision fp64; an fp32 in-place += would raise), and the
+    # outer-product accumulation benefits from the headroom regardless.
+    J = torch.zeros((n_act, n_act), device=device, dtype=torch.float64)
     sw = 0.0; seen = 0; hit_cap = False
     use_batched = bool(vectorized)
     bar = tqdm(loader, desc="emp-fisher", disable=not progress, unit="batch")
     for batch in bar:
         if max_events > 0 and seen >= max_events:
             hit_cap = True; break
-        batch = _move_batch(batch, device)
+        batch = _move_batch(batch, device, _model_dtype(model))
         data_mask = ~batch["is_data_mask"] if mc_as_data else batch["is_data_mask"]
         di = data_mask.nonzero(as_tuple=True)[0]
         if di.numel() == 0:
@@ -2404,14 +2504,17 @@ def compute_empirical_fisher_net(
         raise RuntimeError("empirical Fisher (mlp): theta_net has no parameters.")
 
     n_act = n_net + n_bg
-    J = torch.zeros((n_act, n_act), device=device, dtype=torch.float32)
+    # float64: per-event grads arrive in the model dtype (fp64 with
+    # --fit-precision fp64; an fp32 in-place += would raise), and the
+    # outer-product accumulation benefits from the headroom regardless.
+    J = torch.zeros((n_act, n_act), device=device, dtype=torch.float64)
     sw = 0.0; seen = 0; hit_cap = False
     use_batched = bool(vectorized)
     bar = tqdm(loader, desc="emp-fisher(net)", disable=not progress, unit="batch")
     for batch in bar:
         if max_events > 0 and seen >= max_events:
             hit_cap = True; break
-        batch = _move_batch(batch, device)
+        batch = _move_batch(batch, device, _model_dtype(model))
         data_mask = ~batch["is_data_mask"] if mc_as_data else batch["is_data_mask"]
         di = data_mask.nonzero(as_tuple=True)[0]
         if di.numel() == 0:
@@ -2479,17 +2582,18 @@ def _propagate_net_cov_to_outputs(model, cov_w, eta_edges, *, n_phi_avg=16,
     units), matching the binned Fisher keys consumed by the diagnostics."""
     net_params = list(model.theta_net.parameters())
     cov_w = cov_w.to(torch.float64)
+    mdt = _model_dtype(model)            # grid tensors must match the model dtype
     centers = 0.5 * (np.asarray(eta_edges[:-1]) + np.asarray(eta_edges[1:]))
     n_eta = int(centers.shape[0])
-    centers_t = torch.as_tensor(centers, dtype=torch.float32, device=device)
+    centers_t = torch.as_tensor(centers, dtype=mdt, device=device)
     # φ-average grid (uniform on the circle → exact mean), both muons share (η,φ);
     # muon-0 output is the plotted one (per-muon net, symmetry implicit).
     phi_avg = torch.linspace(0.0, 2 * np.pi * (1.0 - 1.0 / n_phi_avg), n_phi_avg,
-                             dtype=torch.float32, device=device)
+                             dtype=mdt, device=device)
     eta_grid = centers_t[:, None, None].expand(n_eta, n_phi_avg, 2).reshape(-1, 2)
     phi_grid = phi_avg[None, :, None].expand(n_eta, n_phi_avg, 2).reshape(-1, 2)
     smear_scale = torch.tensor([SMEAR_VAR_SCALE_A, SMEAR_VAR_SCALE_C],
-                               dtype=torch.float32, device=device)
+                               dtype=mdt, device=device)
     AeM_g, ac_g = model.theta_net(eta_grid, phi_grid)            # physical A,e,M; O(1) a,c
     AeM = AeM_g[:, 0, :].view(n_eta, n_phi_avg, 3).mean(dim=1)   # [n_eta,3] φ-mean
     ac_eff = model._smear_raw_to_effective(ac_g[:, 0, :])        # softplus·mask
@@ -2639,10 +2743,12 @@ def compute_output_fisher_2d(model, loader, device, *, method="empirical",
             p.requires_grad_(False)
     model.theta_scale.requires_grad_(False)
     model.theta_smear.requires_grad_(False)
+    mdt = _model_dtype(model)            # grids must match the model dtype
     centres = 0.5 * (np.asarray(eta_edges[:-1]) + np.asarray(eta_edges[1:]))
     n_eta = int(len(centres))
-    eta_c = torch.as_tensor(centres, dtype=torch.float32, device=device)
-    phi_edges = torch.linspace(-float(np.pi), float(np.pi), n_phi + 1, device=device)
+    eta_c = torch.as_tensor(centres, dtype=mdt, device=device)
+    phi_edges = torch.linspace(-float(np.pi), float(np.pi), n_phi + 1,
+                               dtype=mdt, device=device)
     phi_c = 0.5 * (phi_edges[:-1] + phi_edges[1:])
     eg = eta_c[:, None, None].expand(n_eta, n_phi, 2).reshape(-1, 2)
     pg = phi_c[None, :, None].expand(n_eta, n_phi, 2).reshape(-1, 2)
@@ -2709,7 +2815,7 @@ def compute_output_fisher_2d(model, loader, device, *, method="empirical",
         for batch in bar:
             if max_events > 0 and seen >= max_events:
                 hit = True; break
-            batch = _move_batch(batch, device)
+            batch = _move_batch(batch, device, _model_dtype(model))
             dm = ~batch["is_data_mask"] if mc_as_data else batch["is_data_mask"]
             di = dm.nonzero(as_tuple=True)[0]
             if di.numel() == 0:
@@ -2807,10 +2913,12 @@ def _table_output_jacobian(model, eta_edges, n_phi, scale_cols, smear_cols,
     ``G`` and ``J_table`` are consistent for the projection ``Uᵀ J_table U``.
     Returned on CPU float64 (to match the CPU-side information matrices)."""
     net_params = list(model.theta_net.parameters())
+    mdt = _model_dtype(model)            # grids must match the model dtype
     centres = 0.5 * (np.asarray(eta_edges[:-1]) + np.asarray(eta_edges[1:]))
     n_eta = int(len(centres))
-    eta_c = torch.as_tensor(centres, dtype=torch.float32, device=device)
-    phi_edges = torch.linspace(-float(np.pi), float(np.pi), n_phi + 1, device=device)
+    eta_c = torch.as_tensor(centres, dtype=mdt, device=device)
+    phi_edges = torch.linspace(-float(np.pi), float(np.pi), n_phi + 1,
+                               dtype=mdt, device=device)
     phi_c = 0.5 * (phi_edges[:-1] + phi_edges[1:])
     eg = eta_c[:, None, None].expand(n_eta, n_phi, 2).reshape(-1, 2)
     pg = phi_c[None, :, None].expand(n_eta, n_phi, 2).reshape(-1, 2)
@@ -4021,10 +4129,34 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         "trainer; a one-line note is printed at startup.",
     )
     p.add_argument(
-        "--precision", choices=("fp32", "bf16", "fp16"), default="fp32",
-        help="Training + validation forward-pass precision. fp32 = no "
-        "autocast. bf16 = bfloat16 autocast (Ampere+, no GradScaler). "
-        "fp16 = float16 autocast + enabled GradScaler for loss scaling.",
+        "--precision", choices=("fp32", "fp64", "bf16", "fp16"), default="fp32",
+        help="Compute precision for BOTH stages (overridable per stage with "
+        "--flow-precision/--fit-precision). fp32 = float32 model + batches "
+        "(default). fp64 = REAL double precision: the model parameters/"
+        "buffers and the batch float tensors run in float64, eliminating the "
+        "per-event fp32 round-off that sets the ~1e-5 ‖g‖ noise floor of the "
+        "stage-2 fit (the float64 Σ-reductions already removed the summation "
+        "part; this removes the per-event part — e.g. lets trust-krylov "
+        "converge to a small --trust-gtol instead of breaking down at the "
+        "floor). ~2× memory and slower GPU matmuls. bf16/fp16 (autocast) are "
+        "NOT wired into this trainer — accepted for CLI parity but run as "
+        "fp32 with a warning.",
+    )
+    p.add_argument(
+        "--flow-precision", choices=("fp32", "fp64", "bf16", "fp16"),
+        default=None,
+        help="Stage-1 (flow training) precision override; default = "
+        "--precision. Typical split: fp32 flow training (the expensive "
+        "stage; the flow is a smooth template whose fp32 accuracy is "
+        "sufficient) + --fit-precision fp64 for the θ fit. An fp32-trained "
+        "flow checkpoint is upcast LOSSLESSLY into an fp64 fit (same "
+        "weights, evaluated in float64 arithmetic).",
+    )
+    p.add_argument(
+        "--fit-precision", choices=("fp32", "fp64", "bf16", "fp16"),
+        default=None,
+        help="Stage-2 (θ + background fit, incl. the Fisher/bootstrap passes "
+        "that follow it) precision override; default = --precision.",
     )
     p.add_argument(
         "--progress", default=True, action=argparse.BooleanOptionalAction,

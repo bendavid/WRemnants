@@ -127,6 +127,14 @@ class NCEDensity(nn.Module):
         B = x.shape[0]
         half = 0.5 * (x - self.a)              # [B] signed half-length of [a, x]
         mid = 0.5 * (x + self.a)
+        if self._gl_t.dtype != torch.float64:
+            # Self-heal: a model-wide .float()/.to(fp32) cast (per-stage
+            # --precision handling) downcasts every buffer, including the GL
+            # rule. Re-derive it exactly in float64 so a later fp64 stage
+            # isn't stuck with fp32-rounded nodes/weights.
+            t64, w64 = np.polynomial.legendre.leggauss(int(self._gl_t.numel()))
+            self._gl_t = torch.from_numpy(t64).to(self._gl_t.device)
+            self._gl_w = torch.from_numpy(w64).to(self._gl_w.device)
         t = self._gl_t.to(x.dtype)
         w = self._gl_w.to(x.dtype)
         u = mid.unsqueeze(-1) + half.unsqueeze(-1) * t            # [B, N]
