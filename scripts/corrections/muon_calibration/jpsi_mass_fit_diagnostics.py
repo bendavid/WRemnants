@@ -1715,7 +1715,6 @@ def plot_param_sensitivity(model, loader, stats, m_centers, out_dir, *,
         print(f"  wrote param_sensitivity_{v} ({ns} slices)")
 
 
-@torch.no_grad()
 def plot_theta_scale_likelihood_scan(
     model, loader, device, output_dir, *,
     scale_fit_params: str,
@@ -1727,7 +1726,7 @@ def plot_theta_scale_likelihood_scan(
     n_points: int = 25,
     n_sigma: float = 4.0,
 ) -> None:
-    """1-D NLL likelihood scan over each active θ_scale component.
+    """1-D NLL likelihood scan (+ gradient) over each active θ_scale component.
 
     Intended for the SINGLE-η-bin binned-θ fit (``--n-eta-bins 1``), where the
     three scale nuisances (A, e, M) are global numbers and a direct scan of the
@@ -1736,11 +1735,13 @@ def plot_theta_scale_likelihood_scan(
     Caches the (pseudo-)data once, then for every fit parameter listed in
     ``scale_fit_params`` sweeps that component over a window — ±``n_sigma``·σ from
     the Fisher covariance when available, otherwise a default ±10 raw units —
-    holding the others at the fit value, and re-accumulates the weighted data NLL
-    (``data_nll_continuity``, exactly the stage-2 objective). The scan curve, the
-    fit minimum, the injected truth (if any) and the Gaussian (Fisher) parabola
-    are overlaid, directly exposing the curvature and any non-parabolicity / bias
-    of the global scale parameters.
+    holding the others at the fit value, and re-accumulates BOTH the weighted
+    data NLL and its gradient ∂NLL/∂θ (``data_nll_continuity`` + autograd, exactly
+    the stage-2 objective and its gradient). The NLL scan, the Fisher parabola,
+    and the gradient (twin axis) are overlaid with the fit value and injected
+    truth, directly exposing curvature, non-parabolicity, bias, AND convergence:
+    a non-zero ∂NLL/∂θ at the fit marker (the gradient zero-crossing displaced
+    from the fit line) is the under-convergence signature.
 
     The scan runs the model in **float64**: the per-event NLL is otherwise
     computed in fp32 (the training --precision), and summed over the full
@@ -1783,15 +1784,22 @@ def plot_theta_scale_likelihood_scan(
     orig_dtype = next(model.parameters()).dtype
     model.double()
 
-    def total_nll() -> float:
-        acc = 0.0
+    def nll_and_grad(j: int):
+        """Total weighted NLL and ∂NLL/∂θ_scale[0, j] (raw units) summed over the
+        cached (pseudo-)data — the exact stage-2 objective + gradient (autograd).
+        Both come from a single forward+backward per call."""
+        nll_acc = 0.0
+        g_acc = 0.0
         for b in cache:
             per = model.data_nll_continuity(
                 b["mll"], b["pt_pm"], b["eta_pm"], b["phi_pm"], b["q_pm"],
                 b["b_pm"], b["cond_std"], b["dm"], n_iter=n_iter)
             w = b["w"] * b["dm"].to(b["w"].dtype)
-            acc += float((w * per).sum().item())
-        return acc
+            loss = (w * per).sum()
+            g, = torch.autograd.grad(loss, model.theta_scale)
+            nll_acc += float(loss.item())
+            g_acc += float(g[0, j].item())
+        return nll_acc, g_acc
 
     fit_raw = model.theta_scale.detach().clone()    # [1, 3] raw O(1) params
 
@@ -1819,15 +1827,19 @@ def plot_theta_scale_likelihood_scan(
             hw_raw = max(hw_raw, 1.3 * abs(inj_raw - center_raw))
         xs_raw = np.linspace(center_raw - hw_raw, center_raw + hw_raw, int(n_points))
         nlls = np.empty(xs_raw.shape[0], dtype=np.float64)
+        grads = np.empty(xs_raw.shape[0], dtype=np.float64)   # ∂NLL/∂θ_raw
         for k, xr in enumerate(xs_raw):
-            model.theta_scale[0, j] = float(xr)
-            nlls[k] = total_nll()
-        model.theta_scale[0, j] = center_raw   # restore the fit value
+            with torch.no_grad():
+                model.theta_scale[0, j] = float(xr)
+            nlls[k], grads[k] = nll_and_grad(j)
+        with torch.no_grad():
+            model.theta_scale[0, j] = center_raw   # restore the fit value
+        g_fit = float(np.interp(center_raw, xs_raw, grads))   # ∂NLL/∂θ at the fit
         dnll = nlls - float(np.min(nlls))
         parab = None if sig_raw is None else 0.5 * ((xs_raw - center_raw) / sig_raw) ** 2
         results.append(dict(
-            comp=c, x_phys=xs_raw * ref_phys[j], dnll=dnll,
-            fit_phys=center_raw * ref_phys[j], sig_phys=sig_phys,
+            comp=c, x_phys=xs_raw * ref_phys[j], dnll=dnll, grad=grads,
+            fit_phys=center_raw * ref_phys[j], sig_phys=sig_phys, g_fit=g_fit,
             inj_phys=(float(inject_ref[0, j]) if inject_ref is not None else None),
             parab=parab))
 
@@ -1837,26 +1849,43 @@ def plot_theta_scale_likelihood_scan(
         model.float()
 
     n = len(results)
-    fig, axes = plt.subplots(n, 1, figsize=(7, 3.0 * n), squeeze=False)
+    fig, axes = plt.subplots(n, 1, figsize=(7.5, 3.2 * n), squeeze=False)
     axes = axes[:, 0]
     for ax, r in zip(axes, results):
-        ax.plot(r["x_phys"], r["dnll"], "o-", color="k", ms=3, lw=1.2,
-                label="NLL scan")
+        h_nll, = ax.plot(r["x_phys"], r["dnll"], "o-", color="k", ms=3, lw=1.2,
+                         label="NLL scan")
+        handles = [h_nll]
         if r["parab"] is not None:
-            ax.plot(r["x_phys"], r["parab"], color="C0", ls="-", lw=1.2,
-                    label="Gaussian (Fisher)")
-        ax.axvline(r["fit_phys"], color="C2", lw=1.0, label="fit")
-        if r["inj_phys"] is not None:
-            ax.axvline(r["inj_phys"], color="C3", lw=1.2, ls="--", label="injected")
+            h_p, = ax.plot(r["x_phys"], r["parab"], color="C0", ls="-", lw=1.2,
+                           label="Gaussian (Fisher)")
+            handles.append(h_p)
         ax.axhline(0.5, color="0.6", lw=0.8, ls=":")   # 1σ crossing
+        ax.set_ylabel("ΔNLL")
+        ax.set_ylim(bottom=0.0)
+        ax.grid(True, alpha=0.3)
+        # Gradient ∂NLL/∂θ (raw fit-param units) on a twin axis — the quantity
+        # the optimiser drives to zero; its zero-crossing is the true minimum, so
+        # a non-zero value at the fit line = under-convergence.
+        ax2 = ax.twinx()
+        h_g, = ax2.plot(r["x_phys"], r["grad"], "-", color="C4", lw=1.3,
+                        label="∂NLL/∂θ (raw)")
+        ax2.axhline(0.0, color="C4", lw=0.7, ls=":")
+        ax2.set_ylabel("∂NLL/∂θ  (raw θ units)", color="C4")
+        ax2.tick_params(axis="y", labelcolor="C4")
+        gmax = float(np.max(np.abs(r["grad"]))) or 1.0
+        ax2.set_ylim(-1.15 * gmax, 1.15 * gmax)   # symmetric so the zero line is centred
+        handles.append(h_g)
+        # fit + injected markers (drawn on the NLL axis).
+        handles.append(ax.axvline(r["fit_phys"], color="C2", lw=1.0,
+                                   label=f"fit (∂NLL/∂θ|fit={r['g_fit']:+.2g})"))
+        if r["inj_phys"] is not None:
+            handles.append(ax.axvline(r["inj_phys"], color="C3", lw=1.2, ls="--",
+                                      label="injected"))
         xlab = comp_label[r["comp"]]
         if r["sig_phys"] is not None:
             xlab += f"   (σ_Fisher = {r['sig_phys']:.2e})"
         ax.set_xlabel(xlab)
-        ax.set_ylabel("ΔNLL")
-        ax.set_ylim(bottom=0.0)
-        ax.grid(True, alpha=0.3)
-        ax.legend(loc="best", fontsize=7)
+        ax.legend(handles=handles, loc="upper center", fontsize=7, ncol=2)
     axes[0].set_title("θ_scale likelihood scan (single η-bin)")
     fig.tight_layout()
     for ext in ("png", "pdf"):
