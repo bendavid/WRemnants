@@ -82,28 +82,34 @@ class CompactMatchedFlow(nn.Module):
         self.s_min = float(s_min_frac)          # min logistic scale in [0,1] units
         self.curv_floor = float(curv_floor)     # min |(log p)''| in std-mass units
 
-        layers: list[nn.Module] = []
-        d = int(n_cond)
-        for _ in range(int(n_layers)):
-            layers += [nn.Linear(d, hidden_features), activation()]
-            d = hidden_features
-        self.body = nn.Sequential(*layers) if layers else nn.Identity()
-        self.head = nn.Linear(d, self.L * 3 * self.K)   # per layer: [logit_w|raw_mu|raw_s]
-        nn.init.normal_(self.head.weight, std=1e-3)
-        with torch.no_grad():
-            self.head.bias.zero_()
-            # Per layer: spread means across (0,1), moderate scales.
-            frac = torch.linspace(0.08, 0.92, self.K)
-            mu_b = torch.log(frac / (1 - frac))                      # sigmoid⁻¹
-            s0 = max(1.0 / self.K, self.s_min)
-            s_b = math.log(math.expm1(max(s0 - self.s_min, 1e-4)))   # softplus⁻¹
-            bias = self.head.bias.view(self.L, 3, self.K)
-            bias[:, 1, :] = mu_b
-            bias[:, 2, :] = s_b
+        # One INDEPENDENT conditioner MLP per layer (c → [logit_w|raw_mu|raw_s]),
+        # mirroring gf's per-transform hyper-network (so the conditioning capacity
+        # and parameter count match gf), rather than a shared body + linear head.
+        frac = torch.linspace(0.08, 0.92, self.K)
+        mu_b = torch.log(frac / (1 - frac))                          # sigmoid⁻¹
+        s0 = max(1.0 / self.K, self.s_min)
+        s_b = math.log(math.expm1(max(s0 - self.s_min, 1e-4)))       # softplus⁻¹
+        self.conditioners = nn.ModuleList()
+        for _ in range(self.L):
+            seq: list[nn.Module] = []
+            d = int(n_cond)
+            for _ in range(int(n_layers)):
+                seq += [nn.Linear(d, hidden_features), activation()]
+                d = hidden_features
+            final = nn.Linear(d, 3 * self.K)
+            nn.init.normal_(final.weight, std=1e-3)                  # ~c-independent init
+            with torch.no_grad():
+                final.bias.zero_()
+                b = final.bias.view(3, self.K)                       # [logit_w|raw_mu|raw_s]
+                b[1, :] = mu_b                                       # spread means in (0,1)
+                b[2, :] = s_b                                        # moderate scales
+            seq.append(final)
+            self.conditioners.append(nn.Sequential(*seq))
 
     # ---- per-layer mixture parameters --------------------------------------
     def _layer_params(self, c: torch.Tensor):
-        h = self.head(self.body(c)).view(-1, self.L, 3, self.K)      # [B,L,3,K]
+        h = torch.stack([cond(c) for cond in self.conditioners], dim=1)  # [B,L,3K]
+        h = h.view(-1, self.L, 3, self.K)                            # [B,L,3,K]
         log_pi = F.log_softmax(h[:, :, 0, :], dim=-1)                # [B,L,K]
         mu = torch.sigmoid(h[:, :, 1, :])                            # [B,L,K] in (0,1)
         s = self.s_min + F.softplus(h[:, :, 2, :])                   # [B,L,K] > s_min
@@ -248,7 +254,8 @@ def _selftest():
     # overflow stress: extreme conditioners
     f2 = CompactMatchedFlow(7, a, b, n_components=8, n_transforms=5).double()
     with torch.no_grad():
-        f2.head.weight.normal_(0, 3.0); f2.head.bias.normal_(0, 3.0)
+        for p in f2.parameters():
+            p.normal_(0, 3.0)         # extreme conditioners (stress the tails)
     cc = torch.randn(64, 7, dtype=torch.float64)
     xs = torch.linspace(-6, 6, 200, dtype=torch.float64)
     ok = all(torch.isfinite(f2(xs, cc[e:e + 1].expand(200, -1))).all()
