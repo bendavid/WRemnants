@@ -610,6 +610,7 @@ class JpsiMassMixtureModel(nn.Module):
         flow_n_hidden_layers: int = 3,
         flow_gf_components: int = 8,
         flow_nsf_bins: int = 8,
+        compact_learn_weights: bool = False,
         mlp_hidden: int = 32,
         mlp_n_layers: int = 2,
         n_eta_bins: int = N_ETA_BINS,
@@ -852,6 +853,7 @@ class JpsiMassMixtureModel(nn.Module):
                 n_layers=flow_n_hidden_layers,
                 n_components=flow_gf_components,
                 n_transforms=flow_n_transforms,   # composed depth, as for gf
+                learn_weights=compact_learn_weights,
             )
         else:
             flow_inner = build_flow(

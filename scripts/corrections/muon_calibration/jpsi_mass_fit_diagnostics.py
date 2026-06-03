@@ -61,6 +61,7 @@ from jpsi_mass_model import (  # noqa: E402
     SMEAR_VAR_SCALE_A, SMEAR_VAR_SCALE_C, THETA_SCALE_REF,
 )
 from train_jpsi_mass_fit import _move_batch, _stats_from_dict  # noqa: E402
+from compact_flow import infer_learn_weights  # noqa: E402
 
 
 # ---------------------------------------------------------------------------
@@ -105,6 +106,13 @@ def load_model_from_checkpoint(checkpoint_path: str, device: str):
         background_enabled=not bool(args.get("no_background", False)),
         theta_mode=("mlp" if args.get("theta_mlp", False) else "binned"),
         n_eta_bins=len(stats.eta_edges) - 1,
+        # compact flow: adopt the mixture-weight mode from the checkpoint;
+        # older compact checkpoints (always learnable, 3K heads) lack the key —
+        # infer it from the saved conditioner head shape.
+        compact_learn_weights=args.get(
+            "compact_learn_weights",
+            infer_learn_weights(ckpt["state_dict"],
+                                int(args.get("gf_components", 8)))),
         cond_basis=args.get("cond_basis", "muon_kin"),
         theta_mlp_hidden=args.get("theta_mlp_hidden", 32),
         theta_mlp_layers=args.get("theta_mlp_layers", 2),

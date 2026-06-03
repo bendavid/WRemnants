@@ -55,6 +55,33 @@ def _phi(z: torch.Tensor) -> torch.Tensor:
     return 0.5 * (1.0 + torch.erf(z / _SQRT2))
 
 
+def infer_learn_weights(state_dict, n_components: int,
+                        prefix: str = "flow.conditioners.0.",
+                        default: bool = False) -> bool:
+    """Infer whether a compact-flow checkpoint used LEARNABLE mixture weights
+    (3K-output conditioner heads) or fixed equal weights (2K), from the final
+    conditioner layer's output dimension. For checkpoints predating the
+    ``learn_weights`` option (which were always 3K)."""
+    cand = [(k, v) for k, v in state_dict.items()
+            if k.startswith(prefix) and k.endswith(".weight")]
+    if not cand:
+        return default
+
+    def _idx(k):
+        try:
+            return int(k[len(prefix):].split(".")[0])
+        except (ValueError, IndexError):
+            return -1
+
+    _, v = max(cand, key=lambda kv: _idx(kv[0]))
+    out = int(v.shape[0])
+    if out == 3 * int(n_components):
+        return True
+    if out == 2 * int(n_components):
+        return False
+    return default
+
+
 class CompactMatchedFlow(nn.Module):
     """Composed uniform-base compact 1-D conditional flow with matched tails."""
 
@@ -70,21 +97,30 @@ class CompactMatchedFlow(nn.Module):
         activation: type[nn.Module] = nn.GELU,
         s_min_frac: float = 0.01,
         curv_floor: float = 1e-3,
+        learn_weights: bool = False,
     ):
         super().__init__()
         if not (b > a):
             raise ValueError(f"need b>a; got a={a}, b={b}")
         self.K = int(n_components)
         self.L = int(n_transforms)
+        # learn_weights=False (default) fixes π_k = 1/K — the per-layer mixture
+        # has only means+scales (2K conditioner outputs), exactly matching gf's
+        # equal-weight Gaussianization layers. True adds learnable per-component
+        # weights (3K outputs, the original behaviour).
+        self.learn_weights = bool(learn_weights)
         self.register_buffer("a", torch.tensor(float(a)))
         self.register_buffer("b", torch.tensor(float(b)))
         self._width = float(b - a)
         self.s_min = float(s_min_frac)          # min logistic scale in [0,1] units
         self.curv_floor = float(curv_floor)     # min |(log p)''| in std-mass units
 
-        # One INDEPENDENT conditioner MLP per layer (c → [logit_w|raw_mu|raw_s]),
-        # mirroring gf's per-transform hyper-network (so the conditioning capacity
-        # and parameter count match gf), rather than a shared body + linear head.
+        # One INDEPENDENT conditioner MLP per layer, mirroring gf's per-transform
+        # hyper-network (so conditioning capacity and parameter count match gf),
+        # rather than a shared body + linear head. Per-layer outputs:
+        # [raw_mu|raw_s] (2K, equal weights — default) or [logit_w|raw_mu|raw_s]
+        # (3K, learnable weights).
+        nblk = 3 if self.learn_weights else 2
         frac = torch.linspace(0.08, 0.92, self.K)
         mu_b = torch.log(frac / (1 - frac))                          # sigmoid⁻¹
         s0 = max(1.0 / self.K, self.s_min)
@@ -96,23 +132,27 @@ class CompactMatchedFlow(nn.Module):
             for _ in range(int(n_layers)):
                 seq += [nn.Linear(d, hidden_features), activation()]
                 d = hidden_features
-            final = nn.Linear(d, 3 * self.K)
+            final = nn.Linear(d, nblk * self.K)
             nn.init.normal_(final.weight, std=1e-3)                  # ~c-independent init
             with torch.no_grad():
                 final.bias.zero_()
-                b = final.bias.view(3, self.K)                       # [logit_w|raw_mu|raw_s]
-                b[1, :] = mu_b                                       # spread means in (0,1)
-                b[2, :] = s_b                                        # moderate scales
+                b = final.bias.view(nblk, self.K)
+                b[-2, :] = mu_b                                      # spread means in (0,1)
+                b[-1, :] = s_b                                       # moderate scales
             seq.append(final)
             self.conditioners.append(nn.Sequential(*seq))
 
     # ---- per-layer mixture parameters --------------------------------------
     def _layer_params(self, c: torch.Tensor):
-        h = torch.stack([cond(c) for cond in self.conditioners], dim=1)  # [B,L,3K]
-        h = h.view(-1, self.L, 3, self.K)                            # [B,L,3,K]
-        log_pi = F.log_softmax(h[:, :, 0, :], dim=-1)                # [B,L,K]
-        mu = torch.sigmoid(h[:, :, 1, :])                            # [B,L,K] in (0,1)
-        s = self.s_min + F.softplus(h[:, :, 2, :])                   # [B,L,K] > s_min
+        nblk = 3 if self.learn_weights else 2
+        h = torch.stack([cond(c) for cond in self.conditioners], dim=1)  # [B,L,nblk·K]
+        h = h.view(-1, self.L, nblk, self.K)                         # [B,L,nblk,K]
+        if self.learn_weights:
+            log_pi = F.log_softmax(h[:, :, 0, :], dim=-1)            # [B,L,K]
+        else:
+            log_pi = h.new_full(h.shape[:2] + (self.K,), -math.log(self.K))
+        mu = torch.sigmoid(h[:, :, -2, :])                           # [B,L,K] in (0,1)
+        s = self.s_min + F.softplus(h[:, :, -1, :])                  # [B,L,K] > s_min
         return log_pi, mu, s
 
     @staticmethod
@@ -234,23 +274,31 @@ class CompactMatchedFlow(nn.Module):
 def _selftest():
     torch.manual_seed(0)
     a, b = -3.7, 3.9
+    for lw in (False, True):
+        flow = CompactMatchedFlow(n_cond=7, a=a, b=b, n_components=8,
+                                  n_transforms=5, learn_weights=lw).double()
+        c = torch.randn(4, 7, dtype=torch.float64)
+        xg = torch.linspace(a, b, 20001, dtype=torch.float64)
+        for e in range(c.shape[0]):
+            lp = flow(xg, c[e:e + 1].expand(xg.shape[0], -1))
+            I = torch.trapz(lp.exp(), xg).item()
+            Fa = flow.log_cdf(torch.tensor([a], dtype=torch.float64), c[e:e + 1]).exp().item()
+            Fb = flow.log_cdf(torch.tensor([b], dtype=torch.float64), c[e:e + 1]).exp().item()
+            print(f"learn_weights={lw} event {e}: ∫_window p={I:.6f}  F(b)-F(a)={Fb-Fa:.6f}")
+        xt = torch.tensor([a - 0.3, a - 0.01, a + 0.01, 0.0, b - 0.01, b + 0.01, b + 0.3],
+                          dtype=torch.float64)
+        ce = c[:1].expand(xt.shape[0], -1)
+        h = 1e-5
+        dF = (flow.log_cdf(xt + h, ce).exp() - flow.log_cdf(xt - h, ce).exp()) / (2 * h)
+        p = flow(xt, ce).exp()
+        print(f"learn_weights={lw} rel.diff dF/dx vs p:",
+              [f"{abs(d - pp) / max(pp, 1e-12):.1e}" for d, pp in zip(dF.tolist(), p.tolist())])
+        # checkpoint-shape inference round-trip
+        sd = {f"flow.{k}": v for k, v in flow.state_dict().items()}
+        assert infer_learn_weights(sd, 8) == lw, "infer_learn_weights round-trip failed"
+    print("infer_learn_weights round-trip OK for both modes")
     flow = CompactMatchedFlow(n_cond=7, a=a, b=b, n_components=8, n_transforms=5).double()
     c = torch.randn(4, 7, dtype=torch.float64)
-    xg = torch.linspace(a, b, 20001, dtype=torch.float64)
-    for e in range(c.shape[0]):
-        lp = flow(xg, c[e:e + 1].expand(xg.shape[0], -1))
-        I = torch.trapz(lp.exp(), xg).item()
-        Fa = flow.log_cdf(torch.tensor([a], dtype=torch.float64), c[e:e + 1]).exp().item()
-        Fb = flow.log_cdf(torch.tensor([b], dtype=torch.float64), c[e:e + 1]).exp().item()
-        print(f"event {e}: ∫_window p={I:.6f}  F(b)-F(a)={Fb-Fa:.6f}")
-    xt = torch.tensor([a - 0.3, a - 0.01, a + 0.01, 0.0, b - 0.01, b + 0.01, b + 0.3],
-                      dtype=torch.float64)
-    ce = c[:1].expand(xt.shape[0], -1)
-    h = 1e-5
-    dF = (flow.log_cdf(xt + h, ce).exp() - flow.log_cdf(xt - h, ce).exp()) / (2 * h)
-    p = flow(xt, ce).exp()
-    print("rel.diff dF/dx vs p:",
-          [f"{abs(d - pp) / max(pp, 1e-12):.1e}" for d, pp in zip(dF.tolist(), p.tolist())])
     # overflow stress: extreme conditioners
     f2 = CompactMatchedFlow(7, a, b, n_components=8, n_transforms=5).double()
     with torch.no_grad():

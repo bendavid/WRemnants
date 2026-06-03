@@ -780,15 +780,17 @@ def _inject_smear_np(args, n_eta):
 # meaning), so stage-2 must inherit the flow's basis.
 _FLOW_ARCH_KEYS = (
     "flow_arch", "flow_n_transforms", "flow_hidden", "flow_n_hidden",
-    "gf_components", "nsf_bins", "cond_basis",
+    "gf_components", "nsf_bins", "cond_basis", "compact_learn_weights",
 )
 
 
-def _apply_flow_arch_from_ckpt(args, ck_args: dict) -> None:
+def _apply_flow_arch_from_ckpt(args, ck_args: dict, state_dict=None) -> None:
     """Override the flow-architecture args on ``args`` with the values stored
     in the flow checkpoint so the rebuilt flow matches the saved weights.
     Logs any field that changed; silently keeps the CLI value for keys the
-    checkpoint doesn't carry (older checkpoints)."""
+    checkpoint doesn't carry (older checkpoints). For compact-flow checkpoints
+    predating ``compact_learn_weights`` the value is inferred from the saved
+    conditioner head shape (3K = learnable weights, 2K = fixed equal)."""
     changed = []
     for k in _FLOW_ARCH_KEYS:
         if k in ck_args:
@@ -797,6 +799,13 @@ def _apply_flow_arch_from_ckpt(args, ck_args: dict) -> None:
             if old != new:
                 changed.append(f"{k}: {old}→{new}")
             setattr(args, k, new)
+    if ("compact_learn_weights" not in ck_args
+            and ck_args.get("flow_arch") == "compact" and state_dict is not None):
+        from compact_flow import infer_learn_weights
+        lw = infer_learn_weights(state_dict, int(ck_args.get("gf_components", 8)))
+        if getattr(args, "compact_learn_weights", None) != lw:
+            changed.append(f"compact_learn_weights: inferred {lw} from head shape")
+        args.compact_learn_weights = lw
     if changed:
         print("  flow-architecture args set from checkpoint: " + ", ".join(changed))
     else:
@@ -814,6 +823,7 @@ def _build_model(args, stats, device):
         flow_arch=args.flow_arch, flow_n_transforms=args.flow_n_transforms,
         flow_hidden_features=args.flow_hidden, flow_n_hidden_layers=args.flow_n_hidden,
         flow_gf_components=args.gf_components, flow_nsf_bins=args.nsf_bins,
+        compact_learn_weights=getattr(args, "compact_learn_weights", False),
         mlp_hidden=args.mlp_hidden, mlp_n_layers=args.mlp_n_layers,
         smearing_enabled=not args.disable_smearing,
         scale_enabled=not args.disable_scale,
@@ -1651,7 +1661,8 @@ def train_loop(args: argparse.Namespace) -> int:
             return 1
         print(f"loading stage-1 flow checkpoint: {flow_ckpt}")
         flow_ck = torch.load(flow_ckpt, map_location=device, weights_only=False)
-        _apply_flow_arch_from_ckpt(args, flow_ck.get("args", {}) or {})
+        _apply_flow_arch_from_ckpt(args, flow_ck.get("args", {}) or {},
+                                   state_dict=flow_ck.get("state_dict"))
         # Reuse the flow's own standardisation unless the user forces --stats-in.
         if args.stats_in is None and flow_ck.get("stats") is not None:
             stats_override = _stats_from_dict(flow_ck["stats"])
@@ -3066,7 +3077,7 @@ def _load_full_fit(args, device):
         print("  warning: --checkpoint is a stage-1 FLOW checkpoint (θ not fit); "
               "the uncertainty will be evaluated at the un-fit θ.", file=sys.stderr)
     # Adopt the model-defining settings from the checkpoint.
-    _apply_flow_arch_from_ckpt(args, ck_args)
+    _apply_flow_arch_from_ckpt(args, ck_args, state_dict=ck.get("state_dict"))
     for k in ("mlp_hidden", "mlp_n_layers", "smear_fit_params", "scale_fit_params",
               "smear_flow_steps", "smear_operator", "n_gh_nodes",
               "jacobian_form", "smear_param_form",
@@ -3674,7 +3685,14 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     p.add_argument("--flow-n-hidden", type=int, default=3,
                    help="Number of hidden layers in each flow conditioner MLP.")
     p.add_argument("--gf-components", type=int, default=8,
-                   help="(--flow-arch gf only) Gaussian-mixture components per layer.")
+                   help="(--flow-arch gf/compact) mixture components per layer.")
+    p.add_argument("--compact-learn-weights", action="store_true",
+                   help="(--flow-arch compact) Make the per-component mixture "
+                   "weights π_k LEARNABLE (3K conditioner outputs per layer). By "
+                   "default they are fixed equal (π_k=1/K, 2K outputs), exactly "
+                   "matching gf's equal-weight Gaussianization layers. When "
+                   "loading a compact flow checkpoint the setting is adopted "
+                   "from it (inferred from the head shape for older checkpoints).")
     p.add_argument("--mlp-hidden", type=int, default=32,
                    help="Hidden width of the data-branch mixture MLP.")
     p.add_argument("--mlp-n-layers", type=int, default=2,
