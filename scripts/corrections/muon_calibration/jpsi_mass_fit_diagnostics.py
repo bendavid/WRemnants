@@ -1727,6 +1727,7 @@ def plot_theta_scale_likelihood_scan(
     inject_ref: "np.ndarray | None" = None,
     n_points: int = 25,
     n_sigma: float = 4.0,
+    progress: bool = True,
 ) -> None:
     """1-D NLL likelihood scan (+ gradient) over each active θ_scale component.
 
@@ -1772,7 +1773,8 @@ def plot_theta_scale_likelihood_scan(
     cache = []
     seen = 0
     keys = ("mll", "pt_pm", "eta_pm", "phi_pm", "q_pm", "b_pm", "cond_std", "w")
-    for batch in loader:
+    for batch in tqdm(loader, desc="θ_scale scan: caching events", unit="batch",
+                      leave=False, disable=not progress):
         if max_events > 0 and seen >= max_events:
             break
         batch = _move_batch(batch, device)
@@ -1787,16 +1789,20 @@ def plot_theta_scale_likelihood_scan(
     if not cache:
         print("  θ_scale scan: no data rows found; skipping.")
         return
+    print(f"  θ_scale scan: cached {len(cache)} batches ({seen} events); "
+          f"{int(n_points)} scan pts × {len(active)} param(s) "
+          f"(each pt = 1 fwd+bwd over the full sample at the OBSERVED mass; no grid)")
 
     # Run the model forward in float64 for the scan to kill fp32 round-off noise
     # (restored to the original dtype at the end).
     orig_dtype = next(model.parameters()).dtype
     model.double()
 
-    def nll_and_grad(j: int):
+    def nll_and_grad(j: int, bar=None):
         """Total weighted NLL and ∂NLL/∂θ_scale[0, j] (raw units) summed over the
         cached (pseudo-)data — the exact stage-2 objective + gradient (autograd).
-        Both come from a single forward+backward per call."""
+        Both come from a single forward+backward per call. Each event is evaluated
+        ONLY at its observed mass (data_nll_continuity) — no mass grid."""
         nll_acc = 0.0
         g_acc = 0.0
         for b in cache:
@@ -1808,6 +1814,8 @@ def plot_theta_scale_likelihood_scan(
             g, = torch.autograd.grad(loss, model.theta_scale)
             nll_acc += float(loss.item())
             g_acc += float(g[0, j].item())
+            if bar is not None:
+                bar.update(1)
         return nll_acc, g_acc
 
     fit_raw = model.theta_scale.detach().clone()    # [1, 3] raw O(1) params
@@ -1837,10 +1845,15 @@ def plot_theta_scale_likelihood_scan(
         xs_raw = np.linspace(center_raw - hw_raw, center_raw + hw_raw, int(n_points))
         nlls = np.empty(xs_raw.shape[0], dtype=np.float64)
         grads = np.empty(xs_raw.shape[0], dtype=np.float64)   # ∂NLL/∂θ_raw
+        bar = tqdm(total=int(n_points) * len(cache), unit="batch",
+                   desc=f"θ_scale scan [{c}] ({len(cache)} batches × {int(n_points)} pts)",
+                   leave=False, disable=not progress)
         for k, xr in enumerate(xs_raw):
             with torch.no_grad():
                 model.theta_scale[0, j] = float(xr)
-            nlls[k], grads[k] = nll_and_grad(j)
+            nlls[k], grads[k] = nll_and_grad(j, bar)
+            bar.set_postfix_str(f"A={xr * ref_phys[j]:.3e} ΔNLL={nlls[k]-nlls[:k+1].min():.2f}")
+        bar.close()
         with torch.no_grad():
             model.theta_scale[0, j] = center_raw   # restore the fit value
         g_fit = float(np.interp(center_raw, xs_raw, grads))   # ∂NLL/∂θ at the fit
@@ -2259,7 +2272,7 @@ def main() -> int:
                 mc_as_data=mc_as_data, n_iter=args.continuity_n_iter,
                 max_events=0, sigma_scale=sigma_scale,
                 inject_ref=inject_ref_np, n_points=args.theta_scan_points,
-                n_sigma=args.theta_scan_nsigma)
+                n_sigma=args.theta_scan_nsigma, progress=True)
     else:
         print("  --disable-scale: skipping theta_scale_vs_eta")
     if model.smearing_enabled:
