@@ -61,6 +61,14 @@ ap.add_argument("--shift-mode", choices=("qop", "additive"), default="qop",
                      "is just flow density + window normalisation (g_jac = 0). "
                      "Isolates the flow-template bias with no operator/Jacobian.")
 ap.add_argument("--batch-size", type=int, default=65536)
+ap.add_argument("--eval-chunk", type=int, default=0,
+                help="events per autograd slice within each loader batch (the "
+                     "gradient sums are linear in events, so slicing is exact). "
+                     "0 = auto: full batch for analytic-CDF flows; 8192 for "
+                     "--flow-arch nce, whose quadrature window-Z "
+                     "(--nce-quad-nodes MLP evals per event, fp64, activations "
+                     "RETAINED for the autograd.grad) exhausts the CUDA "
+                     "allocator at the default --batch-size (the NVML assert).")
 ap.add_argument("--max-batches", type=int, default=0,
                 help="0 = full sample (recommended). >0 truncates (fast but the "
                      "inhomogeneous shards make a prefix non-representative).")
@@ -187,6 +195,16 @@ def additive_logp_logZ(m_obs, mk):
 
 
 ni = int(targs.get("continuity_n_iter", 2))
+# Per-batch autograd slicing (memory bound, not a statistics knob): the three
+# gradient sums are LINEAR in events, so per-slice accumulation is exact. The
+# nce flow's quadrature window-Z retains --nce-quad-nodes MLP activations per
+# event for the backward — at fp64 and the default --batch-size that exhausts
+# the CUDA allocator (NVML assert); analytic-CDF flows are fine unsliced.
+chunk = args.eval_chunk or (8192 if getattr(model, "flow_is_nce", False)
+                            else args.batch_size)
+if chunk != args.batch_size:
+    print(f"eval-chunk: {chunk} events per autograd slice "
+          f"({'auto: nce quadrature CDF' if not args.eval_chunk else 'user'})")
 g_p0 = g_jac = g_norm = 0.0
 sw = 0.0
 t0 = time.time()
@@ -199,26 +217,33 @@ for i, b in enumerate(loader):
     if not bool(dm.any()):
         continue
     cast = lambda x: x.double() if x.is_floating_point() else x
-    m, pt = cast(b["mll"]), cast(b["pt_pm"])
-    eta, phi = cast(b["eta_pm"]), cast(b["phi_pm"])
-    q, bp, mk = b["q_pm"], b["b_pm"], cast(b["cond_std"])
-    w = cast(b["w"]) * dm.double()
+    m_b, pt_b = cast(b["mll"]), cast(b["pt_pm"])
+    eta_b, phi_b = cast(b["eta_pm"]), cast(b["phi_pm"])
+    q_b, bp_b, mk_b = b["q_pm"], b["b_pm"], cast(b["cond_std"])
+    w_b = cast(b["w"]) * dm.double()
 
-    if args.shift_mode == "additive":
-        logp0, lZ = additive_logp_logZ(m, mk)
-        g_p0 += float(torch.autograd.grad((w * (-logp0)).sum(), ts,
-                                          retain_graph=True)[0][0, 0])
-        # g_jac stays 0 (unit Jacobian)
-        g_norm += float(torch.autograd.grad((w * lZ).sum(), ts)[0][0, 0])
-    else:
-        logp0, logJ = parts_logp(m, mk, pt, eta, phi, q, bp)
-        g_p0 += float(torch.autograd.grad((w * (-logp0)).sum(), ts,
-                                          retain_graph=True)[0][0, 0])
-        g_jac += float(torch.autograd.grad((w * (-logJ)).sum(), ts)[0][0, 0])
-        lZ = model._norm_correction_log_Z(m, mk, pt, eta, phi, q, bp, n_iter=ni)
-        g_norm += float(torch.autograd.grad((w * lZ).sum(), ts)[0][0, 0])
+    for s0 in range(0, m_b.shape[0], chunk):
+        sl = slice(s0, s0 + chunk)
+        m, pt, eta, phi = m_b[sl], pt_b[sl], eta_b[sl], phi_b[sl]
+        q, bp, mk, w = q_b[sl], bp_b[sl], mk_b[sl], w_b[sl]
 
-    sw += float(w.sum()); nb += 1
+        if args.shift_mode == "additive":
+            logp0, lZ = additive_logp_logZ(m, mk)
+            g_p0 += float(torch.autograd.grad((w * (-logp0)).sum(), ts,
+                                              retain_graph=True)[0][0, 0])
+            # g_jac stays 0 (unit Jacobian)
+            g_norm += float(torch.autograd.grad((w * lZ).sum(), ts)[0][0, 0])
+        else:
+            logp0, logJ = parts_logp(m, mk, pt, eta, phi, q, bp)
+            g_p0 += float(torch.autograd.grad((w * (-logp0)).sum(), ts,
+                                              retain_graph=True)[0][0, 0])
+            g_jac += float(torch.autograd.grad((w * (-logJ)).sum(), ts)[0][0, 0])
+            lZ = model._norm_correction_log_Z(m, mk, pt, eta, phi, q, bp,
+                                              n_iter=ni)
+            g_norm += float(torch.autograd.grad((w * lZ).sum(), ts)[0][0, 0])
+
+        sw += float(w.sum())
+    nb += 1
     if i % 20 == 0:
         print(f"  batch {i:>4}  Σw={sw:.3e}  dt={time.time()-t0:.0f}s", flush=True)
 
