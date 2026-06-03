@@ -1414,8 +1414,10 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    help="Number of scan points for the single-η-bin θ_scale "
                    "likelihood scan (theta_scale_likelihood_scan.png). The scan "
                    "is auto-enabled only for binned θ with a single η bin "
-                   "(--n-eta-bins 1); each point re-evaluates the data NLL over "
-                   "the cached (pseudo-)data.")
+                   "(--n-eta-bins 1); each point re-evaluates the data NLL + its "
+                   "gradient over the FULL fitted sample (a dedicated loader "
+                   "matching the fit — independent of --split and --max-events — "
+                   "so the scan diagnoses the actual fit minimum).")
     p.add_argument("--theta-scan-nsigma", type=float, default=4.0,
                    help="Half-width of the θ_scale likelihood scan, in Fisher σ "
                    "(falls back to ±10 raw units when no covariance is available).")
@@ -1742,6 +1744,13 @@ def plot_theta_scale_likelihood_scan(
     truth, directly exposing curvature, non-parabolicity, bias, AND convergence:
     a non-zero ∂NLL/∂θ at the fit marker (the gradient zero-crossing displaced
     from the fit line) is the under-convergence signature.
+
+    IMPORTANT: ``loader`` must yield the SAME events the fit used (the FULL
+    fitted sample) and ``max_events`` should be 0. The objective minimum is a
+    property of the fitted sample; the shards are inhomogeneous, so a subset
+    (a --split slice, or a --max-events truncation) has its OWN minimum that can
+    sit anywhere — diagnosing it would mislocate the fit minimum and fake or hide
+    a bias. The caller builds a dedicated full-sample loader for exactly this.
 
     The scan runs the model in **float64**: the per-event NLL is otherwise
     computed in fp32 (the training --precision), and summed over the full
@@ -2225,11 +2234,30 @@ def main() -> int:
         if (not args.no_theta_scan and model.theta_mode == "binned"
                 and model.theta_scale.shape[0] == 1):
             print("plotting θ_scale likelihood scan (single η-bin)...")
+            # The scan/gradient must diagnose the fit MINIMUM, so it has to run on
+            # the SAME events the fit used — the FULL fitted sample. Build a
+            # dedicated loader matching the stage-2 fit (split='train', NO
+            # val/holdout carve-out, the fit's validation half) and run on ALL of
+            # it (max_events=0), NOT the diagnostics --split (default 'holdout', a
+            # non-representative ~5%) and NOT a --max-events subsample. The shards
+            # are inhomogeneous, so a partial/wrong sample mislocates the minimum
+            # (and the Fisher parabola is also full-sample, for comparability).
+            fit_half = (None if (not train_args.get("validation", False)
+                                 or train_args.get("no_validation_split", False))
+                        else 1)
+            scan_loader = JpsiMassArrowLoader(
+                shard_files, stats, batch_size=args.batch_size, split="train",
+                val_fraction=0.0, holdout_fraction=0.0, drop_last=False,
+                half=fit_half,
+                inject_theta_scale=inject_np, inject_theta_smear=inject_smear_np,
+                inject_seed=int(train_args.get("inject_smear_seed", 12345)),
+                cond_basis=train_args.get("cond_basis", "muon_kin"),
+                inject_nonuniform=nonuniform)
             plot_theta_scale_likelihood_scan(
-                model, loader, device, out_dir,
+                model, scan_loader, device, out_dir,
                 scale_fit_params=model.scale_fit_params,
                 mc_as_data=mc_as_data, n_iter=args.continuity_n_iter,
-                max_events=args.max_events, sigma_scale=sigma_scale,
+                max_events=0, sigma_scale=sigma_scale,
                 inject_ref=inject_ref_np, n_points=args.theta_scan_points,
                 n_sigma=args.theta_scan_nsigma)
     else:
