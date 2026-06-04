@@ -161,8 +161,22 @@ def _tilt_density_on_grid(
         rep = lambda x: x[start:end].unsqueeze(1).expand(
             sub, G, *x.shape[1:]).reshape(sub * G, *x.shape[1:])
         pt_g = (pt[start:end].unsqueeze(1) * scale).reshape(sub * G, 2)
+        # Refine the pt scale so the RECOMPUTED event mass hits the grid mass
+        # EXACTLY: the operator rebuilds m from the per-muon kinematics, and
+        # the muon-mass term breaks the m ∝ pt proportionality — the naive
+        # scale misses the grid point by up to ~3 MeV at the far grid edge
+        # (δm² = B·(1−(m_g/m_obs)²), B ~ m_μ²·(p₁/p₂+p₂/p₁+2)), i.e. an O(50%)
+        # density error on the steep window edges (it made the θ=0 tilt curve
+        # visibly disagree with the nominal overlay on flow-checkpoint
+        # closures). Two fixed-point steps leave a sub-keV residual.
+        eta_r, phi_r = rep(eta), rep(phi)
+        mg_flat = mg.reshape(-1)
+        for _ in range(2):
+            m_cur = _event_mll(pt_g.unsqueeze(1), eta_r.unsqueeze(1),
+                               phi_r.unsqueeze(1)).squeeze(1)
+            pt_g = pt_g * (mg_flat / m_cur).unsqueeze(-1)
         lp = model._continuity_logp(
-            mg.reshape(-1), rep(mk), pt_g, rep(eta), rep(phi), rep(q), rep(b),
+            mg_flat, rep(mk), pt_g, eta_r, phi_r, rep(q), rep(b),
             n_iter=n_iter)
         out[start:end] = lp.reshape(sub, G)
     # Window-normalize per event, exactly as the fit does in data_nll_continuity:
@@ -205,7 +219,15 @@ def _nominal_density_on_grid(model, batch, idx, m_centers_dev, *, chunk_events=4
             rep = lambda x: x[start:end].unsqueeze(1).expand(
                 sub, G, *x.shape[1:]).reshape(sub * G, *x.shape[1:])
             pt_g = (pt[start:end].unsqueeze(1) * scale).reshape(sub * G, 2)
-            mke = model._cond_from_muons(pt_g, rep(eta), rep(phi), rep(q))
+            # Same muon-mass refinement as the tilt grid (see
+            # _tilt_density_on_grid) so the conditioning sweep is consistent.
+            eta_r, phi_r = rep(eta), rep(phi)
+            mg_flat = mg.reshape(-1)
+            for _ in range(2):
+                m_cur = _event_mll(pt_g.unsqueeze(1), eta_r.unsqueeze(1),
+                                   phi_r.unsqueeze(1)).squeeze(1)
+                pt_g = pt_g * (mg_flat / m_cur).unsqueeze(-1)
+            mke = model._cond_from_muons(pt_g, eta_r, phi_r, rep(q))
         else:
             mke = mk[start:end].unsqueeze(1).expand(
                 sub, G, mk.shape[-1]).reshape(sub * G, -1)
