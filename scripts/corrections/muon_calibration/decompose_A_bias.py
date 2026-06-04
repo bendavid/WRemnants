@@ -121,9 +121,18 @@ def _half(which):  # mirrors train_jpsi_mass_fit._validation_half
     return 0 if which == "flow" else 1
 if args.match == "flow":
     half = _half("flow")
-    vf = float(targs.get("val_fraction", 0.1))
-    hf = float(targs.get("holdout_fraction", 0.05))
-    sel = "stage-1 flow TRAIN split"
+    # --flow-monitor train (the default since it was introduced): stage 1
+    # trains on ALL events of its half with NO val/holdout carve-out — the
+    # checkpoint's val_fraction/holdout_fraction args do NOT apply to the
+    # flow's event set. Older checkpoints (no flow_monitor key) used the
+    # val-monitored split with the stored fractions.
+    if targs.get("flow_monitor", "val") == "train":
+        vf = 0.0; hf = 0.0
+        sel = "stage-1 flow events (ALL of the flow half; --flow-monitor train)"
+    else:
+        vf = float(targs.get("val_fraction", 0.1))
+        hf = float(targs.get("holdout_fraction", 0.05))
+        sel = "stage-1 flow TRAIN split"
 elif args.match == "fit":
     half = _half("fit"); vf = 0.0; hf = 0.0
     sel = "stage-2 fit events (all of the fit half)"

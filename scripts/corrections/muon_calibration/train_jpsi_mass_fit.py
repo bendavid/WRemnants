@@ -1693,6 +1693,11 @@ def _arr_key(x_np):
 def train_stage1(args, model, train_loader, val_loader, stats) -> float:
     """Stage 1: fit the nominal flow p₀(m|muon_kin) on simulation (MC rows)."""
     print("\n=== stage 1: nominal flow on simulation (θ=0, no θ conditioning) ===")
+    fm = getattr(args, "flow_monitor", "train")
+    print("  monitor: train-NLL plateau on ALL events (no val/holdout split; "
+          "--flow-monitor train, as the stage-2 fit)" if fm == "train" else
+          "  monitor: held-out val NLL (--flow-monitor val; "
+          f"val_fraction={args.val_fraction:g} holdout={args.holdout_fraction:g})")
     optim = torch.optim.Adam(model.flow.parameters(), lr=args.lr,
                              weight_decay=args.weight_decay)
     print(f"  optimizer: flow ({sum(p.numel() for p in model.flow.parameters()):,} params), lr={args.lr:g}")
@@ -1831,6 +1836,7 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
         best = _run_epochs(args, model, optim, train_loader, val_loader, stats,
                            step_fn=step1, ckpt_prefix="flow", stage_name="flow",
                            epochs=args.flow_epochs or args.epochs,
+                           monitor=getattr(args, "flow_monitor", "train"),
                            precision=_stage_precision(args, "flow"))
     finally:
         if mm_prec != "highest":
@@ -2100,7 +2106,15 @@ def train_loop(args: argparse.Namespace) -> int:
             print("    injecting the θ_scale shift into the stage-2 pseudo-data m_ll")
         if inj_sm is not None:
             print("    injecting the per-muon qop smear into the stage-2 pseudo-data m_ll")
-        s1_train, s1_val = _make_loaders(args, shard_files, stats, half=h_flow)   # flow: NOT injected
+        # Flow loaders (NOT injected). --flow-monitor train (default): stage 1
+        # trains on ALL events of its half (no val/holdout carve-out) and
+        # stops on the train-NLL plateau like the fit; no val loader.
+        if getattr(args, "flow_monitor", "train") == "train":
+            s1_train, _ = _make_loaders(args, shard_files, stats, half=h_flow,
+                                        val_fraction=0.0, holdout_fraction=0.0)
+            s1_val = None
+        else:
+            s1_train, s1_val = _make_loaders(args, shard_files, stats, half=h_flow)
         # Fit: ALL events of its half (no held-out val/holdout); stops on train NLL.
         s2_train, s2_val = _make_loaders(args, shard_files, stats, half=h_fit,
                                          inject_theta=inj, inject_smear=inj_sm,
@@ -2111,7 +2125,12 @@ def train_loop(args: argparse.Namespace) -> int:
                 or _inject_smear_np(args, len(stats.eta_edges) - 1) is not None):
             print("warning: --inject-A/e/M/a/c only apply in --validation mode; ignoring.",
                   file=sys.stderr)
-        s1_train, s1_val = train_loader, val_loader
+        if getattr(args, "flow_monitor", "train") == "train":
+            s1_train, _ = _make_loaders(args, shard_files, stats,
+                                        val_fraction=0.0, holdout_fraction=0.0)
+            s1_val = None
+        else:
+            s1_train, s1_val = train_loader, val_loader
         # Fit: ALL events (no held-out val/holdout); stops on train NLL.
         s2_train, s2_val = _make_loaders(args, shard_files, stats,
                                          val_fraction=0.0, holdout_fraction=0.0,
@@ -3876,9 +3895,30 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    help="Floor on the scheduled lr; early-stop fires once the lr "
                    "has reached this (plateau) reductions are exhausted.")
     p.add_argument("--val-fraction", type=float, default=0.10,
-                   help="Fraction of events held out for validation.")
+                   help="Fraction of events held out for validation. NB with "
+                   "the default --flow-monitor train, stage 1 IGNORES this "
+                   "(trains on all events); it still defines the val/holdout "
+                   "splits the diagnostics can select with --split.")
     p.add_argument("--holdout-fraction", type=float, default=0.05,
-                   help="Fraction held out from train+val (e.g. for Fisher info).")
+                   help="Fraction held out from train+val (e.g. for Fisher info). "
+                   "Ignored by stage 1 under the default --flow-monitor train.")
+    p.add_argument("--flow-monitor", choices=("train", "val"), default="train",
+                   help="Stage-1 stopping / best-checkpoint metric. 'train' "
+                   "(default): train the flow on ALL events (no val/holdout "
+                   "carve-out) and stop on the train-NLL plateau, exactly like "
+                   "the stage-2 fit. Rationale: the closure target is the "
+                   "SAME-EVENTS fit, where more flow training is strictly "
+                   "better (a 'val-overfit' flow is by definition a better "
+                   "template for the events the fit actually uses), and the "
+                   "val split costs ~15%% of the events plus early-stops on a "
+                   "mismatched event set — both were observed to degrade the "
+                   "A-closure. 'val': the previous behaviour — carve "
+                   "--val-fraction/--holdout-fraction and stop on the held-out "
+                   "val NLL (the choice for generalisation studies). NB for "
+                   "--flow-arch nce the train monitor carries fresh-twin noise "
+                   "~1/sqrt(N·k) per epoch (the val monitor used fixed twins); "
+                   "negligible at full statistics but consider a nonzero "
+                   "--patience-threshold at small --event-fraction.")
     p.add_argument("--max-events", type=int, default=0,
                    help="Subsample to ~this many events for the flow + fit stages "
                    "(0 = use all). Applied per shard AFTER the --validation "
