@@ -1725,6 +1725,13 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
               f"Z = F0({model.m_hi:g}|c) - F0({model.m_lo:g}|c)  "
               f"(consistent with stage-2 flow_cdf; the frozen flow is the "
               f"truncated-MLE on the mass window)")
+    gauge_lambda = (float(getattr(args, "flow_gauge_penalty", 0.0) or 0.0)
+                    if window_norm else 0.0)
+    if gauge_lambda > 0.0:
+        print(f"  + gauge fixing: {gauge_lambda:g}·E_w[(log Z_window)²] — pins "
+              f"the loss-flat window-mass gauge at Z(c) ≈ 1 (prevents the "
+              f"drift into probit/erfinv saturation: chaotic device-dependent "
+              f"evaluation + window-Z degradation)")
     else:
         print("  likelihood: full-support -logp0 (--no-flow-window-norm; the flow "
               "leaks mass outside the window and stage-2 truncates inconsistently "
@@ -1823,10 +1830,22 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
             logp = logp - log_Z
         w = batch["w"][idx].double()                 # float64 reduction: the model
         sw = float(w.sum().clamp_min(1e-30))         # runs at --precision, but the
-        return -(w * logp.double()).sum() / sw, sw   # Σw·NLL sum + its backward are
+        loss = -(w * logp.double()).sum() / sw       # Σw·NLL sum + its backward are
         # float64 (a ~65k-event float32 sum carries ~√N·ε cancellation; backward
         # accumulates per-event grad contributions in float64, cast to the fp32
         # leaf only at the end). Benefits adam/soap/lbfgs alike (all call step_fn).
+        if window_norm and gauge_lambda > 0.0:
+            # GAUGE FIXING (--flow-gauge-penalty): the truncated NLL depends
+            # only on p/Z, so the per-conditioning window mass Z(c) is a flat
+            # (gauge) direction that drifts freely — observed running to
+            # Z ~ e−130, deep into the probit/erfinv saturation where the gf
+            # becomes numerically chaotic (device-dependent evaluation) and
+            # the window-Z machinery degrades. λ·E_w[(log Z)²] selects the
+            # Z ≈ 1 point of the gauge orbit: along the orbit it is UNOPPOSED
+            # (any λ pins it); off the orbit the truncated shape pays only
+            # O(λ) — kept small, and verified by the decompose closure.
+            loss = loss + gauge_lambda * (w * (log_Z.double() ** 2)).sum() / sw
+        return loss, sw
 
     # --matmul-precision: TF32/bf16-internal fp32 matmuls for the stage-1
     # training loop ONLY — restored before the calibration report below and
@@ -3681,6 +3700,22 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "the base values that get modulated.")
     p.add_argument("--flow-epochs", type=int, default=0,
                    help="Max epochs for stage 1 (0 → use --epochs).")
+    p.add_argument("--flow-gauge-penalty", type=float, default=1e-3,
+                   help="(gf/nsf stage 1, truncated training) Gauge-fixing "
+                   "weight λ for the term λ·E_w[(log Z_window(c))²] added to "
+                   "the truncated NLL. The truncated likelihood depends only "
+                   "on p/Z, so the per-conditioning window mass Z(c) is a "
+                   "loss-FLAT (gauge) direction that drifts freely during "
+                   "training — observed running to Z ~ e−130, deep into the "
+                   "gf's probit/erfinv saturation, where the flow becomes "
+                   "numerically CHAOTIC (the same weights evaluate to "
+                   "different functions on different devices) and the "
+                   "window-Z machinery degrades. The penalty selects the "
+                   "Z(c) ≈ 1 point of the gauge orbit: along the orbit it is "
+                   "unopposed (any λ pins it); off the orbit the shape pays "
+                   "only O(λ) — keep it small and verify with the decompose "
+                   "closure. 0 disables (the previous behaviour). Inert for "
+                   "compact (Z≡1 algebraically) and nce (BCE objective).")
     p.add_argument("--no-flow-window-norm", action="store_true",
                    help="Disable the stage-1 window (truncation) normalization. "
                    "By DEFAULT stage 1 maximises the TRUNCATED likelihood "
