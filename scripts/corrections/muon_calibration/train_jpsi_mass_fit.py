@@ -1813,10 +1813,23 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
         # accumulates per-event grad contributions in float64, cast to the fp32
         # leaf only at the end). Benefits adam/soap/lbfgs alike (all call step_fn).
 
-    best = _run_epochs(args, model, optim, train_loader, val_loader, stats,
-                       step_fn=step1, ckpt_prefix="flow", stage_name="flow",
-                       epochs=args.flow_epochs or args.epochs,
-                       precision=_stage_precision(args, "flow"))
+    # --matmul-precision: TF32/bf16-internal fp32 matmuls for the stage-1
+    # training loop ONLY — restored before the calibration report below and
+    # everything downstream (stage 2 targets ~1e-5 effects; TF32's 10-bit
+    # mantissa would raise its per-event noise floor by ~2-3 orders).
+    mm_prec = str(getattr(args, "matmul_precision", "highest"))
+    if mm_prec != "highest":
+        torch.set_float32_matmul_precision(mm_prec)
+        print(f"  fp32 matmul precision: {mm_prec} (stage 1 only; "
+              f"restored to 'highest' afterwards)")
+    try:
+        best = _run_epochs(args, model, optim, train_loader, val_loader, stats,
+                           step_fn=step1, ckpt_prefix="flow", stage_name="flow",
+                           epochs=args.flow_epochs or args.epochs,
+                           precision=_stage_precision(args, "flow"))
+    finally:
+        if mm_prec != "highest":
+            torch.set_float32_matmul_precision("highest")
     if nce:
         # _run_epochs reloaded the best checkpoint, so this reports the flow
         # state stage 2 will actually use.
@@ -4308,6 +4321,22 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         "~1e-5-level effects: bf16/fp16 there is for throughput experiments, "
         "not final fits — bf16's ~3 decimal digits put the per-event noise "
         "orders of magnitude above the closure target.",
+    )
+    p.add_argument(
+        "--matmul-precision", choices=("highest", "high", "medium"),
+        default="highest",
+        help="torch.set_float32_matmul_precision for STAGE 1 (flow training) "
+        "only — restored to 'highest' before stage 2 and the post-training "
+        "calibration/diagnostics. 'high' enables TF32 tensor cores for fp32 "
+        "matmuls on Ampere+/H100 (~10-bit mantissa per multiply, fp32 "
+        "accumulate; silences the inductor 'TensorFloat32 ... not enabled' "
+        "warning), 'medium' allows bf16-internal matmuls. Acceptable for the "
+        "stage-1 SGD (per-multiply rounding ~1e-3 relative, same order as "
+        "the gf flow's per-event fp32 NLL noise) but NEVER applied to the "
+        "stage-2 fit, which targets ~1e-5 effects — use --fit-precision "
+        "fp64 to go the other direction there. Default 'highest' = exact "
+        "fp32 matmuls everywhere (no behaviour change). Irrelevant for "
+        "matmuls already under bf16/fp16 autocast or fp64.",
     )
     p.add_argument(
         "--flow-precision", choices=("fp32", "fp64", "bf16", "fp16"),
