@@ -848,7 +848,7 @@ def _inject_smear_np(args, n_eta):
 _FLOW_ARCH_KEYS = (
     "flow_arch", "flow_n_transforms", "flow_hidden", "flow_n_hidden",
     "gf_components", "nsf_bins", "cond_basis", "compact_learn_weights",
-    "nce_quad_nodes",
+    "compact_layer", "bernstein_degree", "nce_quad_nodes",
 )
 
 
@@ -892,6 +892,8 @@ def _build_model(args, stats, device):
         flow_hidden_features=args.flow_hidden, flow_n_hidden_layers=args.flow_n_hidden,
         flow_gf_components=args.gf_components, flow_nsf_bins=args.nsf_bins,
         compact_learn_weights=getattr(args, "compact_learn_weights", False),
+        compact_layer=getattr(args, "compact_layer", "logistic"),
+        bernstein_degree=getattr(args, "bernstein_degree", 16),
         nce_quad_nodes=getattr(args, "nce_quad_nodes", 64),
         mlp_hidden=args.mlp_hidden, mlp_n_layers=args.mlp_n_layers,
         smearing_enabled=not args.disable_smearing,
@@ -4119,6 +4121,29 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    help="Number of hidden layers in each flow conditioner MLP.")
     p.add_argument("--gf-components", type=int, default=8,
                    help="(--flow-arch gf/compact) mixture components per layer.")
+    p.add_argument("--compact-layer", choices=("logistic", "bernstein"),
+                   default="logistic",
+                   help="(--flow-arch compact) Per-layer monotone [0,1]→[0,1] "
+                   "transform. 'logistic' (default): renormalised logistic-"
+                   "mixture CDF (--gf-components components/layer; matched-"
+                   "tail edge derivatives via autograd). 'bernstein': pinned "
+                   "monotone Bernstein polynomial of degree --bernstein-degree "
+                   "(θ_0=0, θ_M=1 ALGEBRAICALLY — no renormalisation division; "
+                   "slope ≥ s_min by construction, no floors/clamps in the "
+                   "layer) on top of a FIXED truncated-N(0,1) input warp (the "
+                   "standardised mass is moment-matched by construction, so "
+                   "the init density is already the peaked truncated normal "
+                   "and the fixed-position polynomial basis only fits the "
+                   "smooth residual). Edge derivatives for the matched tails "
+                   "are CLOSED FORM (no autograd) — cheaper tails and fully "
+                   "vmap/compile-friendly. Z≡1 and the exact window CDF hold "
+                   "for both layer types.")
+    p.add_argument("--bernstein-degree", type=int, default=16,
+                   help="(--compact-layer bernstein) Polynomial degree M per "
+                   "layer (M conditioner outputs/layer; basis resolution "
+                   "~1/(2√M) of the window — the truncated-normal prewarp "
+                   "absorbs the peak so moderate degrees suffice; ≥3 required "
+                   "for the C²-matched tails).")
     p.add_argument("--compact-learn-weights", action="store_true",
                    help="(--flow-arch compact) Make the per-component mixture "
                    "weights π_k LEARNABLE (3K conditioner outputs per layer). By "

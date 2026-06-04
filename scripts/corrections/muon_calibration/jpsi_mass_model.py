@@ -612,6 +612,8 @@ class JpsiMassMixtureModel(nn.Module):
         flow_gf_components: int = 8,
         flow_nsf_bins: int = 8,
         compact_learn_weights: bool = False,
+        compact_layer: str = "logistic",
+        bernstein_degree: int = 16,
         nce_quad_nodes: int = 64,
         mlp_hidden: int = 32,
         mlp_n_layers: int = 2,
@@ -862,7 +864,13 @@ class JpsiMassMixtureModel(nn.Module):
                 n_layers=flow_n_hidden_layers,
                 n_components=flow_gf_components,
                 n_transforms=flow_n_transforms,   # composed depth, as for gf
-                learn_weights=compact_learn_weights,
+                # learn_weights is a logistic-layer option; bernstein layers
+                # have no mixture weights (sanitise rather than raise so old
+                # configs combine freely with --compact-layer bernstein).
+                learn_weights=(compact_learn_weights
+                               and compact_layer == "logistic"),
+                layer_type=compact_layer,
+                bernstein_degree=bernstein_degree,
             )
         elif self.flow_is_nce:
             a_std = (float(m_lo) - float(mll_mean)) / float(mll_std)

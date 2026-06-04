@@ -108,11 +108,17 @@ def load_model_from_checkpoint(checkpoint_path: str, device: str):
         n_eta_bins=len(stats.eta_edges) - 1,
         # compact flow: adopt the mixture-weight mode from the checkpoint;
         # older compact checkpoints (always learnable, 3K heads) lack the key —
-        # infer it from the saved conditioner head shape.
-        compact_learn_weights=args.get(
-            "compact_learn_weights",
-            infer_learn_weights(ckpt["state_dict"],
-                                int(args.get("gf_components", 8)))),
+        # infer it from the saved conditioner head shape. The head-shape
+        # heuristic only applies to LOGISTIC layers (bernstein heads have M
+        # outputs, which could collide with 2K/3K — but every bernstein
+        # checkpoint postdates the key, so the args.get always hits first).
+        compact_learn_weights=(
+            args.get("compact_learn_weights",
+                     infer_learn_weights(ckpt["state_dict"],
+                                         int(args.get("gf_components", 8))))
+            if args.get("compact_layer", "logistic") == "logistic" else False),
+        compact_layer=args.get("compact_layer", "logistic"),
+        bernstein_degree=args.get("bernstein_degree", 16),
         nce_quad_nodes=args.get("nce_quad_nodes", 64),
         cond_basis=args.get("cond_basis", "muon_kin"),
         theta_mlp_hidden=args.get("theta_mlp_hidden", 32),
