@@ -775,7 +775,8 @@ def _setup_common(args, *, stats_override=None):
 
 
 def _make_loaders(args, shard_files, stats, *, half=None, inject_theta=None,
-                  inject_smear=None, val_fraction=None, holdout_fraction=None):
+                  inject_smear=None, val_fraction=None, holdout_fraction=None,
+                  batch_size=None):
     """Build the ``(train, val)`` loaders for one stage. ``half`` selects a
     deterministic disjoint event half (0/1) — used by the MC-closure
     validation mode (stage 1 ← half 0, stage 2 ← half 1); ``None`` = all
@@ -783,22 +784,24 @@ def _make_loaders(args, shard_files, stats, *, half=None, inject_theta=None,
     a known θ_scale shift / per-muon qop smear into the (pseudo-)data m_ll
     (validation closure). ``val_fraction``/``holdout_fraction`` override the
     args defaults (the fit stage passes 0/0 to use ALL events — within the
-    half — with no held-out split)."""
+    half — with no held-out split). ``batch_size`` overrides --batch-size
+    (the fit stage passes --fit-batch-size when set)."""
     seed = int(getattr(args, "inject_smear_seed", 12345))
     me = int(getattr(args, "max_events", 0) or 0)
     ef = float(getattr(args, "event_fraction", 1.0) or 1.0)
     nu = bool(getattr(args, "inject_nonuniform", False))
     vf = args.val_fraction if val_fraction is None else float(val_fraction)
     hf = args.holdout_fraction if holdout_fraction is None else float(holdout_fraction)
+    bs = int(batch_size or args.batch_size)
     train_loader = JpsiMassArrowLoader(
-        shard_files, stats, batch_size=args.batch_size, split="train",
+        shard_files, stats, batch_size=bs, split="train",
         val_fraction=vf, holdout_fraction=hf,
         drop_last=True, half=half, inject_theta_scale=inject_theta,
         inject_theta_smear=inject_smear, inject_seed=seed,
         cond_basis=getattr(args, "cond_basis", "muon_kin"),
         max_events=me, event_fraction=ef, inject_nonuniform=nu)
     val_loader = JpsiMassArrowLoader(
-        shard_files, stats, batch_size=args.batch_size, split="val",
+        shard_files, stats, batch_size=bs, split="val",
         val_fraction=vf, holdout_fraction=hf,
         drop_last=False, half=half, inject_theta_scale=inject_theta,
         inject_theta_smear=inject_smear, inject_seed=seed,
@@ -2099,7 +2102,8 @@ def train_loop(args: argparse.Namespace) -> int:
         # Fit: ALL events of its half (no held-out val/holdout); stops on train NLL.
         s2_train, s2_val = _make_loaders(args, shard_files, stats, half=h_fit,
                                          inject_theta=inj, inject_smear=inj_sm,
-                                         val_fraction=0.0, holdout_fraction=0.0)
+                                         val_fraction=0.0, holdout_fraction=0.0,
+                                         batch_size=getattr(args, "fit_batch_size", 0) or None)
     else:
         if (_inject_theta_np(args, len(stats.eta_edges) - 1) is not None
                 or _inject_smear_np(args, len(stats.eta_edges) - 1) is not None):
@@ -2108,7 +2112,8 @@ def train_loop(args: argparse.Namespace) -> int:
         s1_train, s1_val = train_loader, val_loader
         # Fit: ALL events (no held-out val/holdout); stops on train NLL.
         s2_train, s2_val = _make_loaders(args, shard_files, stats,
-                                         val_fraction=0.0, holdout_fraction=0.0)
+                                         val_fraction=0.0, holdout_fraction=0.0,
+                                         batch_size=getattr(args, "fit_batch_size", 0) or None)
 
     if args.stage in ("both", "flow"):
         _apply_stage_precision(args, model, "flow")
@@ -3831,6 +3836,20 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "(advection+smear pre-image).")
     p.add_argument("--epochs", type=int, default=50, help="Maximum training epochs.")
     p.add_argument("--batch-size", type=int, default=65536, help="Events per batch.")
+    p.add_argument("--fit-batch-size", type=int, default=0,
+                   help="Stage-2 loader batch size (0 = --batch-size). The "
+                   "fit's retained autograd graph scales as batch × GH nodes "
+                   "× flow depth — the operator evaluates the frozen flow at "
+                   "every GH node and the window-Z at the boundary preimages, "
+                   "ALL kept alive until the θ backward (_flow_eval_chunked "
+                   "bounds only the transient peak, not the retained graph) — "
+                   "and ×2 again at --fit-precision fp64. Lower this when the "
+                   "fit OOMs (the CUDA-allocator NVML internal assert) while "
+                   "keeping the big --batch-size for stage-1 throughput. The "
+                   "fit result is unaffected (the Σw-weighted NLL is linear "
+                   "in events; Adam just takes more, smaller steps per "
+                   "epoch). Does not affect the Fisher/bootstrap loaders "
+                   "(they have their own caps/chunking).")
     p.add_argument("--lr", type=float, default=1e-3,
                    help="Adam lr for flow + MLP.")
     p.add_argument("--weight-decay", type=float, default=0.0,
