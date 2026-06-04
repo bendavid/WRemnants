@@ -241,8 +241,11 @@ def _nominal_density_on_grid(model, batch, idx, m_centers_dev, *, chunk_events=4
     if getattr(model, "norm_correction", "none") != "none":
         m_hi = mk.new_full((n,), float(model.m_hi))
         m_lo = mk.new_full((n,), float(model.m_lo))
-        logZ = (model._flow_log_cdf(m_hi, mk).exp()
-                - model._flow_log_cdf(m_lo, mk).exp()).clamp_min(1e-30).log()
+        # STABLE log window mass: the naive exp-difference of CDFs collapses
+        # to the clamp once the (gauge-free) window mass drifts below the fp32
+        # floor — the nominal curve then explodes by e⁶⁹·Z_true (the e21-scale
+        # mc_closure pathology at forward η).
+        logZ = model._flow_log_window_Z(m_lo, m_hi, mk)
         out = out - logZ.view(n, 1)
     return out
 

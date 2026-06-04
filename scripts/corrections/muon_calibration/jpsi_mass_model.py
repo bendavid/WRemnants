@@ -2050,6 +2050,86 @@ class JpsiMassMixtureModel(nn.Module):
         F = 0.5 * (1.0 + torch.erf(z / math.sqrt(2.0)))
         return F.clamp(min=1e-30).log()
 
+    @staticmethod
+    def _log1mexp(d: torch.Tensor) -> torch.Tensor:
+        """``log(1 − e^d)`` for d ≤ 0, stable for both d→0⁻ and d→−∞
+        (Mächler's two-branch form)."""
+        d = d.clamp(max=-1e-12)          # coincident bounds → ~log(1e-12), not −inf
+        return torch.where(d > -0.6931471805599453,          # −log 2
+                           torch.log(-torch.expm1(d)),
+                           torch.log1p(-torch.exp(d)))
+
+    def _log_phi_window(self, z_lo: torch.Tensor, z_hi: torch.Tensor) -> torch.Tensor:
+        """``log(Φ(z_hi) − Φ(z_lo))`` (z_hi ≥ z_lo), fp64-stable in BOTH tails
+        AND for near-coincident bounds:
+
+        * wide bounds: reflect to the side where Φ is small (log_ndtr is
+          accurate there) and subtract in log space — exact down to window
+          masses ~e−300 (far-tail windows), no exp-difference cancellation.
+        * narrow bounds (z_hi − z_lo < 1e−6, the collapsed-transform regime —
+          the log-space subtraction amplifies the log_ndtr ulp by 1/width):
+          midpoint form log Z = log φ(z̄) + log(width), exact to O(width²),
+          with a finite floor and a NONZERO width gradient — so a training
+          run whose transform collapses the window gets a correct restoring
+          gradient instead of a frozen clamp."""
+        zl = z_lo.double(); zh = z_hi.double()
+        width = (zh - zl).clamp_min(0.0)
+        # wide branch: log-space subtraction on the accurate tail side
+        flip = (zl + zh) > 0             # window in the upper Φ tail → reflect
+        a = torch.where(flip, -zh, zl)
+        b = torch.where(flip, -zl, zh)
+        log_Fb = torch.special.log_ndtr(b)
+        log_Fa = torch.special.log_ndtr(a)
+        log_wide = log_Fb + self._log1mexp(log_Fa - log_Fb)
+        # narrow branch: midpoint × width
+        zbar = 0.5 * (zl + zh)
+        log_narrow = (-0.5 * zbar * zbar - 0.5 * math.log(2.0 * math.pi)
+                      + width.clamp_min(1e-290).log())
+        out = torch.where(width < 1e-6, log_narrow, log_wide)
+        return out.to(z_lo.dtype)
+
+    def _flow_log_window_Z(self, m_lo_t: torch.Tensor, m_hi_t: torch.Tensor,
+                           mk: torch.Tensor) -> torch.Tensor:
+        """STABLE per-row ``log ∫_{m_lo_t}^{m_hi_t} p₀`` = log(F₀(hi) − F₀(lo)).
+
+        For the normal-base archs (gf/nsf) the naive ``F.exp() − F.exp()``
+        difference collapses once the window mass Z(c) falls below the fp
+        cancellation/underflow floor — which the truncated stage-1 training
+        ALLOWS, since the out-of-window gauge is free and Z(c) can drift
+        arbitrarily small (observed at e−40-scale for forward-η conditioning).
+        The collapsed Z then (a) explodes the display normalisation by
+        e⁶⁹·Z_true and (b) freezes the training/fit logZ at the clamp with
+        ZERO gradient, silently switching those events to unnormalised-density
+        maximisation. Here the window mass is computed from the base-space z
+        values via fp64 ``log_ndtr`` on the accurate tail side — exact to
+        Z ~ e−300, with correct gradients throughout.
+
+        compact/nce keep their native O(1)-conditioned CDF differences
+        (exact-Z construction / quadrature integral)."""
+        if getattr(self, "flow_is_compact", False) or getattr(self, "flow_is_nce", False):
+            lo = self._flow_log_cdf(m_lo_t, mk)
+            hi = self._flow_log_cdf(m_hi_t, mk)
+            return (hi.exp() - lo.exp()).clamp_min(1e-30).log()
+        m_std_lo = self._standardise_mll(m_lo_t).clamp(
+            -MLL_STD_FLOW_CLAMP, MLL_STD_FLOW_CLAMP)
+        m_std_hi = self._standardise_mll(m_hi_t).clamp(
+            -MLL_STD_FLOW_CLAMP, MLL_STD_FLOW_CLAMP)
+        dist = self.flow.flow(mk)
+        z_lo = dist.transform(m_std_lo.unsqueeze(-1)).squeeze(-1)
+        z_hi = dist.transform(m_std_hi.unsqueeze(-1)).squeeze(-1)
+        return self._log_phi_window(z_lo, z_hi)
+
+    def _flow_log_window_Z_chunked(self, m_lo_flat, m_hi_flat, mk_flat):
+        """Chunked ``_flow_log_window_Z`` (same chunking as _flow_eval_chunked)."""
+        n = m_lo_flat.shape[0]
+        if n <= _FLOW_EVAL_CHUNK:
+            return self._flow_log_window_Z(m_lo_flat, m_hi_flat, mk_flat)
+        return torch.cat([
+            self._flow_log_window_Z(m_lo_flat[i:i + _FLOW_EVAL_CHUNK],
+                                    m_hi_flat[i:i + _FLOW_EVAL_CHUNK],
+                                    mk_flat[i:i + _FLOW_EVAL_CHUNK])
+            for i in range(0, n, _FLOW_EVAL_CHUNK)])
+
     def _norm_correction_log_Z(self, m_obs, mk, pt_obs, eta_pm, phi_pm, q_pm,
                                b_pm, n_iter: int = 2) -> torch.Tensor:
         """Per-event ``log Z(θ;c) = log ∫_{m_lo}^{m_hi} p_θ(x|c) dx`` — the
@@ -2158,12 +2238,10 @@ class JpsiMassMixtureModel(nn.Module):
             return 0.5 * (lo + hi)
         mp_lo = bisect(m_lo)
         mp_hi = bisect(m_hi)
-        log_F_lo = self._flow_log_cdf(mp_lo, mk_src)
-        log_F_hi = self._flow_log_cdf(mp_hi, mk_src)
-        # Z = F_hi − F_lo; floor at eps in case bisection lands on the same
-        # preimage (e.g., when T's image misses the window entirely).
-        Z = (log_F_hi.exp() - log_F_lo.exp()).clamp(min=1e-30)
-        return Z.log()
+        # Stable log window mass (no exp-difference cancellation; coincident
+        # preimages — T's image missing the window — give a large-negative
+        # finite logZ via the _log1mexp guard rather than a hard clamp).
+        return self._flow_log_window_Z(mp_lo, mp_hi, mk_src)
 
     def _norm_correction_log_Z_gh(self, m_obs, mk, pt_obs, eta_pm, phi_pm,
                                   q_pm, b_pm) -> torch.Tensor:
@@ -2240,15 +2318,13 @@ class JpsiMassMixtureModel(nn.Module):
             else:
                 mk_g[..., N_MUON_KIN - 1] = self._source_rho_std_gh(
                     m_obs, pt_obs, eta_pm, phi_pm, q_pm, b_pm, xi)
-        log_F_lo = self._flow_log_cdf(
-            mp_lo.reshape(-1), mk_g.reshape(B * G, -1)).reshape(B, G)
-        log_F_hi = self._flow_log_cdf(
-            mp_hi.reshape(-1), mk_g.reshape(B * G, -1)).reshape(B, G)
-        # Per-node window mass × GH weights, then sum over nodes.
-        node_window = (log_F_hi.exp() - log_F_lo.exp()).clamp_min(0.0)  # [B, G]
-        W = logW.exp().view(1, G)                                       # [1, G]
-        Z = (W * node_window).sum(dim=1).clamp(min=1e-30)               # [B]
-        return Z.log()
+        # Per-node STABLE log window mass, then the GH-weighted sum in log
+        # space (logsumexp) — same maths as Σ W·(F_hi − F_lo) but immune to
+        # the exp-difference cancellation when the window mass is tiny.
+        log_nw = self._flow_log_window_Z_chunked(
+            mp_lo.reshape(-1), mp_hi.reshape(-1),
+            mk_g.reshape(B * G, -1)).reshape(B, G)                      # [B, G]
+        return torch.logsumexp(logW.view(1, G) + log_nw, dim=1)         # [B]
 
     def _norm_correction_log_Z_gh_qop(self, m_obs, mk, pt_obs, eta_pm, phi_pm,
                                        q_pm, b_pm) -> torch.Tensor:
@@ -2301,14 +2377,12 @@ class JpsiMassMixtureModel(nn.Module):
         if self.scale_enabled or self.smearing_enabled:
             mk_g = self._node_cond(mk_g, pt_truth_evt, etao, phio, qo)
         mkf = mk_g.reshape(B * G2, -1)
-        log_F_lo = self._flow_eval_chunked(
-            self._flow_log_cdf, m_t_lo.reshape(-1), mkf).reshape(B, G2)
-        log_F_hi = self._flow_eval_chunked(
-            self._flow_log_cdf, m_t_hi.reshape(-1), mkf).reshape(B, G2)
-        node_window = (log_F_hi.exp() - log_F_lo.exp()).clamp_min(0.0)  # [B, G²]
-        W = logW2.exp().view(1, G2)                                     # [1, G²]
-        Z = (W * node_window).sum(dim=1).clamp(min=1e-30)               # [B]
-        return Z.log()
+        # Per-node STABLE log window mass + GH-weighted logsumexp (see
+        # _norm_correction_log_Z_gh) — replaces the cancellation-prone
+        # Σ W·(F_hi.exp() − F_lo.exp()).
+        log_nw = self._flow_log_window_Z_chunked(
+            m_t_lo.reshape(-1), m_t_hi.reshape(-1), mkf).reshape(B, G2)
+        return torch.logsumexp(logW2.view(1, G2) + log_nw, dim=1)       # [B]
 
     def data_nll_continuity(
         self,

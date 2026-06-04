@@ -1812,9 +1812,14 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
             # TRUNCATED density on [m_lo, m_hi] — the same normalisation stage 2
             # applies via flow_cdf (at θ=0). Removes the full-support-vs-truncated
             # mismatch that biases the overall scale A.
-            log_F_hi = model._flow_log_cdf(m.new_full(m.shape, float(model.m_hi)), mk)
-            log_F_lo = model._flow_log_cdf(m.new_full(m.shape, float(model.m_lo)), mk)
-            log_Z = (log_F_hi.exp() - log_F_lo.exp()).clamp_min(1e-30).log()
+            # STABLE log window mass (fp64 log_ndtr inside): the truncated
+            # loss leaves the Z(c) gauge free, and once it drifts below the
+            # fp32 floor the old exp-difference clamped → ZERO gradient → the
+            # affected events silently switched to unnormalised-density
+            # maximisation (observed as e−40-scale window masses at forward η).
+            log_Z = model._flow_log_window_Z(
+                m.new_full(m.shape, float(model.m_lo)),
+                m.new_full(m.shape, float(model.m_hi)), mk)
             logp = logp - log_Z
         w = batch["w"][idx].double()                 # float64 reduction: the model
         sw = float(w.sum().clamp_min(1e-30))         # runs at --precision, but the

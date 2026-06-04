@@ -198,9 +198,8 @@ def additive_logp_logZ(m_obs, mk):
     logp0 = model.log_p_nominal(m_obs + s, mk)                # [B]
     mhi = m_obs.new_full(m_obs.shape, M_HI) + s
     mlo = m_obs.new_full(m_obs.shape, M_LO) + s
-    Z = (model._flow_log_cdf(mhi, mk).exp()
-         - model._flow_log_cdf(mlo, mk).exp()).clamp_min(1e-30)
-    return logp0, Z.log()                                     # [B], [B]
+    # STABLE log window mass (no exp-difference cancellation at tiny Z).
+    return logp0, model._flow_log_window_Z(mlo, mhi, mk)      # [B], [B]
 
 
 ni = int(targs.get("continuity_n_iter", 2))
