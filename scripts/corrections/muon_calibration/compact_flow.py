@@ -231,6 +231,21 @@ class CompactMatchedFlow(nn.Module):
         return total, beyond
 
     # ---- public API --------------------------------------------------------
+    def forward_inwindow(self, x: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
+        """log p₀(x_std | c) for x GUARANTEED ∈ [a, b] — the stage-1 training
+        case (the masses are window-selected, so standardised values lie in
+        [a, b] by construction and ``forward``'s tail branch is dead code).
+        Numerically identical to ``forward`` there, but skips the
+        data-dependent short-circuit (``bool((x<a).any())`` graph-breaks
+        dynamo) and the matched tails (``_edges``' inner ``autograd.grad``
+        cannot be traced), so it is torch.compile(fullgraph=True)-friendly.
+        Do NOT use where x can stray outside the window (operator un-kick,
+        CDF boundaries) — the tail extension would be silently wrong."""
+        x = x.reshape(-1)
+        log_pi, mu, s = self._layer_params(c)
+        _, logp = self._compose(x, log_pi, mu, s)
+        return logp
+
     def forward(self, x: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
         """log p₀(x_std | c), [B]. ``x`` may be [B] or [B,1]."""
         x = x.reshape(-1)
@@ -293,10 +308,16 @@ def _selftest():
         p = flow(xt, ce).exp()
         print(f"learn_weights={lw} rel.diff dF/dx vs p:",
               [f"{abs(d - pp) / max(pp, 1e-12):.1e}" for d, pp in zip(dF.tolist(), p.tolist())])
+        # forward_inwindow ≡ forward for in-window x (the compile fast path)
+        xin = a + (b - a) * torch.rand(257, dtype=torch.float64)
+        cin = c[:1].expand(257, -1)
+        assert torch.equal(flow.forward_inwindow(xin, cin), flow(xin, cin)), \
+            "forward_inwindow disagrees with forward in-window"
         # checkpoint-shape inference round-trip
         sd = {f"flow.{k}": v for k, v in flow.state_dict().items()}
         assert infer_learn_weights(sd, 8) == lw, "infer_learn_weights round-trip failed"
-    print("infer_learn_weights round-trip OK for both modes")
+    print("forward_inwindow ≡ forward (in-window); infer_learn_weights "
+          "round-trip OK for both modes")
     flow = CompactMatchedFlow(n_cond=7, a=a, b=b, n_components=8, n_transforms=5).double()
     c = torch.randn(4, 7, dtype=torch.float64)
     # overflow stress: extreme conditioners

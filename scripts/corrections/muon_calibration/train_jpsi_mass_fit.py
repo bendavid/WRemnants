@@ -1720,6 +1720,31 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
               "leaks mass outside the window and stage-2 truncates inconsistently "
               "→ biases the overall scale A)")
 
+    # --compile: fuse the stage-1 hot path. Only the compact/nce archs are
+    # traceable — gf/nsf route through zuko's MonotonicTransform whose inner
+    # torch.autograd.grad dynamo cannot trace. For compact the training
+    # forward is the IN-WINDOW composition only (the masses are window-
+    # selected, so forward()'s data-dependent tail branch is dead code —
+    # forward_inwindow skips it and fullgraph-compiles); for nce the whole
+    # paired-BCE loss compiles. The stage-1 workload is launch-bound (long
+    # chains of small elementwise kernels around skinny matmuls), so kernel
+    # fusion — not low-precision matmuls — is the effective speed lever.
+    compiled_inwindow = None
+    compiled_nce_loss = None
+    if getattr(args, "compile", False):
+        if compact:
+            compiled_inwindow = torch.compile(model.flow.forward_inwindow)
+            print("  --compile: compact in-window density compiled "
+                  "(first batches include one-off compilation)")
+        elif nce:
+            compiled_nce_loss = torch.compile(model.flow.nce_loss)
+            print("  --compile: NCE BCE loss compiled (training pass only — "
+                  "the seeded-generator validation pass stays eager; first "
+                  "batches include one-off compilation)")
+        else:
+            print(f"  --compile: SKIPPED for flow-arch {model.flow_arch} "
+                  f"(zuko's inner autograd.grad is untraceable)")
+
     def step1(model, batch):
         idx = (~batch["is_data_mask"]).nonzero(as_tuple=True)[0]
         if idx.numel() == 0:
@@ -1750,12 +1775,28 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
                              float(m_std[-1].item()))) & 0x7FFFFFFFFFFFFFFF
                 gen = torch.Generator(device=m_std.device)
                 gen.manual_seed(seed)
-            loss_ev = model.flow.nce_loss(
-                m_std, mk, n_noise=args.nce_noise_ratio, generator=gen)
+            if compiled_nce_loss is not None and gen is None:
+                # training pass: compiled (the generator kwarg would graph-
+                # break dynamo; the val pass is a tiny fraction of the epoch)
+                loss_ev = compiled_nce_loss(m_std, mk,
+                                            n_noise=args.nce_noise_ratio)
+            else:
+                loss_ev = model.flow.nce_loss(
+                    m_std, mk, n_noise=args.nce_noise_ratio, generator=gen)
             w = batch["w"][idx].double()
             sw = float(w.sum().clamp_min(1e-30))
             return (w * loss_ev.double()).sum() / sw, sw
-        logp = model.log_p_nominal(m, mk)
+        if compiled_inwindow is not None:
+            # compact + --compile: same formula as log_p_nominal (standardise →
+            # clamp → flow → − mll_log_scale), with the flow evaluated through
+            # the compiled in-window composition. The clamp at ±MLL_STD_FLOW_
+            # CLAMP=5 is inactive for window-selected masses (the standardised
+            # window is within ±5), so the in-window precondition holds.
+            m_std = model._standardise_mll(m).clamp(
+                -MLL_STD_FLOW_CLAMP, MLL_STD_FLOW_CLAMP)
+            logp = compiled_inwindow(m_std, mk) - model.mll_log_scale
+        else:
+            logp = model.log_p_nominal(m, mk)
         if window_norm:
             # Subtract the per-event window log-normaliser so stage 1 fits the
             # TRUNCATED density on [m_lo, m_hi] — the same normalisation stage 2
@@ -4229,11 +4270,20 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     # train_muon_response_flow.py).
     p.add_argument(
         "--compile", action="store_true",
-        help="Wrap the model in torch.compile. Currently SKIPPED — the "
-        "GF base flow's Jacobian uses an inner torch.autograd.grad call "
-        "(zuko's MonotonicTransform.call_and_ladj) that dynamo cannot "
-        "trace. Flag is accepted for parity with the response-flow "
-        "trainer; a one-line note is printed at startup.",
+        help="torch.compile the STAGE-1 hot path for the traceable flow "
+        "archs: compact (the in-window composition — the training forward "
+        "never reaches the matched tails, whose edge autograd.grad cannot "
+        "be traced) and nce (the paired-BCE loss; the seeded-generator "
+        "validation pass stays eager). Targets the actual stage-1 "
+        "bottleneck — kernel-launch overhead from long chains of small "
+        "elementwise ops around skinny matmuls (which is also why "
+        "bf16/fp16 alone barely move the wall clock). SKIPPED with a note "
+        "for gf/nsf (zuko's MonotonicTransform uses an inner "
+        "torch.autograd.grad dynamo cannot trace) and for stage 2 (the "
+        "continuity operator's inner Jacobian grads + the double-backward "
+        "consumers — smear d², Fisher, trust HVPs — are unsupported by "
+        "compiled autograd). First batches include one-off compilation "
+        "(~tens of seconds).",
     )
     p.add_argument(
         "--precision", choices=("fp32", "fp64", "bf16", "fp16"), default="fp32",
