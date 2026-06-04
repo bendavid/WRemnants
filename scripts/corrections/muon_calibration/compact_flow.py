@@ -141,8 +141,19 @@ class CompactMatchedFlow(nn.Module):
             if self.M < 3:
                 raise ValueError(f"bernstein_degree must be ≥ 3 (need S''' at "
                                  f"the edges for the matched tails); got {self.M}")
+        # Buffers kept ONLY for checkpoint compatibility (they are persistent
+        # and present in existing state_dicts). All maths/comparisons use the
+        # EXACT python-float scalars below: the buffers were created at the
+        # default dtype (fp32), so under model.double() they upcast the
+        # fp32-ROUNDED edges — an exact-double edge evaluation (decompose at
+        # A=0, fit norm at θ→0) then lands 1e-7 INSIDE the flow's internal
+        # window, taking the in-window branch whose x-gradient the bernstein
+        # pow-safety clamp zeroes. Scalars are exact doubles (and round
+        # consistently with the tensor dtype in fp32 ops).
         self.register_buffer("a", torch.tensor(float(a)))
         self.register_buffer("b", torch.tensor(float(b)))
+        self._af = float(a)
+        self._bf = float(b)
         self._width = float(b - a)
         # logistic: min component scale in [0,1] units; bernstein: EXACT lower
         # bound on every layer slope S' ≥ s_min (via the δ floor) — both keep
@@ -299,7 +310,7 @@ class CompactMatchedFlow(nn.Module):
                 u = S
             return u, logp
         log_pi, mu, s = params
-        u = (x - self.a) / (self.b - self.a)
+        u = (x - self._af) / (self._bf - self._af)
         logp = -math.log(self._width) + torch.zeros_like(x)
         for l in range(self.L):
             S, logSp = self._layer_S_logSp(u, log_pi[:, l], mu[:, l], s[:, l])
@@ -322,8 +333,8 @@ class CompactMatchedFlow(nn.Module):
         train_grad = torch.is_grad_enabled()
         out = {}
         with torch.enable_grad():
-            for tag, edge in (("a", self.a), ("b", self.b)):
-                xe = edge.expand(B).clone().requires_grad_(True)
+            for tag, edge in (("a", self._af), ("b", self._bf)):
+                xe = params[0].new_full((B,), edge).requires_grad_(True)
                 _, lp = self._compose(xe, params)
                 d1 = torch.autograd.grad(lp.sum(), xe, create_graph=True,
                                          retain_graph=True)[0]
@@ -365,7 +376,7 @@ class CompactMatchedFlow(nn.Module):
         c2 = Mf * (Mf - 1.0)
         c3 = Mf * (Mf - 1.0) * (Mf - 2.0)
         out = {}
-        for tag, xe in (("a", float(self.a)), ("b", float(self.b))):
+        for tag, xe in (("a", self._af), ("b", self._bf)):
             at_b = (tag == "b")
             lw = -0.5 * xe * xe - self._log_norm     # log w'(xe)
             lq = delta.new_full((B,), lw)
@@ -435,21 +446,27 @@ class CompactMatchedFlow(nn.Module):
         """log p₀(x_std | c), [B]. ``x`` may be [B] or [B,1]."""
         x = x.reshape(-1)
         params = self._cond_params(c)
-        a, b = self.a, self.b
+        a, b = self._af, self._bf
         _, logq_in = self._compose(x, params)
-        if not (bool((x < a).any()) or bool((x > b).any())):
+        # STRICT interior fast path / INCLUSIVE tail branches: at exactly x=a/b
+        # the tail value equals the in-window value (C² match), but the tail's
+        # x-derivative is clamp-free — the bernstein layers' pow-safety clamp
+        # sits exactly at its boundary for u=0/1 and silently ZEROES the
+        # autograd derivative of the in-window branch there (the decompose
+        # g_norm bug: dZ/ds at the un-shifted window edges came out 0).
+        if not (bool((x <= a).any()) or bool((x >= b).any())):
             return logq_in                                  # all in-window (training)
         ed = self._edges(params)
         logp_hi = self._tail_logp(x - b, ed["logq_b"], ed["d1_b"], ed["d2_b"])
         logp_lo = self._tail_logp(x - a, ed["logq_a"], ed["d1_a"], ed["d2_a"])
-        return torch.where(x > b, logp_hi, torch.where(x < a, logp_lo, logq_in))
+        return torch.where(x >= b, logp_hi, torch.where(x <= a, logp_lo, logq_in))
 
     def log_cdf(self, x: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
         """log F₀(x_std | c), [B]. F₀ = cumulative of the (in-window + tails)
         unnormalised density; F₀(b)−F₀(a)=1 exactly → window Z is exact."""
         x = x.reshape(-1)
         params = self._cond_params(c)
-        a, b = self.a, self.b
+        a, b = self._af, self._bf
         ed = self._edges(params)
         # d2 is already floored ≤ −curv_floor in _edges, so α=−d2 ≥ curv_floor > 0.
         alpha_a = -ed["d2_a"]
@@ -464,7 +481,13 @@ class CompactMatchedFlow(nn.Module):
         Q = Q.clamp(0.0, 1.0)
         F_in = m_lo + Q
         F_hi = m_lo + 1.0 + (m_hi_tot - beyond_xb)
-        Fc = torch.where(x > b, F_hi, torch.where(x < a, F_below_x, F_in))
+        # INCLUSIVE tail branches (see forward): at exactly x=a/b the tail
+        # F is both exact in value (F_hi(b) = m_lo + 1 algebraically, vs an
+        # O(M·ε) clamp residue in Q) and has the correct clamp-free derivative
+        # p(edge) — the in-window branch's derivative is zeroed there by the
+        # bernstein pow-safety clamp (decompose-g_norm / fit-norm-gradient at
+        # θ≈0 would silently lose the p(b)−p(a) term).
+        Fc = torch.where(x >= b, F_hi, torch.where(x <= a, F_below_x, F_in))
         return Fc.clamp_min(1e-30).log()
 
 
@@ -580,6 +603,22 @@ def _selftest():
             assert d < 1e-4, (k, tag, d)
     print("bernstein analytic edges == autograd-chain reference "
           "(logq, d1, d2 at both edges; rel <1e-4, reference-limited)")
+    # 3b) EXACT-EDGE shift gradient: dZ/ds at s=0 with Z = F(b+s) − F(a+s)
+    #     must equal p(b) − p(a) (the decompose g_norm path; the bernstein
+    #     pow-safety clamp used to zero it through the in-window branch).
+    for lt in ("bernstein", "logistic"):
+        fz = (fb if lt == "bernstein" else
+              CompactMatchedFlow(n_cond=7, a=a, b=b, n_transforms=5).double())
+        cz = c[:3]
+        s0 = torch.zeros((), dtype=torch.float64, requires_grad=True)
+        Z = (fz.log_cdf(torch.full((3,), b, dtype=torch.float64) + s0, cz).exp()
+             - fz.log_cdf(torch.full((3,), a, dtype=torch.float64) + s0, cz).exp())
+        gz = torch.autograd.grad(Z.sum(), s0)[0]
+        pe = (fz(torch.full((3,), b, dtype=torch.float64), cz).exp()
+              - fz(torch.full((3,), a, dtype=torch.float64), cz).exp()).sum()
+        rel = float((gz - pe).abs() / pe.abs().clamp_min(1e-12))
+        assert rel < 1e-9, (lt, float(gz), float(pe))
+        print(f"{lt} exact-edge dZ/ds == p(b)-p(a) (rel {rel:.1e})")
     # 4) forward_inwindow ≡ forward in-window; conditioning grads through the
     #    ANALYTIC tails (the operator path)
     xin = a + (b - a) * torch.rand(257, dtype=torch.float64)
