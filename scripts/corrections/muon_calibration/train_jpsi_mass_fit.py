@@ -1538,15 +1538,23 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
             g_full = torch.cat([gi.reshape(-1) for gi in g])
             if _h_use_batched:
                 try:
+                    # Row chunk: --fisher-hessian-chunk when set (the dedicated
+                    # vmap-width knob; the batched vjp holds ~chunk copies of
+                    # the subset's backward graph — the OOM lever at fp64 /
+                    # large --hess-subsample-events), else the historical
+                    # --empirical-fisher-chunk default.
                     Hb = _hessian_block_batched(
                         g_full[_h_active_idx], params, _h_active_idx, n_par,
-                        chunk=max(1, int(args.empirical_fisher_chunk)))
+                        chunk=(int(getattr(args, "fisher_hessian_chunk", 0) or 0)
+                               or max(1, int(args.empirical_fisher_chunk))))
                 except (RuntimeError, NotImplementedError) as e:
                     _h_use_batched = False
                     if str(device).startswith("cuda"):
                         torch.cuda.empty_cache()
                     bar.write(f"  note: vectorised Hessian unavailable "
-                              f"({type(e).__name__}); using the per-row loop")
+                              f"({type(e).__name__}: "
+                              f"{str(e).splitlines()[0][:120]}); "
+                              f"using the per-row loop")
                     Hb = _hessian_block_loop(g_full, params, _h_active_idx, n_par)
             else:
                 Hb = _hessian_block_loop(g_full, params, _h_active_idx, n_par)
@@ -4079,16 +4087,21 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "so 'train' == 'all' here and 'val'/'holdout' are EMPTY — keep "
                    "the default 'train'.")
     p.add_argument("--fisher-hessian-chunk", type=int, default=0,
-                   help="(--fisher-info) Hessian ROWS per vmapped second-"
-                   "backward pass. 0 (default) = all active rows at once "
-                   "(the historical behaviour) — the batched vjp then holds "
-                   "~n_active copies of the batch's backward graph, which is "
+                   help="(--fisher-info, and the trust-exact per-iteration "
+                   "Hessian) Hessian ROWS per vmapped second-backward pass. "
+                   "0 (default) = the historical behaviour: --fisher-info "
+                   "runs all active rows at once; trust-exact falls back to "
+                   "--empirical-fisher-chunk (64). The batched vjp holds "
+                   "~chunk copies of the batch's backward graph, which is "
                    "the memory peak when that graph is large (nce quadrature "
-                   "window-Z, fp64, big --batch-size). Set e.g. 8-16 to bound "
-                   "peak memory at ~chunk copies for the same total compute; "
-                   "--no-fisher-vectorized (per-row loop) is the chunk=1 "
-                   "limit. The event dimension is bounded separately by "
-                   "--batch-size (the Fisher loader uses it directly).")
+                   "window-Z, fp64, big --batch-size/--hess-subsample-events) "
+                   "— a CUDA OOM there surfaces as the 'vectorised Hessian "
+                   "unavailable (RuntimeError: ...)' per-row-loop fallback. "
+                   "Set e.g. 4-16 to bound peak memory at ~chunk copies for "
+                   "the same total compute; --no-fisher-vectorized (per-row "
+                   "loop) is the chunk=1 limit. The event dimension is "
+                   "bounded separately by --batch-size (the Fisher loader "
+                   "uses it directly) / --hess-subsample-events (trust).")
     p.add_argument("--fisher-vectorized", default=True,
                    action=argparse.BooleanOptionalAction,
                    help="(two-stage) Compute the Hessian with one vmapped "
