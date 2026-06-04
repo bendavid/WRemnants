@@ -124,7 +124,8 @@ def _make_amp(precision: str, device: str):
 def _stage_precision(args, which: str) -> str:
     """Resolve the compute precision for a stage: --flow-precision /
     --fit-precision override --precision."""
-    return getattr(args, f"{which}_precision", None) or args.precision
+    return (getattr(args, f"{which}_precision", None)
+            or getattr(args, "precision", "fp32"))
 
 
 def _apply_stage_precision(args, model, which: str) -> torch.dtype:
@@ -1582,12 +1583,41 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
               f"on {sub_str} events; max {max_iter} iters, gtol={args.trust_gtol:g}")
 
     best = {"nll": float("inf"), "x": x0.copy()}
+    best_ckpt = os.path.join(args.output, f"{stage_name}_best.pt")
+    last_ckpt = os.path.join(args.output, f"{stage_name}_last.pt")
+
+    def _ckpt(nit, nll):
+        """Checkpoint dict from the CURRENT model state (same layout as
+        _run_epochs' so resume/diagnostics treat them identically)."""
+        return {
+            "epoch": nit, "stage": stage_name,
+            "state_dict": {k: v.detach().cpu()
+                           for k, v in model.state_dict().items()},
+            "theta_scale": model.theta_scale.detach().cpu(),
+            "theta_smear": model.theta_smear.detach().cpu(),
+            "stats": _stats_to_dict(stats), "best_val": nll, "val_metric": nll,
+            "args": vars(args),
+        }
 
     def _callback(xk, *a):
         ctr["iter"] += 1
         nll = _fun_and_grad.last_nll
-        if nll < best["nll"]:
+        improved = nll < best["nll"]
+        if improved:
             best["nll"] = nll; best["x"] = np.array(xk, copy=True)
+        # Persist progress after EVERY trust iteration (matching _run_epochs'
+        # per-epoch last/best), so a crash, OOM, or subproblem breakdown loses
+        # at most one iteration. ``xk`` is the ACCEPTED iterate — trust-region
+        # acceptance is monotone descent, so nll(xk) == best after the update
+        # (on a rejected step xk is unchanged and equals the stored best).
+        # _set_flat bumps the param versions, but the fun(x_proposed) eval
+        # that preceded this callback already did — no extra HVP-graph
+        # rebuilds result from the checkpointing.
+        _set_flat(xk)
+        ck = _ckpt(ctr["iter"], best["nll"])
+        torch.save(ck, last_ckpt)
+        if improved:
+            torch.save(ck, best_ckpt)
         print(f"  [{stage_name}] trust iter {ctr['iter']}/{max_iter}: "
               f"nll={nll:+.6f}  (cum: {ctr['fg']} f/grad evals, "
               f"{ctr['gS']} graph builds, {ctr['hvp']} HVPs)", flush=True)
@@ -1634,16 +1664,9 @@ def _run_trust_region(args, model, params, train_loader, stats, step_fn=None, *,
     print(f"  [{stage_name}] trust-region done: nll={final_nll:+.6f}, "
           f"‖g‖={np.linalg.norm(res.jac):.3e}, {res.nit} iters, "
           f"success={res.success} ({res.message})")
-    ck = {
-        "epoch": res.nit, "stage": stage_name,
-        "state_dict": {k: v.detach().cpu() for k, v in model.state_dict().items()},
-        "theta_scale": model.theta_scale.detach().cpu(),
-        "theta_smear": model.theta_smear.detach().cpu(),
-        "stats": _stats_to_dict(stats), "best_val": final_nll,
-        "val_metric": final_nll, "args": vars(args),
-    }
-    torch.save(ck, os.path.join(args.output, "fit_best.pt"))
-    torch.save(ck, os.path.join(args.output, "fit_last.pt"))
+    ck = _ckpt(int(res.nit), final_nll)
+    torch.save(ck, best_ckpt)
+    torch.save(ck, last_ckpt)
     return final_nll
 
 
