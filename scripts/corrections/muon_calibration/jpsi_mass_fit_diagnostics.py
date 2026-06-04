@@ -57,7 +57,7 @@ from jpsi_mass_arrow_loader import (  # noqa: E402
 )
 from jpsi_mass_model import (  # noqa: E402
     JpsiMassMixtureModel, _event_mll, _event_cond_raw,
-    N_THETA_SCALE_PM, N_THETA_SMEAR_PM,
+    N_THETA_SCALE, N_THETA_SCALE_PM, N_THETA_SMEAR_PM,
     SMEAR_VAR_SCALE_A, SMEAR_VAR_SCALE_C, THETA_SCALE_REF,
 )
 from train_jpsi_mass_fit import _move_batch, _stats_from_dict  # noqa: E402
@@ -1972,6 +1972,31 @@ def main() -> int:
     print(f"loading checkpoint: {args.checkpoint}")
     model, stats, train_args, ckpt = load_model_from_checkpoint(args.checkpoint, device)
 
+    # Stage-1 FLOW checkpoint (no fit ran): the meaningful closure is the RAW
+    # template vs NOMINAL MC at θ = 0. The checkpoint's args still carry the
+    # full command line (--inject-A/... apply only to the STAGE-2 pseudo-data;
+    # stage 1 trains on un-injected events), and the saved θ tables are at
+    # their INIT values — which for --smear-param-form softplus is a NONZERO
+    # effective smearing (softplus(0)·scale ≈ 0.69·scale). Force exact θ = 0
+    # (scale AND smear, binned tables and θ-net alike) and skip the injection
+    # replay below, so the closure plots show pure template fidelity.
+    is_flow_ckpt = str(ckpt.get("stage", "")) == "flow"
+    if is_flow_ckpt:
+        smear_zero_raw = (-30.0   # softplus(−30) ≈ 1e−13 → effective smear ≈ 0
+                          if getattr(model, "smear_param_form", "linear") == "softplus"
+                          else 0.0)
+        with torch.no_grad():
+            model.theta_scale.zero_()
+            model.theta_smear.fill_(smear_zero_raw)
+            if getattr(model, "theta_net", None) is not None:
+                last = model.theta_net.net[-1]
+                last.weight.zero_()
+                last.bias.zero_()
+                last.bias[N_THETA_SCALE:].fill_(smear_zero_raw)
+        print("stage-1 FLOW checkpoint detected: forcing θ = 0 (no scale "
+              "shift, no smearing) and skipping the injection replay — the "
+              "closure plots compare the raw template against NOMINAL MC")
+
     # Loader.
     shard_files = discover_shards([args.shards])
     if not shard_files:
@@ -1990,7 +2015,7 @@ def main() -> int:
     # pseudo-data, and use them as the χ² reference + dashed line on the θ plot.
     inject_np = None
     inject_smear_np = None
-    if mc_as_data:
+    if mc_as_data and not is_flow_ckpt:
         n_eta = len(stats.eta_edges) - 1
         ia = float(train_args.get("inject_A", 0.0) or 0.0)
         ie = float(train_args.get("inject_e", 0.0) or 0.0)
