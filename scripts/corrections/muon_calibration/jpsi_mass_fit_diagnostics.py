@@ -388,23 +388,22 @@ class _override_theta:
 
 def _continuity_mc_fold(model, ptm, etam, phim, qm, bm):
     """Fold MC reco at the fitted θ — the empirical template the model signal
-    curve should reproduce. The per-muon PHYSICAL fold: apply the fitted scale
-    δqop and an independent Gaussian σ_qop smear to each muon's pt, then
-    RECOMPUTE m_ll from the folded 4-vectors. The smear σ_qop uses the fitted
-    width coefficients directly via ``model.fold_sigma_qop_pm`` (the signed
-    (a, c) clipped at 0). This is the exact operation the continuity density
-    approximates (linearized advection + the deterministic width stretch), so
-    the closure overlay exposes those approximations. (ρ is a flow condition,
-    not histogrammed/binned here, so it is not recomputed — no effect on the
-    m_ll closure plots.)"""
+    curve should reproduce. The per-muon PHYSICAL fold, in the model's
+    generative order: FIRST the forward Gaussian σ_qop smear at the truth pt
+    (``model.fold_sigma_qop_pm``, the signed (a, c) clipped at 0), THEN the
+    forward scale — the exact functional inverse of the model's defining
+    BACKWARD (data → MC) map, via ``model._scale_apply_pt_forward`` (fixed
+    point; the iteration cost lives on the fold side, where it is free). m_ll
+    is RECOMPUTED from the folded 4-vectors. This is the exact operation the
+    continuity density inverts, so the closure overlay exposes the residual
+    approximations. (ρ is a flow condition, not histogrammed/binned here, so
+    it is not recomputed — no effect on the m_ll closure plots.)"""
     pt_cur = ptm
-    if model.scale_enabled:
-        AeM = model._scale_AeM_pm(etam, phim, bm)
-        dqop_s = model._delta_qop_analytic(AeM, ptm, etam, qm)
-        pt_cur = model._apply_scale_pt(ptm, etam, qm, dqop_s, sign=+1.0)
     if model.smearing_enabled:
         sig = model.fold_sigma_qop_pm(pt_cur, etam, phim, bm)
         pt_cur = model.apply_smear_pt(pt_cur, etam, qm, sig, torch.randn_like(sig))
+    if model.scale_enabled:
+        pt_cur = model._scale_apply_pt_forward(pt_cur, etam, phim, qm, bm)
     return _event_mll(pt_cur, etam, phim).detach()
 
 

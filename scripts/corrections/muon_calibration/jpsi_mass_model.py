@@ -1211,13 +1211,43 @@ class JpsiMassMixtureModel(nn.Module):
     ) -> torch.Tensor:
         """Shift qop by ``sign·δqop`` and convert back to pt.
 
-        Conventions: ``qop = q · sinθ / pt``. ``sign=+1`` → forward
-        T_scale (truth → obs); ``sign=−1`` → inverse T_scale (obs → truth).
+        Conventions: ``qop = q · sinθ / pt``. The scale transform is DEFINED in
+        the BACKWARD (data → MC) direction: ``qop_mc = qop_obs − δqop(pt_obs)``
+        with δqop evaluated at the OBSERVED pt — so ``sign=−1`` with the input
+        pt is the exact, closed-form defining map (no fixed point anywhere in
+        the fit). ``sign=+1`` only realises a single step of the implicit
+        forward (MC → data) inverse — see ``_scale_apply_pt_forward``.
         """
         sintheta = _sintheta_from_eta(eta_pm)
         qop = q_pm * sintheta / pt_pm
         qop_new = qop + sign * delta_qop
         return self._qop_new_to_pt(qop, qop_new, q_pm, sintheta)
+
+    def _scale_apply_pt_forward(
+        self,
+        pt_in: torch.Tensor,
+        eta_pm: torch.Tensor,
+        phi_pm: torch.Tensor,
+        q_pm: torch.Tensor,
+        b_pm: torch.Tensor,
+        n_iter: int = 8,
+    ) -> torch.Tensor:
+        """FORWARD (MC → data) scale: the exact functional inverse of the
+        defining backward map ``qop_mc = qop_obs − δqop(pt_obs)``, solved by
+        fixed point ``qop_obs ← qop_in + δqop(pt_obs)`` (contraction rate
+        ~|∂δqop/∂qop| ≲ 2e·k ~ 2e-3; 8 iterations → ~1e-12 relative). The FIT never needs
+        this — only the forward consumers do (the diagnostics' physical fold;
+        the loader's numpy injection twin), where the iteration cost is free."""
+        if not self.scale_enabled:
+            return pt_in
+        sintheta = _sintheta_from_eta(eta_pm)
+        qop_in = q_pm * sintheta / pt_in
+        AeM_pm = self._scale_AeM_pm(eta_pm, phi_pm, b_pm)
+        pt_obs = pt_in
+        for _ in range(n_iter):
+            dq = self._delta_qop_analytic(AeM_pm, pt_obs, eta_pm, q_pm)
+            pt_obs = self._qop_new_to_pt(qop_in, qop_in + dq, q_pm, sintheta)
+        return pt_obs
 
     def jacobian_mll_linearized(
         self,
@@ -1550,8 +1580,11 @@ class JpsiMassMixtureModel(nn.Module):
             return torch.autograd.grad(lp.sum(), ml, create_graph=True)[0].detach()
 
     def _scale_unapply_pt(self, pt_obs, eta_pm, phi_pm, q_pm, b_pm):
-        """Un-apply the scale correction (observed → truth pt); identity if scale
-        is disabled. Shared by the mass-space operators' source-conditioning."""
+        """THE defining backward (data → MC) scale map on a per-muon config:
+        ``qop_mc = qop_obs − δqop(pt_obs)`` with δqop evaluated at the OBSERVED
+        pt — exact and iteration-free by construction. Identity if scale is
+        disabled. Used by the operators (un-kick + source conditioning) and the
+        boundary transport of the window normalisation."""
         if not self.scale_enabled:
             return pt_obs
         AeM_pm = self._scale_AeM_pm(eta_pm, phi_pm, b_pm)
@@ -1566,6 +1599,33 @@ class JpsiMassMixtureModel(nn.Module):
         rho = (pt1[:, 0] - pt1[:, 1]) / (pt1[:, 0] + pt1[:, 1])
         idx = N_MUON_KIN - 1
         return (rho - self.muon_kin_mean[idx]) / self.muon_kin_std[idx]
+
+    def _scale_backward_mass_linear(self, m_eval, m_obs, pt_obs, eta_pm, q_pm,
+                                    theta_scale_pm):
+        """Explicit BACKWARD (data → MC) scale shift in mass space for the
+        mass-space operators (pf_ode / gh_convolution), in their linearised
+        representation: ``m_s(x) = x − s_adv(x)`` with the advective shift
+        ``s_adv = v(x)·θ`` evaluated at the EVALUATION mass ``m_eval`` along the
+        event's observed ray (``pt(x) = pt_obs·x/m_obs`` inside
+        ``_continuity_response``) — exact and iteration-free in the defining
+        direction. Also returns the exact ``log|dm_s/dx| = log|1 − ∂_x s_adv|``
+        by autograd through a zero leaf added to ``m_eval`` (the θ graph is
+        preserved). Returns ``(m_s, log_J)`` shaped like ``m_eval``."""
+        if not self.scale_enabled:
+            return m_eval, torch.zeros_like(m_eval)
+        train_grad = torch.is_grad_enabled()
+        with torch.enable_grad():
+            dm = torch.zeros_like(m_eval).requires_grad_(True)
+            me = m_eval + dm
+            s_adv = self._continuity_response(
+                me, m_obs, pt_obs, eta_pm, q_pm, theta_scale_pm)
+            sp = torch.autograd.grad(s_adv.sum(), dm, create_graph=train_grad,
+                                     retain_graph=True)[0]
+        if not train_grad:
+            s_adv, sp = s_adv.detach(), sp.detach()
+        m_s = m_eval - s_adv
+        log_J = torch.log((1.0 - sp).abs().clamp_min(1e-6))
+        return m_s, log_J
 
     def _continuity_logp(self, m_obs, mk, pt_obs, eta_pm, phi_pm, q_pm, b_pm,
                          n_iter: int = 2):
@@ -1592,11 +1652,15 @@ class JpsiMassMixtureModel(nn.Module):
     def _continuity_logp_pf_ode(self, m_obs, mk, pt_obs, eta_pm, phi_pm, q_pm,
                                 b_pm, n_iter: int = 2):
         """``log p_θ(x|c)``: the frozen nominal flow pushed through an exactly-
-        normalized, INVERTIBLE TRANSPORT — a scale advection ``s_adv`` plus the
-        smear as a score-driven PROBABILITY-FLOW displacement
+        normalized, INVERTIBLE TRANSPORT. The scale is the explicit BACKWARD
+        (data → MC) shift ``m_s = x − s_adv(x)`` applied first at the OBSERVED
+        mass (defining direction — closed form, exact Jacobian, no fixed
+        point); the smear keeps its forward (MC → data) convention as a
+        score-driven PROBABILITY-FLOW displacement
         ``y ← y − (V/2n)·∂_m log p₀(y)`` (``smear_flow_steps`` Euler steps; the
         deterministic equivalent of a Gaussian qop smear of mass-variance V,
-        broaden V>0 / sharpen V<0). Invert for the source m' by fixed point.
+        broaden V>0 / sharpen V<0), inverted from the scaled coordinate ``m_s``
+        for the source m' by fixed point (smear shift only).
 
         Log-Jacobian — two forms (``self.jacobian_form``):
 
@@ -1642,15 +1706,19 @@ class JpsiMassMixtureModel(nn.Module):
                 mk_src[..., N_MUON_KIN - 1] = self._scale_source_rho_std(
                     pt_obs, eta_pm, phi_pm, q_pm, b_pm)
 
-        def s_adv_of(me):
-            return self._continuity_response(
-                me, m_obs, pt_obs, eta_pm, q_pm, theta_scale_pm)
+        # BACKWARD (data → MC) scale, explicit at the OBSERVED mass — the
+        # defining direction: m_s = m_obs − s_adv(m_obs), with the exact scale
+        # Jacobian log|dm_s/dm_obs|. The flow + smear inversion below act on
+        # the scaled coordinate m_s (no scale term in the fixed point).
+        m_s, log_J_s = self._scale_backward_mass_linear(
+            m_obs, m_obs, pt_obs, eta_pm, q_pm, theta_scale_pm)
 
-        def forward(mp):
-            # scale advection, then the probability-flow smear (score displacement).
-            # V (diffusion time) is evaluated at the SOURCE mass mp — so its
-            # mass-dependence (V ∝ a·m⁴ + c·m²) enters the autograd Jacobian G'.
-            y = mp + s_adv_of(mp)
+        def forward_sm(mp):
+            # smear-only forward map (MC → data convention unchanged): the
+            # probability-flow score displacement. V (diffusion time) is
+            # evaluated at the SOURCE mass mp — so its mass-dependence
+            # (V ∝ a·m⁴ + c·m²) enters the autograd Jacobian G'.
+            y = mp
             if self.smearing_enabled:
                 V = self._smear_mass_var(eta_pm, phi_pm, b_pm, pt_obs, mp, m_obs)
                 dt = V / (2.0 * n_step)
@@ -1658,26 +1726,35 @@ class JpsiMassMixtureModel(nn.Module):
                     y = y - dt * self._flow_score(y, mk_src)
             return y
 
-        # invert for the source m': fixed point  m' = m_obs − (forward(m') − m').
-        # (Graph is built in training so m' carries the θ dependence, as for G'.)
-        mp = m_obs.clone()
+        if not self.smearing_enabled:
+            # Scale-only: the source is the explicit backward image — no fixed
+            # point, no smear Jacobian (one of the backward-direction
+            # simplifications).
+            log_p_theta = self.log_p_nominal(m_s, mk_src) + log_J_s
+            return torch.nan_to_num(log_p_theta.clamp(max=50.0), nan=0.0)
+
+        # invert the SMEAR-ONLY map for the source m': fixed point
+        # m' = m_s − (forward_sm(m') − m'). (Graph is built in training so m'
+        # carries the θ dependence, as for G'.)
+        mp = m_s.clone()
         for _ in range(n_iter):
-            mp = m_obs - (forward(mp) - mp)
-        # change-of-variables log-Jacobian: dispatch on jacobian_form.
+            mp = m_s - (forward_sm(mp) - mp)
+        # change-of-variables log-Jacobian of the smear-only map: dispatch on
+        # jacobian_form (the scale Jacobian is the explicit log_J_s above).
         if self.jacobian_form == "exp":
             # Frozen-score continuous-flow approximation, no floor needed.
-            log_Gp = self._log_jacobian_exp(mp, mk_src, s_adv_of, eta_pm, phi_pm,
+            log_Gp = self._log_jacobian_exp(mp, mk_src, None, eta_pm, phi_pm,
                                             b_pm, pt_obs, m_obs)
         else:  # "softlog" (default): autograd Jacobian + tangent extension below floor.
             if mp.requires_grad:
-                Gp = torch.autograd.grad(forward(mp).sum(), mp, create_graph=True)[0]
+                Gp = torch.autograd.grad(forward_sm(mp).sum(), mp, create_graph=True)[0]
             else:
                 with torch.enable_grad():
                     mpj = mp.detach().requires_grad_(True)
-                    Gp = torch.autograd.grad(forward(mpj).sum(), mpj)[0].detach()
+                    Gp = torch.autograd.grad(forward_sm(mpj).sum(), mpj)[0].detach()
             log_Gp = _softlog_below_floor(Gp, SMEAR_GP_FLOOR)
         logp0 = self.log_p_nominal(mp, mk_src)
-        log_p_theta = logp0 - log_Gp
+        log_p_theta = logp0 - log_Gp + log_J_s
         # Cap log_p_theta from ABOVE only (the overflow direction). The
         # downstream mixture in `data_nll_continuity` takes `.exp()` of this:
         # for jacobian_form='exp' the unbounded sharpening reward can drive
@@ -1694,14 +1771,19 @@ class JpsiMassMixtureModel(nn.Module):
     def _continuity_logp_gh(self, m_obs, mk, pt_obs, eta_pm, phi_pm, q_pm,
                              b_pm, n_gh: int = 8, n_iter: int = 2):
         """``log p_θ(x|c)`` via the EXACT Gaussian convolution operator,
-        implemented as Gauss-Hermite quadrature of the per-event source map:
+        implemented as Gauss-Hermite quadrature of the per-event source map.
+        The scale enters as the explicit BACKWARD (data → MC) shift
+        ``m_s = x − s_adv(x)`` applied first at the OBSERVED mass (defining
+        direction — closed form + exact Jacobian ``|dm_s/dx|``); the smear
+        keeps its forward (MC → data) convention, inverted from the scaled
+        coordinate:
 
-            ``p_θ(x|c) = E_{ε~N(0,1)}[ p_0(m'(ε)|c_src) / |G'(m'(ε))| ]``
-            ``       ≈ Σ_i W_i · p_0(m'_i | c_src,i) / |G'_i|``
+            ``p_θ(x|c) = |dm_s/dx| · E_{ε~N(0,1)}[ p_0(m'(ε)|c_src) / |G'(m'(ε))| ]``
+            ``       ≈ |dm_s/dx| · Σ_i W_i · p_0(m'_i | c_src,i) / |G'_i|``
 
         where, for each GH node ε = ξ_i:
-            ``x = m'_i + s_adv(m'_i) + √V(m'_i)·ξ_i``  (forward map)
-            ``G'(m') = 1 + s_adv'(m') + (V'(m')/(2√V(m')))·ε``  (autograd Jacobian)
+            ``m_s = m'_i + √V(m'_i)·ξ_i``  (smear-only forward map)
+            ``G'(m') = 1 + (V'(m')/(2√V(m')))·ε``  (autograd Jacobian)
 
         Equivalent — by construction — to the per-muon qop fold that generates
         the validation pseudo-data, so the closure-target curve (flow at
@@ -1736,19 +1818,20 @@ class JpsiMassMixtureModel(nn.Module):
         phio = phi_pm.unsqueeze(1)                                        # [B, 1, 2]
         qo  = q_pm.unsqueeze(1)                                           # [B, 1, 2]
         bpo = b_pm.unsqueeze(1).expand(B, G, b_pm.shape[-1])              # [B, G, 2]
-        tsp = theta_scale_pm.unsqueeze(1)                                 # [B, 1, 6]
         xig = xi.view(1, G)                                               # [1, G]
 
-        def resp(me):
-            """Return (s_adv, V) at evaluation mass me [B, G]."""
-            s_adv = self._continuity_response(me, mo, pto, etao, qo, tsp)
-            if self.smearing_enabled:
-                # _smear_mass_var: pt = pto*(me/mo).unsqueeze(-1) → [B,G,2];
-                # broadcasts with etao, phio, bpo[B,G,2]. Returns V [B, G].
-                V = self._smear_mass_var(etao, phio, bpo, pto, me, mo).clamp_min(0.0)
-            else:
-                V = me.new_zeros(me.shape)
-            return s_adv, V
+        # BACKWARD (data → MC) scale, explicit at the OBSERVED mass — the
+        # defining direction (closed form + exact Jacobian); the GH smear
+        # quadrature below acts on the scaled coordinate m_s.
+        m_s, log_J_s = self._scale_backward_mass_linear(
+            m_obs, m_obs, pt_obs, eta_pm, q_pm, theta_scale_pm)
+        ms_ = m_s.unsqueeze(1)                                            # [B, 1]
+
+        def smear_V(me):
+            """Smear mass-variance V at evaluation mass me [B, G] (≥ 0)."""
+            # _smear_mass_var: pt = pto*(me/mo).unsqueeze(-1) → [B,G,2];
+            # broadcasts with etao, phio, bpo[B,G,2]. Returns V [B, G].
+            return self._smear_mass_var(etao, phio, bpo, pto, me, mo).clamp_min(0.0)
 
         def _smear_disp(Vt):
             """The √V·ε displacement per GH node; vanishes exactly if disabled.
@@ -1761,30 +1844,34 @@ class JpsiMassMixtureModel(nn.Module):
             physical √V ~ tens of MeV)."""
             if self.smearing_enabled:
                 return (Vt + 1e-12).sqrt() * xig
-            return me_zero  # populated below before use
+            return me_zero
 
         # Pre-allocate the zero displacement (used only when smearing_enabled=False).
         me_zero = m_obs.new_zeros((B, G))
 
-        # Fixed-point source solve  m'_i = m_obs − s_adv(m'_i) − √V(m'_i)·ξ_i.
-        mp = mo.expand(B, G).clone()
-        for _ in range(n_iter):
-            s_adv, V = resp(mp)
-            mp = mo - s_adv - _smear_disp(V)
+        # Fixed-point source solve (smear shift ONLY — the scale is the explicit
+        # backward image m_s above):  m'_i = m_s − √V(m'_i)·ξ_i. With smearing
+        # disabled the source IS m_s — no fixed point at all (a backward-
+        # direction simplification).
+        mp = ms_.expand(B, G).clone()
+        if self.smearing_enabled:
+            for _ in range(n_iter):
+                mp = ms_ - _smear_disp(smear_V(mp))
 
-        # Source-map Jacobian G' = ∂x/∂m' by autograd at the converged source.
+        # Smear-map Jacobian G' = ∂m_s/∂m' by autograd at the converged source
+        # (≡ 1 with smearing disabled; the scale Jacobian is log_J_s).
         # In training (mp.requires_grad) we keep the graph so the gradient flows
-        # through θ (which sources V, s_adv, and the dependence m'(θ)); in eval
-        # we run under enable_grad on a fresh leaf.
-        if mp.requires_grad:
-            s_advj, Vj = resp(mp)
-            Gx = (mp + s_advj + _smear_disp(Vj)).sum()
+        # through θ (which sources V and the dependence m'(θ)); in eval we run
+        # under enable_grad on a fresh leaf.
+        if not self.smearing_enabled:
+            Gp = torch.ones_like(mp)
+        elif mp.requires_grad:
+            Gx = (mp + _smear_disp(smear_V(mp))).sum()
             Gp = torch.autograd.grad(Gx, mp, create_graph=True)[0]
         else:
             with torch.enable_grad():
                 mp_j = mp.detach().requires_grad_(True)
-                s_advj, Vj = resp(mp_j)
-                Gx = (mp_j + s_advj + _smear_disp(Vj)).sum()
+                Gx = (mp_j + _smear_disp(smear_V(mp_j))).sum()
                 Gp = torch.autograd.grad(Gx, mp_j)[0].detach()
 
         # Frozen-flow density at the per-node source points. ρ in the
@@ -1804,9 +1891,11 @@ class JpsiMassMixtureModel(nn.Module):
         logp0 = self.log_p_nominal(
             mp.reshape(-1), mk_g.reshape(B * G, -1)).reshape(B, G)
 
-        # log p_θ(x) = logsumexp_i[ logW_i + log p_0(m'_i) − log|G'_i| ].
+        # log p_θ(x) = log|dm_s/dx| + logsumexp_i[ logW_i + log p_0(m'_i)
+        # − log|G'_i| ] — the explicit backward-scale Jacobian times the
+        # smear-only GH mixture at the scaled coordinate.
         log_terms = logW.view(1, G) + logp0 - torch.log(Gp.abs().clamp_min(1e-6))
-        log_p_theta = torch.logsumexp(log_terms, dim=1)
+        log_p_theta = torch.logsumexp(log_terms, dim=1) + log_J_s
         # Same upper-cap and NaN guard as the PF-ODE branch — see the
         # _continuity_logp_pf_ode tail for rationale.
         return torch.nan_to_num(log_p_theta.clamp(max=50.0), nan=0.0)
@@ -1869,24 +1958,30 @@ class JpsiMassMixtureModel(nn.Module):
 
     def _gh_qop_unsmear(self, pt_cfg, etao, phio, qo, bpo, eps):
         """Un-kick an OBSERVED per-muon pt config to the nominal (truth) mass +
-        ρ, per 2-D GH node — the genuine INVERSE of the COMBINED per-muon kick
-        the injection applies. The forward (``_inject_pt_np``) is a single
-        shifted-mean Gaussian in qop with the deterministic scale shift δqop and
-        the width σ_qop BOTH at the truth pt::
+        ρ, per 2-D GH node. The model composes (generative, MC → data):
 
-            qop_obs,μ = qop_truth,μ + δqop_μ(pt_truth) + σ_qop,μ(pt_truth)·ξ_μ
+            1. forward smear at the truth pt:
+               ``qop_sm,μ = qop_truth,μ + σ_qop,μ(pt_truth)·ξ_μ``
+            2. forward scale — the implicit inverse of the DEFINING backward
+               (data → MC) map ``qop_sm,μ = qop_obs,μ − δqop_μ(pt_obs)``
+               (δqop at the OBSERVED pt; ``_inject_pt_np`` realises this exact
+               forward by fixed point on the injection side).
 
-        so the exact inverse solves, per node (ξ₊, ξ₋), the joint fixed point::
+        so the fit-side inversion here is, per node (ξ₊, ξ₋):
 
-            qop_truth,μ = qop_obs,μ − δqop_μ(pt_truth) − σ_qop,μ(pt_truth)·ξ_μ
-            pt_truth,μ  = |sinθ_μ / qop_truth,μ|
+            1. BACKWARD scale, exact and closed-form (the defining direction —
+               no iteration): ``qop_s,μ = qop_obs,μ − δqop_μ(pt_obs)``;
+            2. un-smear with σ at the truth pt (the smear keeps its forward
+               MC → data convention): the short fixed point
+               ``qop_truth,μ = qop_s,μ − σ_qop,μ(pt_truth)·ξ_μ``,
+               ``pt_truth,μ = |sinθ_μ / qop_truth,μ|`` — smear shift ONLY.
 
-        with δqop and σ evaluated at the SAME (truth) pt — which is why injection
-        and fit are exact inverses, with no per-step pt drift between un-smear and
-        un-scale (the old sequential un-smear-then-un-scale evaluated δqop at the
-        intermediate post-un-smear pt). pt = |sinθ/qop| is a magnitude, so a kick
-        that flips the sign of qop is the physical charge mis-reco, kept (only the
-        qop=0 pole guarded). A few iterations converge since δqop, σ ≪ |qop|.
+        No ordering ambiguity: the backward scale is applied first, and the
+        flow/un-smear act on the scaled coordinates. pt = |sinθ/qop| is a
+        magnitude, so a kick that flips the sign of qop is the physical charge
+        mis-reco, kept (only the qop=0 pole guarded). The smear fixed point
+        converges in a few iterations since σ ≪ |qop|; with smearing disabled
+        the whole un-kick is a single closed-form expression.
 
         ``pt_cfg`` [B, G², 2] is the observed config (possibly scaled along the
         mass direction by the Jacobian leaf λ); ``eps`` [·, G², 2] the kicks.
@@ -1898,24 +1993,25 @@ class JpsiMassMixtureModel(nn.Module):
         sinth = _sintheta_from_eta(etao)                          # [B,·,2]
         qop_obs = qo * sinth / pt_cfg                             # [B,G²,2] (bcast)
 
-        def _shift_at(pt):
-            """Combined qop shift δqop + σ·ξ evaluated at trial truth pt."""
-            s = qop_obs.new_zeros(())
-            if self.scale_enabled:
-                AeM = self._scale_AeM_pm(etao, phio, bpo)
-                s = s + self._delta_qop_analytic(AeM, pt, etao, qo)
-            if self.smearing_enabled:
-                sig = (self._qop_var_pm(etao, phio, bpo, pt).clamp_min(0.0)
-                       + 1e-14).sqrt()
-                s = s + sig * eps
-            return s
+        # 1) BACKWARD (data → MC) scale — the defining direction: δqop at the
+        #    OBSERVED config, explicit, exact, iteration-free.
+        if self.scale_enabled:
+            AeM = self._scale_AeM_pm(etao, phio, bpo)
+            qop_s = qop_obs - self._delta_qop_analytic(AeM, pt_cfg, etao, qo)
+            pt_s = self._qop_new_to_pt(qop_obs, qop_s, qo, sinth)
+        else:
+            qop_s, pt_s = qop_obs, pt_cfg
 
-        # Joint fixed point for the truth pt: both δqop and σ at the SAME pt.
-        pt_truth = pt_cfg
-        if self.scale_enabled or self.smearing_enabled:
+        # 2) Un-smear from the scaled coordinates: σ at the truth pt (forward
+        #    MC → data smear convention unchanged) → fixed point over the smear
+        #    shift alone.
+        pt_truth = pt_s
+        if self.smearing_enabled:
             for _ in range(3):
-                qop_truth = qop_obs - _shift_at(pt_truth)
-                pt_truth = self._qop_new_to_pt(qop_obs, qop_truth, qo, sinth)
+                sig = (self._qop_var_pm(etao, phio, bpo, pt_truth).clamp_min(0.0)
+                       + 1e-14).sqrt()
+                qop_truth = qop_s - sig * eps
+                pt_truth = self._qop_new_to_pt(qop_s, qop_truth, qo, sinth)
         m_t = _event_mll(pt_truth, etao, phio)                   # [B,G²]
         # Return the un-kicked nominal momenta; the caller builds the per-node
         # conditioning from them via _node_cond (ρ-only for muon_kin, the full
@@ -2020,8 +2116,10 @@ class JpsiMassMixtureModel(nn.Module):
         d2, and even one such event poisons the batch mean. We mask those
         contributions to zero rather than dropping the events — the model is
         at the edge of its validity there anyway."""
-        # ∂s_adv/∂m' (scale-advection Jacobian contribution, =0 if scale disabled).
-        if self.scale_enabled:
+        # ∂s_adv/∂m' (scale-advection Jacobian contribution). With the BACKWARD
+        # scale the operators handle the scale Jacobian explicitly at the
+        # observed mass (s_adv_of=None here → smear-only Jacobian).
+        if self.scale_enabled and s_adv_of is not None:
             if mp.requires_grad:
                 s = s_adv_of(mp)
                 s_prime = torch.autograd.grad(
@@ -2185,10 +2283,11 @@ class JpsiMassMixtureModel(nn.Module):
           narrowing T pushes mass INTO the window, no leakage). Cheap: 2
           boundary forward-map evals + 2 flow density evals per event.
         * ``"flow_cdf"``: EXACT via the flow's CDF
-          ``Z(θ;c) = F_0(T⁻¹(m_hi)|c) − F_0(T⁻¹(m_lo)|c)``. Inverts T at the
-          two boundary x-values by fixed-point (n_iter steps, mirroring
-          ``_continuity_logp``) and evaluates F_0 via the GF monotonic
-          transform + Φ. ~2× the per-event work of the bare density.
+          ``Z(θ;c) = F_0(T⁻¹(m_hi)|c) − F_0(T⁻¹(m_lo)|c)``. The scale part of
+          T⁻¹ is the EXPLICIT backward (data → MC) boundary transport (defining
+          direction — no inversion); only the smear is inverted (bisection),
+          and not at all when smearing is disabled. ~2× the per-event work of
+          the bare density.
 
         When ``self.smear_operator == "gh_convolution"`` both 'linear' and
         'flow_cdf' route to the GH-specific exact formula
@@ -2223,12 +2322,10 @@ class JpsiMassMixtureModel(nn.Module):
                 mk_src[..., N_MUON_KIN - 1] = self._scale_source_rho_std(
                     pt_obs, eta_pm, phi_pm, q_pm, b_pm)
 
-        def s_adv_of(me):
-            return self._continuity_response(
-                me, m_obs, pt_obs, eta_pm, q_pm, theta_scale_pm)
-
-        def forward(mp):
-            y = mp + s_adv_of(mp)
+        def forward_sm(mp):
+            # smear-only forward map (the scale is the explicit backward
+            # boundary transport below).
+            y = mp
             if self.smearing_enabled:
                 V = self._smear_mass_var(eta_pm, phi_pm, b_pm, pt_obs, mp, m_obs)
                 dt = V / (2.0 * n_step)
@@ -2238,15 +2335,27 @@ class JpsiMassMixtureModel(nn.Module):
 
         m_lo = m_obs.new_full(m_obs.shape, float(self.m_lo))
         m_hi = m_obs.new_full(m_obs.shape, float(self.m_hi))
+        # BACKWARD (data → MC) scale images of the window boundaries along the
+        # event's observed ray — explicit and exactly θ-differentiable (the
+        # defining direction): no boundary fixed point / bisection for the
+        # scale, one of the backward-direction simplifications.
+        m_s_lo, _ = self._scale_backward_mass_linear(
+            m_lo, m_obs, pt_obs, eta_pm, q_pm, theta_scale_pm)
+        m_s_hi, _ = self._scale_backward_mass_linear(
+            m_hi, m_obs, pt_obs, eta_pm, q_pm, theta_scale_pm)
 
         if self.norm_correction == "linear":
-            # 1 − Z ≈ Σ_boundary p_0(boundary)·max(0, boundary-shift). The
-            # max() picks up only broadening (T pushing the source OUT); a
-            # narrowing T has no leakage so contributes 0.
-            t_lo = forward(m_lo)
-            t_hi = forward(m_hi)
-            left_leak = (m_lo - t_lo).clamp(min=0.0)
-            right_leak = (t_hi - m_hi).clamp(min=0.0)
+            # Boundary source preimages u = SmearInv(m_s(boundary)) by a short
+            # fixed point (precision is secondary for the linear estimate);
+            # 1 − Z ≈ p₀(m_lo)·(u_lo − m_lo)₊ + p₀(m_hi)·(m_hi − u_hi)₊ — only
+            # sources pushed OUT of the window leak; narrowing contributes 0.
+            u_lo, u_hi = m_s_lo, m_s_hi
+            if self.smearing_enabled:
+                for _ in range(n_iter):
+                    u_lo = m_s_lo - (forward_sm(u_lo) - u_lo)
+                    u_hi = m_s_hi - (forward_sm(u_hi) - u_hi)
+            left_leak = (u_lo - m_lo).clamp(min=0.0)
+            right_leak = (m_hi - u_hi).clamp(min=0.0)
             log_p_lo = self.log_p_nominal(m_lo, mk_src)
             log_p_hi = self.log_p_nominal(m_hi, mk_src)
             leakage = (log_p_lo.exp() * left_leak
@@ -2255,28 +2364,37 @@ class JpsiMassMixtureModel(nn.Module):
             # the linear estimate overshoots in pathological cases
             return torch.log1p(-leakage.clamp(0.0, 1.0 - 1e-6))
 
-        # "flow_cdf": invert T at x = m_lo, m_hi by BISECTION on [m_lo, m_hi].
-        # T is monotonic on the window (G' = 1 + V/(2σ²) > 0 at the peak), so
-        # bisection converges unconditionally; the per-event fixed-point
-        # `mp = x - (T(mp) - mp)` used in `_continuity_logp` is contractive
-        # near a stable observation but becomes expansive / oscillates at the
-        # boundaries when V/(2σ²) is large (large smear gradient there), so we
-        # use bisection here instead. 24 iterations give ~22-bit precision on
-        # the m-window — far below grid noise.
-        n_bisect = 24
+        # "flow_cdf": Z = F₀(SmearInv(m_s(m_hi))) − F₀(SmearInv(m_s(m_lo))).
+        # Scale-only: the preimage IS the explicit backward image — done. With
+        # smearing: invert the SMEAR-ONLY map toward the backward-scaled
+        # targets by BISECTION on a wider-than-window bracket (monotonic —
+        # G' = 1 + V/(2σ²) > 0 at the peak; the per-event fixed point becomes
+        # expansive at the boundaries when V/(2σ²) is large). 24 iterations
+        # give ~22-bit precision — far below grid noise. The bisection runs
+        # detached; the exact θ-gradient of the SCALE boundary transport is
+        # re-attached through m_s (the smear preimage displacement stays
+        # detached, as before).
+        if not self.smearing_enabled:
+            return self._flow_log_window_Z(m_s_lo, m_s_hi, mk_src)
+        n_bisect = 26
+        # Bracket WIDER than the window: a smear preimage of a (transported)
+        # boundary can lie OUTSIDE [m_lo, m_hi]; a window-tight bracket (the
+        # old behaviour) silently clamps it to the edge — a first-order logZ
+        # error whenever the transport pushes the preimage out.
+        marg = 0.25 * (float(self.m_hi) - float(self.m_lo))
         @torch.no_grad()
         def bisect(target):
-            lo = m_obs.new_full(m_obs.shape, float(self.m_lo))
-            hi = m_obs.new_full(m_obs.shape, float(self.m_hi))
+            lo = m_obs.new_full(m_obs.shape, float(self.m_lo) - marg)
+            hi = m_obs.new_full(m_obs.shape, float(self.m_hi) + marg)
             for _ in range(n_bisect):
                 mid = 0.5 * (lo + hi)
-                t_mid = forward(mid)
+                t_mid = forward_sm(mid)
                 go_right = t_mid < target
                 lo = torch.where(go_right, mid, lo)
                 hi = torch.where(go_right, hi, mid)
             return 0.5 * (lo + hi)
-        mp_lo = bisect(m_lo)
-        mp_hi = bisect(m_hi)
+        mp_lo = m_s_lo - (m_s_lo.detach() - bisect(m_s_lo.detach()))
+        mp_hi = m_s_hi - (m_s_hi.detach() - bisect(m_s_hi.detach()))
         # Stable log window mass (no exp-difference cancellation; coincident
         # preimages — T's image missing the window — give a large-negative
         # finite logZ via the _log1mexp guard rather than a hard clamp).
@@ -2286,18 +2404,25 @@ class JpsiMassMixtureModel(nn.Module):
                                   q_pm, b_pm) -> torch.Tensor:
         """``log Z(θ;c)`` for the ``smear_operator='gh_convolution'`` path.
 
-        The Gaussian-convolution operator is `x = m' + s_adv(m') + √V(m')·ε`,
-        ε ~ N(0,1). Z over the m-window factors per GH node:
+        The scale is the explicit BACKWARD (data → MC) boundary transport
+        ``m_s(boundary) = boundary − s_adv(boundary)`` along the event's
+        observed ray (defining direction — closed form, exactly
+        θ-differentiable, no inversion). The smear keeps its forward map
+        ``m_s = m' + √V(m')·ε``, ε ~ N(0,1), inverted toward the transported
+        boundaries. Z over the m-window factors per GH node:
 
             ``Z = Σ_i W_i · [F_0(m'_hi(ξ_i)|c_src,i) − F_0(m'_lo(ξ_i)|c_src,i)]``
 
-        where each m'_{lo,hi}(ξ_i) is the source mass at GH node ξ_i that maps
-        to the corresponding boundary, found by BISECTION on [m_lo, m_hi] (the
-        existing fixed-point at the boundary oscillates at large V for the
-        same reason as in `_norm_correction_log_Z`'s flow_cdf branch; bisection
-        is unconditional given T is monotonic in m'). Per-GH-node CDF
-        evaluation uses the source ρ from `_source_rho_std_gh` for consistency
-        with `_continuity_logp_gh`. Cost: 2·n_gh boundary bisections + 2·n_gh
+        where each m'_{lo,hi}(ξ_i) is the source mass at GH node ξ_i whose
+        smear image is the scale-transported boundary, found by BISECTION on
+        a wider-than-window bracket (a boundary fixed point oscillates at
+        large V — same
+        reason as in `_norm_correction_log_Z`'s flow_cdf branch; the scale's
+        exact θ-gradient is re-attached through m_s, the smear displacement
+        stays detached). With smearing disabled the preimage IS the explicit
+        backward image — no bisection at all. Per-GH-node CDF evaluation uses
+        the source ρ from `_source_rho_std_gh` for consistency with
+        `_continuity_logp_gh`. Cost: 2·n_gh boundary bisections + 2·n_gh
         flow CDF evals per event — roughly 2× the GH density itself.
         """
         B = m_obs.shape[0]
@@ -2313,37 +2438,55 @@ class JpsiMassMixtureModel(nn.Module):
         phio = phi_pm.unsqueeze(1)
         qo = q_pm.unsqueeze(1)
         bpo = b_pm.unsqueeze(1).expand(B, G, b_pm.shape[-1])
-        tsp = theta_scale_pm.unsqueeze(1)
         xig = xi.view(1, G)
 
-        def forward_at_eps(me):
-            """T(me; ξ) for each (event, GH node). me [B, G] → [B, G]. The +EPS
-            inside the sqrt matches the density's `_smear_disp` so the boundary
-            preimages are consistent with `_continuity_logp_gh`."""
-            s_adv = self._continuity_response(me, mo, pto, etao, qo, tsp)
-            if self.smearing_enabled:
-                V = self._smear_mass_var(
-                    etao, phio, bpo, pto, me, mo).clamp_min(0.0)
-                return me + s_adv + (V + 1e-12).sqrt() * xig
-            return me + s_adv
+        # BACKWARD scale images of the boundaries (per event, node-independent).
+        m_lo_t = m_obs.new_full(m_obs.shape, float(self.m_lo))
+        m_hi_t = m_obs.new_full(m_obs.shape, float(self.m_hi))
+        m_s_lo, _ = self._scale_backward_mass_linear(
+            m_lo_t, m_obs, pt_obs, eta_pm, q_pm, theta_scale_pm)
+        m_s_hi, _ = self._scale_backward_mass_linear(
+            m_hi_t, m_obs, pt_obs, eta_pm, q_pm, theta_scale_pm)
 
-        n_bisect = 24
+        def forward_at_eps_sm(me):
+            """Smear-only T(me; ξ) per (event, GH node). me [B, G] → [B, G].
+            The +EPS inside the sqrt matches the density's `_smear_disp` so the
+            boundary preimages are consistent with `_continuity_logp_gh`."""
+            V = self._smear_mass_var(
+                etao, phio, bpo, pto, me, mo).clamp_min(0.0)
+            return me + (V + 1e-12).sqrt() * xig
 
-        @torch.no_grad()
-        def bisect(target_scalar: float):
-            lo = m_obs.new_full((B, G), float(self.m_lo))
-            hi = m_obs.new_full((B, G), float(self.m_hi))
-            target = m_obs.new_full((B, G), float(target_scalar))
-            for _ in range(n_bisect):
-                mid = 0.5 * (lo + hi)
-                t_mid = forward_at_eps(mid)
-                go_right = t_mid < target
-                lo = torch.where(go_right, mid, lo)
-                hi = torch.where(go_right, hi, mid)
-            return 0.5 * (lo + hi)
+        if not self.smearing_enabled:
+            mp_lo = m_s_lo.unsqueeze(1).expand(B, G)       # [B, G]
+            mp_hi = m_s_hi.unsqueeze(1).expand(B, G)
+        else:
+            n_bisect = 26
+            # Wider-than-window bracket: smear preimages of the transported
+            # boundaries can lie outside [m_lo, m_hi] (window-tight brackets
+            # clamp them to the edge — first-order logZ error; see the
+            # _norm_correction_log_Z flow_cdf branch).
+            marg = 0.25 * (float(self.m_hi) - float(self.m_lo))
 
-        mp_lo = bisect(float(self.m_lo))                   # [B, G]
-        mp_hi = bisect(float(self.m_hi))                   # [B, G]
+            @torch.no_grad()
+            def bisect(target):                            # target [B, 1]
+                lo = m_obs.new_full((B, G), float(self.m_lo) - marg)
+                hi = m_obs.new_full((B, G), float(self.m_hi) + marg)
+                for _ in range(n_bisect):
+                    mid = 0.5 * (lo + hi)
+                    t_mid = forward_at_eps_sm(mid)
+                    go_right = t_mid < target
+                    lo = torch.where(go_right, mid, lo)
+                    hi = torch.where(go_right, hi, mid)
+                return 0.5 * (lo + hi)
+
+            # Re-attach the scale's exact θ-gradient through m_s; the smear
+            # preimage displacement (bisected) stays detached, as before.
+            mp_lo = (m_s_lo.unsqueeze(1)
+                     - (m_s_lo.detach().unsqueeze(1)
+                        - bisect(m_s_lo.detach().unsqueeze(1))))   # [B, G]
+            mp_hi = (m_s_hi.unsqueeze(1)
+                     - (m_s_hi.detach().unsqueeze(1)
+                        - bisect(m_s_hi.detach().unsqueeze(1))))   # [B, G]
 
         # Per-GH-node source ρ (same construction as _continuity_logp_gh).
         mk_g = mk.unsqueeze(1).expand(B, G, mk.shape[-1]).clone()

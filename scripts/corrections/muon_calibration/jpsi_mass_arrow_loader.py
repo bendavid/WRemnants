@@ -449,18 +449,23 @@ def _inject_modulation_np(eta, phi):
 def _inject_pt_np(pt_pm, eta_pm, q_pm, b_pm, scale_inj, smear_inj, rng,
                   qop_floor_frac: float = 0.0, phi_pm=None,
                   nonuniform: bool = False):
-    """Inject the θ_scale + θ_smear as a SINGLE shifted-mean Gaussian qop kick::
+    """Inject θ_smear + θ_scale as the EXACT FORWARD of the model::
 
-        qop_obs = qop_truth + δqop(A,e,M) + σ_qop·ε,   ε ~ N(0,1)
+        1. forward smear at the nominal (truth) pt:
+           ``qop_sm = qop_truth + σ_qop(pt_truth)·ε``,   ε ~ N(0,1)
+        2. forward scale — the exact functional inverse of the model's
+           DEFINING backward (data → MC) map ``qop_sm = qop_obs − δqop(pt_obs)``
+           (δqop at the OBSERVED pt), solved here by fixed point
+           ``qop_obs ← qop_sm + δqop(pt_obs)`` (contraction rate
+           ~|∂δqop/∂qop| ≲ 2e·k ~ 2e-3; 8 iterations → ~1e-12 relative — the
+           iteration cost lives on the injection side, where it is free, so
+           the FIT side stays iteration-free for the scale).
 
-    with the deterministic shift δqop AND the width σ_qop BOTH evaluated at the
-    nominal (truth) pt — i.e. the same reference — so scale+smear compose into
-    one affine-Gaussian map in qop (the natural variable: the per-muon kick is
-    Gaussian in qop). This is the forward of the model's combined gh_qop inverse
-    (``_gh_qop_unsmear``); evaluating δqop and σ at the SAME nominal pt is what
-    makes injection and fit exact inverses (no per-step pt drift between them).
+    This is the forward of the gh_qop inverse (``_gh_qop_unsmear``: explicit
+    backward scale first, then the smear-only un-kick) — injection and fit stay
+    exact inverses.
 
-    pt is recovered as ``|sinθ / qop_obs|`` — a magnitude, so a kick large enough
+    pt is recovered as ``|sinθ / qop|`` — a magnitude, so a kick large enough
     to flip the sign of qop is kept as the PHYSICAL charge mis-reconstruction it
     is (only the qop=0 pole is guarded by ``_QOP_EPS``); no resolution-
     suppressing floor. Returns the injected pt ``[N, 2]`` — fully self-consistent
@@ -476,13 +481,8 @@ def _inject_pt_np(pt_pm, eta_pm, q_pm, b_pm, scale_inj, smear_inj, rng,
     # are each modulated by the same f(η,φ)). f≡1 when uniform.
     fmod = (_inject_modulation_np(eta_pm, phi_pm)
             if (nonuniform and phi_pm is not None) else None)
+    # 1) forward smear at the nominal pt (forward MC → data convention).
     qop_new = qop.copy()
-    if scale_inj is not None:
-        A = scale_inj[b_pm, 0]; e = scale_inj[b_pm, 1]; M = scale_inj[b_pm, 2]
-        dqop = q_pm * sinth * ((A - e * k) * k + q_pm * M)  # δqop at nominal pt
-        if fmod is not None:
-            dqop = dqop * fmod                              # modulate A,e,M ∝ f
-        qop_new = qop_new + dqop
     if smear_inj is not None:
         k2 = k * k
         vq = smear_inj[b_pm, 0] + smear_inj[b_pm, 1] * k2   # σ²_qop = a + c·k² at nominal pt
@@ -491,6 +491,20 @@ def _inject_pt_np(pt_pm, eta_pm, q_pm, b_pm, scale_inj, smear_inj, rng,
         sig = np.sqrt(np.clip(vq, 0.0, None))
         eps = rng.standard_normal(pt_pm.shape)
         qop_new = qop_new + sig * eps
+    # 2) forward scale: solve qop_obs = qop_sm + δqop(pt_obs) by fixed point
+    #    (δqop evaluated at the trial OBSERVED pt — the exact inverse of the
+    #    backward map the fit applies).
+    if scale_inj is not None:
+        A = scale_inj[b_pm, 0]; e = scale_inj[b_pm, 1]; M = scale_inj[b_pm, 2]
+        qop_sm = qop_new
+        pt_obs = sinth / np.maximum(np.abs(qop_sm), _QOP_EPS)
+        for _ in range(8):
+            k_obs = 1.0 / pt_obs
+            dqop = q_pm * sinth * ((A - e * k_obs) * k_obs + q_pm * M)
+            if fmod is not None:
+                dqop = dqop * fmod                          # modulate A,e,M ∝ f
+            qop_new = qop_sm + dqop
+            pt_obs = sinth / np.maximum(np.abs(qop_new), _QOP_EPS)
     # pt = |sinθ / qop|; guard only the qop=0 pole (sign flip is physical).
     pt_new = sinth / np.maximum(np.abs(qop_new), _QOP_EPS)
     return pt_new.astype(np.float32)
