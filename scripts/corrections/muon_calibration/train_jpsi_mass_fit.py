@@ -1706,9 +1706,14 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
     # (avoids a pointless per-batch CDF evaluation/autograd at the edges).
     compact = getattr(model, "flow_is_compact", False)
     nce = getattr(model, "flow_is_nce", False)
+    dcb = getattr(model, "flow_is_dcb", False)
     window_norm = ((not getattr(args, "no_flow_window_norm", False))
-                   and not compact and not nce)
-    if nce:
+                   and not compact and not nce and not dcb)
+    if dcb:
+        print("  likelihood: -logp0 (analytic double-sided Crystal Ball, "
+              "MLP-conditional (μ,σ,α_L,n_L,α_R,n_R); window-normalised by "
+              "construction — Z ≡ 1, window-norm term skipped)")
+    elif nce:
         print(f"  likelihood: NCE binary cross-entropy — classifier vs "
               f"{args.nce_noise_ratio} uniform-on-window twins per event "
               f"(paired: twins share the event's conditioning → conditional "
@@ -1752,6 +1757,12 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
         if compact:
             compiled_inwindow = torch.compile(model.flow.forward_inwindow)
             print("  --compile: compact in-window density compiled "
+                  "(first batches include one-off compilation)")
+        elif dcb:
+            # The DCB forward is closed-form elementwise everywhere (its
+            # torch.where branches are traceable) — compile the whole density.
+            compiled_inwindow = torch.compile(model.flow.forward)
+            print("  --compile: DCB density compiled "
                   "(first batches include one-off compilation)")
         elif nce:
             compiled_nce_loss = torch.compile(model.flow.nce_loss)
@@ -4161,7 +4172,8 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     # during warmup.
     # Flow / MLP hyperparams
     p.add_argument(
-        "--flow-arch", choices=("gf", "nsf", "compact", "nce"), default="gf",
+        "--flow-arch", choices=("gf", "nsf", "compact", "nce", "dcb"),
+        default="gf",
         help="Signal flow architecture: 'gf' = Gaussianization flow (default) — "
         "C∞-smooth density, so the continuity score/Hessian have no knot kinks. "
         "'nsf' = neural rational-quadratic spline flow — bounded (linear tails "
@@ -4186,7 +4198,17 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         "logit is C∞ and extrapolates smoothly past the edges; the window Z "
         "is per-event Gauss-Legendre quadrature (--nce-quad-nodes) instead "
         "of an analytic CDF. MLP size from --flow-hidden/--flow-n-hidden "
-        "(--flow-n-transforms/--gf-components unused).",
+        "(--flow-n-transforms/--gf-components unused). "
+        "'dcb' = PARAMETRIC double-sided Crystal Ball (dcb_density.py): the "
+        "classic J/ψ line shape with all six parameters (μ,σ,α_L,n_L,α_R,n_R) "
+        "conditional on c through one MLP (--flow-hidden/--flow-n-hidden; "
+        "other flow knobs unused). Fully analytic density AND CDF, "
+        "window-normalised by construction (Z≡1, no out-of-window gauge — "
+        "--flow-gauge-penalty inert), real power-law tails on all of ℝ for "
+        "the operator probes, torch.compile-friendly. C¹ at the two "
+        "core/tail junctions (score continuous; the smear d² term sees two "
+        "isolated curvature jumps). The rigid-parametrisation baseline: "
+        "closure failures isolate SHAPE-MODEL bias vs flow-training bias.",
     )
     p.add_argument(
         "--nsf-bins", type=int, default=8,
