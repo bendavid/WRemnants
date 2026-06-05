@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import json
+import math
 import os
 import shutil
 import sys
@@ -190,6 +191,34 @@ def _lr_str(optim: torch.optim.Optimizer) -> str:
     return "/".join(f"{x:.2g}" for x in lrs)
 
 
+def _float_or_auto(s: str):
+    """argparse type for --patience-threshold: a float, or the literal 'auto'."""
+    return s if s == "auto" else float(s)
+
+
+def _threshold_is_auto(args) -> bool:
+    """True when --patience-threshold is the literal 'auto' (κ·SE mode)."""
+    return getattr(args, "patience_threshold", None) == "auto"
+
+
+def _auto_threshold(args, sw: float, sq: float, sw2: float, mean_nll: float) -> float:
+    """κ·SE patience threshold from the monitored sample's per-event NLL
+    moments: SE = σ̂·√(Σw²)/Σw is the standard error of the WEIGHTED-MEAN NLL
+    (σ̂² the weighted per-event NLL variance, √(Σw²)/Σw = 1/√N_eff), i.e. the
+    smallest improvement statistically resolvable on this sample — refinements
+    below it cannot reduce the stage-2 closure bias, which scales with how well
+    p₀ matches the data RELATIVE to its statistical power. Recomputed every
+    epoch: σ̂ shrinks as the badly-fit tail disappears (an epoch-1 value is
+    biased HIGH — the dangerous direction), the estimator noise on σ̂ itself is
+    ~√(1/2N_eff) (negligible — no smoothing needed), and the accumulators are
+    free. ``sq`` = Σw·nll², ``sw2`` = Σw² (float64 sums from the step_fn)."""
+    if sw <= 0.0 or sw2 <= 0.0:
+        return 0.0
+    var = max(sq / sw - mean_nll * mean_nll, 0.0)
+    se = math.sqrt(var * sw2) / sw
+    return float(getattr(args, "patience_threshold_kappa", 0.2)) * se
+
+
 def _make_scheduler(args, optim, epochs):
     """Build the LR scheduler per ``--lr-schedule``. ``plateau`` reduces lr by
     ``--lr-reduce-factor`` when the val metric stalls for ``--lr-reduce-patience``
@@ -203,10 +232,14 @@ def _make_scheduler(args, optim, epochs):
         # NEGATIVE NLL (a log-density) moves the bar toward zero — i.e. a flat
         # or slightly-worse epoch still "improves" — so the LR would never
         # reduce while the absolute-threshold early-stop fires anyway.
+        # 'auto' starts at 0 and is updated in place (sched.threshold) each
+        # epoch by the κ·SE recomputation, keeping the lr-annealing and the
+        # early-stop testing the SAME significance level.
+        thr0 = 0.0 if _threshold_is_auto(args) else float(args.patience_threshold)
         return torch.optim.lr_scheduler.ReduceLROnPlateau(
             optim, mode="min", factor=args.lr_reduce_factor,
             patience=args.lr_reduce_patience, min_lr=args.min_lr,
-            threshold=args.patience_threshold, threshold_mode="abs"), kind
+            threshold=thr0, threshold_mode="abs"), kind
     if kind == "cosine":
         return torch.optim.lr_scheduler.CosineAnnealingLR(
             optim, T_max=max(1, epochs), eta_min=args.min_lr), kind
@@ -930,8 +963,11 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
                 step_fn, ckpt_prefix, stage_name, epochs, monitor="val",
                 precision="fp32"):
     """Generic weighted-NLL epoch loop with best/last checkpoints + early-stop.
-    ``step_fn(model, batch) -> (loss, sum_w)`` returns the batch's weighted-mean
-    NLL (scalar tensor) over the rows the stage uses and the corresponding Σw.
+    ``step_fn(model, batch) -> (loss, sum_w, sum_w_nll2, sum_w2)`` returns the
+    batch's weighted-mean NLL (scalar tensor) over the rows the stage uses, the
+    corresponding Σw, and the (Σw·nll², Σw²) moments of the per-event NLL —
+    used by ``--patience-threshold auto`` to recompute the κ·SE plateau /
+    early-stop threshold every epoch (see _auto_threshold).
 
     ``monitor`` selects the metric the early-stop / plateau-LR / best-checkpoint
     act on: ``"val"`` (the held-out validation NLL, stage 1) or ``"train"`` (the
@@ -951,6 +987,15 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
     L-BFGS + fp16 is refused: GradScaler cannot wrap a line-search closure
     (use bf16, which needs no scaler, or adam)."""
     best_val = float("inf"); no_improve = 0; prev_train_nll = None
+    # --patience-threshold auto: κ·SE recomputed from the monitored sample's
+    # per-event NLL moments every epoch (starts at 0 → epoch 1 always improves,
+    # best_val=inf anyway); a numeric --patience-threshold stays fixed.
+    auto_thr = _threshold_is_auto(args)
+    thr = 0.0 if auto_thr else float(args.patience_threshold)
+    if auto_thr:
+        print(f"  [{stage_name}] patience-threshold auto: "
+              f"κ·SE(mean NLL) with κ={getattr(args, 'patience_threshold_kappa', 0.2):g}, "
+              f"recomputed each epoch from the {monitor}-sample NLL moments")
     best_ckpt = os.path.join(args.output, f"{ckpt_prefix}_best.pt")
     last_ckpt = os.path.join(args.output, f"{ckpt_prefix}_last.pt")
     device = args.device
@@ -999,7 +1044,7 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
     is_lbfgs = isinstance(optim, torch.optim.LBFGS)
     for epoch in range(1, epochs + 1):
         t0 = time.time(); model.train()
-        tr_sum = 0.0; tr_w = 0.0; n_seen = 0
+        tr_sum = 0.0; tr_w = 0.0; n_seen = 0; tr_sq = 0.0; tr_w2 = 0.0
         lr_str = _lr_str(optim)
         epoch_gnorm = None   # Σw-weighted gradient norm of the mean NLL (convergence)
         prof = _StepProfiler(device, prof_steps) if prof_steps > 0 else None
@@ -1024,7 +1069,7 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
                 optim.zero_grad(set_to_none=True)
                 closure_stats["call"] += 1
                 call = closure_stats["call"]
-                s = 0.0; w = 0.0; nb = 0
+                s = 0.0; w = 0.0; nb = 0; s2 = 0.0; w2 = 0.0
                 # Per-pass progress: each closure call is one full-batch
                 # eval/line-search probe (up to --lbfgs-max-iter per epoch); the
                 # bar tracks batches within the pass + running mean NLL.
@@ -1034,12 +1079,12 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
                 for batch in cbar:
                     batch = _move_batch(batch, device, _model_dtype(model))
                     with amp_ctx():                    # bf16 autocast (fp16+LBFGS refused)
-                        loss, sw = step_fn(model, batch)   # weighted-MEAN NLL over batch
+                        loss, sw, sq, sw2 = step_fn(model, batch)  # weighted-MEAN NLL over batch
                     nb += 1
                     if sw <= 0 or not torch.isfinite(loss):
                         continue
                     (loss * sw).backward()             # accumulates into .grad; frees graph
-                    s += float(loss.item()) * sw; w += sw
+                    s += float(loss.item()) * sw; w += sw; s2 += sq; w2 += sw2
                     cbar.set_postfix_str(f"nll={s / max(w, 1e-30):+.4f}")
                 cbar.close()
                 if w <= 0:
@@ -1053,6 +1098,7 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
                 gnorm = sum(float((p.grad.detach()**2).sum())
                             for p in lbfgs_params if p.grad is not None) ** 0.5
                 closure_stats["s"] = s; closure_stats["w"] = w; closure_stats["nb"] = nb
+                closure_stats["s2"] = s2; closure_stats["w2"] = w2
                 # Always-visible one-liner per pass (survives --no-progress): the
                 # full-batch passes are slow, so report mean NLL + |g| as each lands.
                 print(f"  [{stage_name}] ep{epoch:>3} pass {call:>2}: "
@@ -1065,6 +1111,7 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
 
             optim.step(closure)
             tr_sum = closure_stats["s"]; tr_w = closure_stats["w"]; n_seen = closure_stats["nb"]
+            tr_sq = closure_stats.get("s2", 0.0); tr_w2 = closure_stats.get("w2", 0.0)
             # gradient-norm convergence readout (the L-BFGS stopping signal)
             gsq = sum(float((p.grad.detach()**2).sum()) for g in optim.param_groups
                       for p in g["params"] if p.grad is not None)
@@ -1089,7 +1136,7 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
                     prof.after_move()
                 optim.zero_grad(set_to_none=True)
                 with amp_ctx():
-                    loss, sw = step_fn(model, batch)
+                    loss, sw, sq, sw2 = step_fn(model, batch)
                 n_seen += 1
                 if sw <= 0:
                     continue
@@ -1126,6 +1173,7 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
                 if prof is not None:
                     prof.after_backward()
                 tr_sum += float(loss.item()) * sw; tr_w += sw
+                tr_sq += sq; tr_w2 += sw2
                 bar.set_postfix_str(f"nll={tr_sum / max(tr_w, 1e-30):+.4f} lr={lr_str}")
             bar.close()
             if g_acc:
@@ -1140,19 +1188,22 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
         # Monitored metric: held-out val NLL (stage 1) or the training NLL itself
         # (stage 2 — all events, no held-out split; skip the val pass).
         if monitor == "val" and val_loader is not None:
-            model.eval(); v_sum = 0.0; v_w = 0.0
+            model.eval(); v_sum = 0.0; v_w = 0.0; v_sq = 0.0; v_w2 = 0.0
             for batch in val_loader:
                 batch = _move_batch(batch, device, _model_dtype(model))
                 with torch.enable_grad(), amp_ctx():
                     # same autocast as training so the monitored metric is
                     # measured in the precision the optimiser actually sees
-                    loss, sw = step_fn(model, batch)
+                    loss, sw, sq, sw2 = step_fn(model, batch)
                 if sw <= 0:
                     continue
                 v_sum += float(loss.item()) * sw; v_w += sw
+                v_sq += sq; v_w2 += sw2
             val_nll = v_sum / max(v_w, 1e-30); metric = val_nll
+            m_w, m_sq, m_w2 = v_w, v_sq, v_w2
         else:
             val_nll = train_nll; v_w = tr_w; metric = train_nll
+            m_w, m_sq, m_w2 = tr_w, tr_sq, tr_w2
 
         d_train = None if prev_train_nll is None else (train_nll - prev_train_nll)
         # Fixed notation for visible changes; scientific once |Δ| is too small to
@@ -1170,14 +1221,24 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
             else:
                 extra = (f" θ_scale‖∞={model.theta_scale.abs().max().item():.3e}"
                          f" θ_smear‖∞={model.theta_smear.abs().max().item():.3e}")
+        if auto_thr:
+            # Recompute κ·SE from THIS epoch's monitored-sample moments: σ̂
+            # shrinks as the badly-fit tail disappears, so a frozen epoch-1
+            # value would be biased high (premature plateau). Push the same
+            # value into the plateau scheduler so lr-annealing and early-stop
+            # keep testing the same significance level.
+            thr = _auto_threshold(args, m_w, m_sq, m_w2, metric)
+            if sched is not None and sched_kind == "plateau":
+                sched.threshold = thr
         val_str = f"val_nll={val_nll:+.4f} " if monitor == "val" else ""
         g_str = f"|g|={epoch_gnorm:.2e} " if epoch_gnorm is not None else ""
+        thr_str = f"thr={thr:.2e} " if auto_thr else ""
         print(f"[{stage_name}] epoch {epoch:>3}: train_nll={train_nll:+.4f} "
-              f"(Δ={d_str}) {val_str}(Σw={v_w:.2e}) lr={lr_str} {g_str}"
+              f"(Δ={d_str}) {val_str}(Σw={v_w:.2e}) lr={lr_str} {g_str}{thr_str}"
               f"dt={time.time()-t0:.1f}s{extra}")
         prev_train_nll = train_nll
 
-        improved = metric < best_val - args.patience_threshold
+        improved = metric < best_val - thr
         if improved:
             best_val = metric; no_improve = 0
         else:
@@ -1786,10 +1847,12 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
                   f"(zuko's inner autograd.grad is untraceable)")
 
     def step1(model, batch):
+        # Returns (weighted-mean loss, Σw, Σw·per², Σw²) — the 2nd-moment
+        # accumulators feed the κ·SE auto patience threshold in _run_epochs.
         idx = (~batch["is_data_mask"]).nonzero(as_tuple=True)[0]
         if idx.numel() == 0:
-            return torch.zeros((), dtype=torch.float64,
-                               device=batch["mll"].device), 0.0
+            return (torch.zeros((), dtype=torch.float64,
+                                device=batch["mll"].device), 0.0, 0.0, 0.0)
         m = batch["mll"][idx]
         mk = batch["cond_std"][idx]
         if nce:
@@ -1825,7 +1888,10 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
                     m_std, mk, n_noise=args.nce_noise_ratio, generator=gen)
             w = batch["w"][idx].double()
             sw = float(w.sum().clamp_min(1e-30))
-            return (w * loss_ev.double()).sum() / sw, sw
+            per = loss_ev.double()
+            pd = per.detach()
+            return ((w * per).sum() / sw, sw,
+                    float((w * pd * pd).sum()), float((w * w).sum()))
         if compiled_inwindow is not None:
             # compact + --compile: same formula as log_p_nominal (standardise →
             # clamp → flow → − mll_log_scale), with the flow evaluated through
@@ -1853,7 +1919,7 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
             logp = logp - log_Z
         w = batch["w"][idx].double()                 # float64 reduction: the model
         sw = float(w.sum().clamp_min(1e-30))         # runs at --precision, but the
-        loss = -(w * logp.double()).sum() / sw       # Σw·NLL sum + its backward are
+        per = -logp.double()                         # Σw·NLL sum + its backward are
         # float64 (a ~65k-event float32 sum carries ~√N·ε cancellation; backward
         # accumulates per-event grad contributions in float64, cast to the fp32
         # leaf only at the end). Benefits adam/soap/lbfgs alike (all call step_fn).
@@ -1867,8 +1933,12 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
             # Z ≈ 1 point of the gauge orbit: along the orbit it is UNOPPOSED
             # (any λ pins it); off the orbit the truncated shape pays only
             # O(λ) — kept small, and verified by the decompose closure.
-            loss = loss + gauge_lambda * (w * (log_Z.double() ** 2)).sum() / sw
-        return loss, sw
+            # Folded into the per-event term so the loss, the auto-threshold
+            # moments, and the early-stop all monitor the SAME quantity.
+            per = per + gauge_lambda * (log_Z.double() ** 2)
+        pd = per.detach()
+        return ((w * per).sum() / sw, sw,
+                float((w * pd * pd).sum()), float((w * w).sum()))
 
     # --matmul-precision: TF32/bf16-internal fp32 matmuls for the stage-1
     # training loop ONLY — restored before the calibration report below and
@@ -2005,10 +2075,13 @@ def train_stage2(args, model, train_loader, val_loader, stats,
             n_iter=args.continuity_n_iter)
         # float64 Σw·NLL reduction + backward (model stays at --precision); same
         # rationale as step1 / the trust driver's _per_event_term, applied to all
-        # optimisers that go through step_fn (adam/soap/lbfgs).
+        # optimisers that go through step_fn (adam/soap/lbfgs). The trailing
+        # (Σw·per², Σw²) moments feed the κ·SE auto patience threshold.
         w = (batch["w"] * data_mask.to(batch["w"].dtype)).double()
         sw = float(w.sum().clamp_min(1e-30))
-        return (w * per.double()).sum() / sw, sw
+        pd = per.detach().double()
+        return ((w * per.double()).sum() / sw, sw,
+                float((w * pd * pd).sum()), float((w * w).sum()))
 
     fit_opt = getattr(args, "fit_optimizer", "adam")
     max_epochs = args.fit_epochs or args.epochs
@@ -2383,8 +2456,13 @@ def run_bootstrap_continuity(args, model, shard_files, stats, device, *,
              if mc_as_data else "")
           + f"  [smear_fit={model.smear_fit_params}; "
           + ("no early stop" if args.no_early_stop
-             else f"patience={patience}, threshold={args.patience_threshold:g}")
+             else "patience=%s, threshold=%s" % (
+                 patience,
+                 ("auto(κ=%g·SE)" % getattr(args, "patience_threshold_kappa", 0.2)
+                  if _threshold_is_auto(args) else f"{args.patience_threshold:g}")))
           + f", lr-schedule={args.lr_schedule}]")
+    auto_thr = _threshold_is_auto(args)
+    thr = 0.0 if auto_thr else float(args.patience_threshold)
     gen = torch.Generator(device=device)
     replicas, eff_smears, conv_epochs = [], [], []
     n_batches_total = None   # learned on the first epoch → % on the inner bar after
@@ -2406,7 +2484,7 @@ def run_bootstrap_continuity(args, model, shard_files, stats, device, *,
         model.train()
         for epoch in range(max_epochs):
             gen.manual_seed(seed)                  # same per-event Poisson each epoch
-            tr_sum = 0.0; tr_w = 0.0; n_seen = 0
+            tr_sum = 0.0; tr_w = 0.0; n_seen = 0; tr_sq = 0.0; tr_w2 = 0.0
             # Inner per-epoch bar over batches so a (slow) epoch visibly advances;
             # total is learned on epoch 1 so later epochs render a % bar.
             ebar = tqdm(loader, total=n_batches_total, leave=False,
@@ -2435,13 +2513,21 @@ def run_bootstrap_continuity(args, model, shard_files, stats, device, *,
                 loss.backward()
                 optim.step()
                 tr_sum += float(loss.item()) * sw; tr_w += sw
+                pd = per.detach().double(); wd = w.detach().double()
+                tr_sq += float((wd * pd * pd).sum()); tr_w2 += float((wd * wd).sum())
                 ebar.set_postfix_str(f"nll={tr_sum / max(tr_w, 1e-30):+.4f}")
             ebar.close()
             if n_batches_total is None:
                 n_batches_total = n_seen
             used = epoch + 1
             nll = tr_sum / max(tr_w, 1e-30)
-            improved = nll < best - args.patience_threshold
+            if auto_thr:
+                # same κ·SE recomputation as _run_epochs, per replica epoch
+                # (the Poisson reweighting enters σ̂ through w², as it should)
+                thr = _auto_threshold(args, tr_w, tr_sq, tr_w2, nll)
+                if sched is not None and sched_kind == "plateau":
+                    sched.threshold = thr
+            improved = nll < best - thr
             if improved:
                 best = nll; no_improve = 0
             else:
@@ -3963,8 +4049,16 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    help="Adam weight decay (L2) on all optimized parameters.")
     p.add_argument("--patience", type=int, default=8,
                    help="Early-stop after this many epochs without val improvement.")
-    p.add_argument("--patience-threshold", type=float, default=1e-4,
-                   help="Minimum val-NLL decrease that counts as an improvement.")
+    p.add_argument("--patience-threshold", type=_float_or_auto, default=1e-4,
+                   help="Minimum monitored-NLL decrease that counts as an "
+                   "improvement (early-stop AND the plateau LR schedule). "
+                   "'auto': κ·SE of the monitored weighted-mean NLL (SE = "
+                   "σ̂·√(Σw²)/Σw from the per-event NLL moments), recomputed "
+                   "every epoch — improvements below the sample's statistical "
+                   "resolution stop counting; κ via --patience-threshold-kappa.")
+    p.add_argument("--patience-threshold-kappa", type=float, default=0.2,
+                   help="κ for --patience-threshold auto: threshold = κ·SE of "
+                   "the monitored mean NLL (default 0.2).")
     p.add_argument("--no-early-stop", action="store_true",
                    help="Disable early stopping (train the full --epochs).")
     p.add_argument("--lr-schedule", choices=["plateau", "cosine", "none"],
@@ -4004,7 +4098,9 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "--flow-arch nce the train monitor carries fresh-twin noise "
                    "~1/sqrt(N·k) per epoch (the val monitor used fixed twins); "
                    "negligible at full statistics but consider a nonzero "
-                   "--patience-threshold at small --event-fraction.")
+                   "--patience-threshold at small --event-fraction "
+                   "(--patience-threshold auto adapts to the sample size "
+                   "automatically).")
     p.add_argument("--max-events", type=int, default=0,
                    help="Subsample to ~this many events for the flow + fit stages "
                    "(0 = use all). Applied per shard AFTER the --validation "
