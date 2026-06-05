@@ -321,10 +321,26 @@ class CompactMatchedFlow(nn.Module):
     def _edges(self, params):
         """(log q, (log q)', (log q)'') at the window edges — analytic for
         bernstein, autograd through the composition for logistic. The d2 ≤
-        −curv_floor clamp is shared (see _edges_autograd)."""
-        if self.layer_type == "bernstein":
-            return self._edges_bernstein(params)
-        return self._edges_autograd(params)
+        −curv_floor clamp is shared (see _edges_autograd).
+
+        ALWAYS computed in fp64: when the trained edge density is tiny
+        (log q ~ −100s, routine for sharp peaks far from a window edge), the
+        per-layer S' factors underflow to 0 in fp32 and the autograd second
+        derivative hits 0/0 → NaN d2 (observed on a real fp32 checkpoint for
+        ~half the conditioning points → non-finite stage-2 loss). The upcast
+        is differentiable, the cost is per-event (not per-node/grid), and the
+        results are cast back to the input dtype (d1/d2 range-clamped first so
+        the downcast itself cannot create ±inf → 0·inf=NaN downstream)."""
+        dt = params[0].dtype
+        if dt != torch.float64:
+            params = tuple(p.double() for p in params)
+        out = (self._edges_bernstein(params) if self.layer_type == "bernstein"
+               else self._edges_autograd(params))
+        if dt != torch.float64:
+            fmax = float(torch.finfo(dt).max) / 16.0
+            out = {k: (v if k.startswith("logq") else v.clamp(-fmax, fmax)).to(dt)
+                   for k, v in out.items()}
+        return out
 
     def _edges_autograd(self, params):
         """(log q, (log q)', (log q)'') at the window edges via autograd through
@@ -414,15 +430,30 @@ class CompactMatchedFlow(nn.Module):
         """log p_ext(edge+t) = logq + d1·t + ½ d2·t² (2nd-order Taylor of log q)."""
         return logq + d1 * t + 0.5 * d2 * t * t
 
+    @staticmethod
+    def _log_erfcx(z):
+        """log erfcx(z) for any real z. erfcx(z) = 2e^{z²} − erfcx(−z), so for
+        z ≤ −6 it is 2e^{z²} to relative error < e^{−36} — but erfcx itself
+        overflows there (fp32 already at z ≈ −9.4). Branch in log space; the
+        clamp keeps the unselected branch NaN-free in forward AND backward."""
+        safe = torch.special.erfcx(z.clamp_min(-6.0)).log()
+        return torch.where(z < -6.0, z * z + math.log(2.0), safe)
+
     def _outward(self, U, logq, s_out, alpha):
-        """Matched tail in the OUTWARD coordinate u≥0: g(u)=exp(logq+s_out·u−½α u²),
-        s_out<0 (decaying). Returns (total=∫₀^∞, beyond=∫_U^∞), erfcx-stable."""
+        """Matched tail in the OUTWARD coordinate u≥0: g(u)=exp(logq+s_out·u−½α u²).
+        Returns (total=∫₀^∞, beyond=∫_U^∞). erfcx is only directly evaluable for
+        DECAYING outward slopes (s_out<0); a trained edge can come out RISING
+        (s_out>0), where the closed form ∝ e^{s²/2α} overflows — assemble both
+        factors in log space and cap the exponent: an e^{80} tail mass is equally
+        pathological either way, but the NLL stays finite (and huge) so the
+        optimizer steers away instead of crashing on NaN."""
         root = (0.5 / alpha).sqrt()
-        pref = (math.pi * 0.5 / alpha).sqrt()
-        erfcx = torch.special.erfcx
-        total = logq.exp() * pref * erfcx(-s_out * root)
+        log_pref = 0.5 * (math.log(math.pi * 0.5) - alpha.log())
+        total = (logq + log_pref + self._log_erfcx(-s_out * root)
+                 ).clamp(max=80.0).exp()
         g_at_U = logq + s_out * U - 0.5 * alpha * U * U
-        beyond = g_at_U.exp() * pref * erfcx((alpha * U - s_out) * root)
+        beyond = (g_at_U + log_pref + self._log_erfcx((alpha * U - s_out) * root)
+                  ).clamp(max=80.0).exp()
         return total, beyond
 
     # ---- public API --------------------------------------------------------
@@ -665,6 +696,49 @@ def _selftest():
     out = flow(torch.full((8,), b + 0.05, dtype=torch.float64), cg).sum()
     g = torch.autograd.grad(out, cg)[0]
     print(f"tail grad wrt conditioning finite = {bool(torch.isfinite(g).all())}")
+
+    # 6) fp32 stress — the REAL fit-stage precision. Two failure modes guarded:
+    #    (a) NaN d2 from _edges_autograd: fp32 underflow of the per-layer S'
+    #        factors when the edge density is tiny (a trained checkpoint hit
+    #        this for ~44% of conditioning points → non-finite stage-2 loss);
+    #        _edges now computes in fp64.
+    #    (b) erfcx overflow in _outward for outward-RISING trained edge slopes
+    #        (erfcx(−y) ≈ 2e^{y²} overflows fp32 at y ≳ 9.4); now log-space.
+    for lt in ("logistic", "bernstein"):
+        f32 = CompactMatchedFlow(7, a, b, n_components=8, n_transforms=4,
+                                 learn_weights=(lt == "logistic"),
+                                 layer_type=lt, bernstein_degree=16)
+        with torch.no_grad():
+            for p_ in f32.parameters():
+                p_.normal_(0, 3.0)
+        cc32 = torch.randn(512, 7)
+        xs32 = torch.linspace(a - 1.0, b + 1.0, 101)
+        nbad = 0
+        for e in range(512):
+            ce = cc32[e:e + 1].expand(101, -1)
+            nbad += int((~torch.isfinite(f32(xs32, ce))).sum())
+            nbad += int((~torch.isfinite(f32.log_cdf(xs32, ce))).sum())
+        ed32 = f32._edges(f32._cond_params(cc32))
+        edfin = all(bool(torch.isfinite(v).all()) for v in ed32.values())
+        assert all(v.dtype == torch.float32 for v in ed32.values())
+        print(f"fp32 stress [{lt}]: non-finite forward/log_cdf values = {nbad}, "
+              f"edges all finite = {edfin}")
+        assert nbad == 0 and edfin
+    # _outward: finite for a rising edge slope with curvature at the floor
+    for dt in (torch.float32, torch.float64):
+        tot, bey = flow._outward(torch.tensor([0.0, 0.5], dtype=dt),
+                                 torch.tensor([-2.0, -2.0], dtype=dt),
+                                 torch.tensor([5.0, 5.0], dtype=dt),
+                                 torch.tensor([1e-3, 1e-3], dtype=dt))
+        assert bool(torch.isfinite(tot).all() and torch.isfinite(bey).all()), dt
+    # _log_erfcx: matches log∘erfcx where evaluable, continuous at the branch
+    z = torch.linspace(-5.9, 6.0, 1001, dtype=torch.float64)
+    r = float((flow._log_erfcx(z) - torch.special.erfcx(z).log()).abs().max())
+    zb = torch.tensor([-6.0 - 1e-9, -6.0 + 1e-9], dtype=torch.float64)
+    jump = float((flow._log_erfcx(zb)[1] - flow._log_erfcx(zb)[0]).abs())
+    print(f"_outward rising-slope finite (fp32+fp64); _log_erfcx max err {r:.1e}, "
+          f"branch jump {jump:.1e}")
+    assert r < 1e-12 and jump < 1e-7
 
 
 if __name__ == "__main__":
