@@ -1736,6 +1736,12 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
               f"Z = F0({model.m_hi:g}|c) - F0({model.m_lo:g}|c)  "
               f"(consistent with stage-2 flow_cdf; the frozen flow is the "
               f"truncated-MLE on the mass window)")
+    else:
+        # only reachable for gf/nsf with --no-flow-window-norm (the compact/
+        # analytic archs were all handled above)
+        print("  likelihood: full-support -logp0 (--no-flow-window-norm; the flow "
+              "leaks mass outside the window and stage-2 truncates inconsistently "
+              "→ biases the overall scale A)")
     gauge_lambda = (float(getattr(args, "flow_gauge_penalty", 0.0) or 0.0)
                     if window_norm else 0.0)
     if gauge_lambda > 0.0:
@@ -1743,10 +1749,6 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
               f"the loss-flat window-mass gauge at Z(c) ≈ 1 (prevents the "
               f"drift into probit/erfinv saturation: chaotic device-dependent "
               f"evaluation + window-Z degradation)")
-    else:
-        print("  likelihood: full-support -logp0 (--no-flow-window-norm; the flow "
-              "leaks mass outside the window and stage-2 truncates inconsistently "
-              "→ biases the overall scale A)")
 
     # --compile: fuse the stage-1 hot path. Only the compact/nce archs are
     # traceable — gf/nsf route through zuko's MonotonicTransform whose inner
