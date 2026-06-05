@@ -428,6 +428,34 @@ def _event_mll(
     return torch.sqrt(m2.clamp_min(1e-12))
 
 
+def _dm_dpt_analytic(
+    pt_pm: torch.Tensor, eta_pm: torch.Tensor, phi_pm: torch.Tensor
+) -> torch.Tensor:
+    """Closed-form ``∂m_ll/∂pt_μ`` at fixed (η, φ) — the exact derivative of
+    ``_event_mll``:
+
+        ∂m/∂pt_μ = [E_tot·pt_μ·cosh²η_μ/E_μ
+                    − (P_x cosφ_μ + P_y sinφ_μ + P_z sinhη_μ)] / m
+
+    (from m² = E_tot² − |ΣP|², with dE/dpt = pt·cosh²η/E and dp/dpt =
+    (cosφ, sinφ, sinhη)). Inputs ``[..., 2]`` per muon; output ``[..., 2]``.
+    Used by the closed-form operator Jacobians (replacing autograd through
+    the kinematic algebra)."""
+    cphi, sphi, sheta = torch.cos(phi_pm), torch.sin(phi_pm), torch.sinh(eta_pm)
+    px = pt_pm * cphi
+    py = pt_pm * sphi
+    pz = pt_pm * sheta
+    E = torch.sqrt(px * px + py * py + pz * pz
+                   + MUON_MASS_GEV * MUON_MASS_GEV)
+    Etot = E.sum(-1, keepdim=True)
+    Px = px.sum(-1, keepdim=True)
+    Py = py.sum(-1, keepdim=True)
+    Pz = pz.sum(-1, keepdim=True)
+    m = torch.sqrt((Etot * Etot - (Px * Px + Py * Py + Pz * Pz)).clamp_min(1e-12))
+    cheta2 = torch.cosh(eta_pm) ** 2
+    return (Etot * pt_pm * cheta2 / E - (Px * cphi + Py * sphi + Pz * sheta)) / m
+
+
 def _event_cond_raw(
     pt_pm: torch.Tensor, eta_pm: torch.Tensor, phi_pm: torch.Tensor,
     eps: float = 1e-6,
@@ -1608,21 +1636,24 @@ class JpsiMassMixtureModel(nn.Module):
         ``s_adv = v(x)·θ`` evaluated at the EVALUATION mass ``m_eval`` along the
         event's observed ray (``pt(x) = pt_obs·x/m_obs`` inside
         ``_continuity_response``) — exact and iteration-free in the defining
-        direction. Also returns the exact ``log|dm_s/dx| = log|1 − ∂_x s_adv|``
-        by autograd through a zero leaf added to ``m_eval`` (the θ graph is
-        preserved). Returns ``(m_s, log_J)`` shaped like ``m_eval``."""
+        direction. The exact ``log|dm_s/dx| = log|1 − ∂_x s_adv|`` is CLOSED
+        FORM along the event ray (pt(x) = pt_obs·x/m_obs): the A term of
+        s_adv is linear in x (slope −½ΣA_μ), the e term is CONSTANT
+        ((x/2)·k(x) = m_obs/(2·pt_obs,μ)), and the M term is quadratic
+        (−x²·q_μ·pt_obs,μ·M_μ/(2·m_obs)), so
+
+            ∂s_adv/∂x = −½(A₊+A₋) − (x/m_obs)·Σ_μ q_μ·pt_obs,μ·M_μ.
+
+        θ-gradients flow through the closed form by ordinary autograd.
+        Returns ``(m_s, log_J)`` shaped like ``m_eval``."""
         if not self.scale_enabled:
             return m_eval, torch.zeros_like(m_eval)
-        train_grad = torch.is_grad_enabled()
-        with torch.enable_grad():
-            dm = torch.zeros_like(m_eval).requires_grad_(True)
-            me = m_eval + dm
-            s_adv = self._continuity_response(
-                me, m_obs, pt_obs, eta_pm, q_pm, theta_scale_pm)
-            sp = torch.autograd.grad(s_adv.sum(), dm, create_graph=train_grad,
-                                     retain_graph=True)[0]
-        if not train_grad:
-            s_adv, sp = s_adv.detach(), sp.detach()
+        s_adv = self._continuity_response(
+            m_eval, m_obs, pt_obs, eta_pm, q_pm, theta_scale_pm)
+        sp = (-0.5 * (theta_scale_pm[..., 0] + theta_scale_pm[..., 3])
+              - (m_eval / m_obs)
+              * (q_pm[..., 0] * pt_obs[..., 0] * theta_scale_pm[..., 2]
+                 + q_pm[..., 1] * pt_obs[..., 1] * theta_scale_pm[..., 5]))
         m_s = m_eval - s_adv
         log_J = torch.log((1.0 - sp).abs().clamp_min(1e-6))
         return m_s, log_J
@@ -1827,23 +1858,34 @@ class JpsiMassMixtureModel(nn.Module):
             m_obs, m_obs, pt_obs, eta_pm, q_pm, theta_scale_pm)
         ms_ = m_s.unsqueeze(1)                                            # [B, 1]
 
-        def smear_V(me):
-            """Smear mass-variance V at evaluation mass me [B, G] (≥ 0)."""
-            # _smear_mass_var: pt = pto*(me/mo).unsqueeze(-1) → [B,G,2];
-            # broadcasts with etao, phio, bpo[B,G,2]. Returns V [B, G].
-            return self._smear_mass_var(etao, phio, bpo, pto, me, mo).clamp_min(0.0)
+        # Smear mass-variance in POLYNOMIAL closed form — algebraically equal
+        # to _smear_mass_var on the event ray (pt(me) = pt_obs·me/m_obs):
+        #   V(me) = α·me⁴ + γ·me²,
+        #   α = ¼ Σ_μ a_μ·pt_obs,μ² / (m_obs²·sin²θ_μ),  γ = ¼ Σ_μ c_μ/sin²θ_μ,
+        # so V′(me) = 4α·me³ + 2γ·me is available WITHOUT autograd. θ-gradients
+        # flow through (a, c) by ordinary autograd (incl. the whitening hook).
+        if self.smearing_enabled:
+            ac = self._smear_ac_pm(eta_pm, phi_pm, b_pm)            # [B, 2, 2]
+            sin2 = _sintheta_from_eta(eta_pm) ** 2                  # [B, 2]
+            al_ = (0.25 * (ac[..., 0] * SMEAR_VAR_SCALE_A
+                           * pt_obs * pt_obs / sin2).sum(-1)
+                   / (m_obs * m_obs)).unsqueeze(1)                  # [B, 1]
+            ga_ = (0.25 * (ac[..., 1] * SMEAR_VAR_SCALE_C
+                           / sin2).sum(-1)).unsqueeze(1)            # [B, 1]
 
-        def _smear_disp(Vt):
-            """The √V·ε displacement per GH node; vanishes exactly if disabled.
+        def _smear_disp(me):
+            """The √V·ε displacement per GH node at evaluation mass me [B, G];
+            vanishes exactly if disabled.
 
-            The +EPS inside the sqrt keeps the autograd gradient finite as V→0
-            (else d√V/dV = 1/(2√V)→∞ times ∂V/∂θ→0 gives 0·∞ = NaN, which
+            The +EPS inside the sqrt keeps the V→0 behaviour finite (else
+            V′/(2√V)→∞ in G′ and the θ-gradient hits 0·∞ = NaN, which
             nan_to_num turns into log p=0 → a spurious UNIFORM density at c≈0,
             which acts as a barrier blocking the fitted smear from reaching 0.
             EPS=1e-12 → a mass-displacement floor of 1e-6 GeV, negligible vs the
             physical √V ~ tens of MeV)."""
             if self.smearing_enabled:
-                return (Vt + 1e-12).sqrt() * xig
+                V = (al_ * me**4 + ga_ * me**2).clamp_min(0.0)
+                return (V + 1e-12).sqrt() * xig
             return me_zero
 
         # Pre-allocate the zero displacement (used only when smearing_enabled=False).
@@ -1856,23 +1898,20 @@ class JpsiMassMixtureModel(nn.Module):
         mp = ms_.expand(B, G).clone()
         if self.smearing_enabled:
             for _ in range(n_iter):
-                mp = ms_ - _smear_disp(smear_V(mp))
+                mp = ms_ - _smear_disp(mp)
 
-        # Smear-map Jacobian G' = ∂m_s/∂m' by autograd at the converged source
-        # (≡ 1 with smearing disabled; the scale Jacobian is log_J_s).
-        # In training (mp.requires_grad) we keep the graph so the gradient flows
-        # through θ (which sources V and the dependence m'(θ)); in eval we run
-        # under enable_grad on a fresh leaf.
+        # Smear-map Jacobian G' = ∂m_s/∂m' in CLOSED FORM at the converged
+        # source (≡ 1 with smearing disabled; the scale Jacobian is log_J_s):
+        #   G′ = 1 + (V′(m′)/(2√(V(m′)+EPS)))·ξ,  V′ masked where the V ≥ 0
+        # clamp is active (matching the old autograd through clamp_min).
         if not self.smearing_enabled:
             Gp = torch.ones_like(mp)
-        elif mp.requires_grad:
-            Gx = (mp + _smear_disp(smear_V(mp))).sum()
-            Gp = torch.autograd.grad(Gx, mp, create_graph=True)[0]
         else:
-            with torch.enable_grad():
-                mp_j = mp.detach().requires_grad_(True)
-                Gx = (mp_j + _smear_disp(smear_V(mp_j))).sum()
-                Gp = torch.autograd.grad(Gx, mp_j)[0].detach()
+            V_raw = al_ * mp**4 + ga_ * mp**2
+            V = V_raw.clamp_min(0.0)
+            Vp = ((4.0 * al_ * mp**3 + 2.0 * ga_ * mp)
+                  * (V_raw >= 0).to(mp.dtype))
+            Gp = 1.0 + Vp / (2.0 * (V + 1e-12).sqrt()) * xig
 
         # Frozen-flow density at the per-node source points. ρ in the
         # conditioning is propagated per-node (scale un-applied + smear's
@@ -1956,7 +1995,8 @@ class JpsiMassMixtureModel(nn.Module):
             fn(m_flat[i:i + _FLOW_EVAL_CHUNK], mk_flat[i:i + _FLOW_EVAL_CHUNK])
             for i in range(0, n, _FLOW_EVAL_CHUNK)])
 
-    def _gh_qop_unsmear(self, pt_cfg, etao, phio, qo, bpo, eps):
+    def _gh_qop_unsmear(self, pt_cfg, etao, phio, qo, bpo, eps,
+                        with_dlam: bool = False):
         """Un-kick an OBSERVED per-muon pt config to the nominal (truth) mass +
         ρ, per 2-D GH node. The model composes (generative, MC → data):
 
@@ -1983,15 +2023,31 @@ class JpsiMassMixtureModel(nn.Module):
         converges in a few iterations since σ ≪ |qop|; with smearing disabled
         the whole un-kick is a single closed-form expression.
 
-        ``pt_cfg`` [B, G², 2] is the observed config (possibly scaled along the
-        mass direction by the Jacobian leaf λ); ``eps`` [·, G², 2] the kicks.
-        Returns ``(m_t [B, G²], pt_truth [B, G², 2])``.
+        ``pt_cfg`` [B, G², 2] is the observed config (the mass-direction scaling
+        of the old Jacobian leaf λ is evaluated at λ=1); ``eps`` [·, G², 2] the
+        kicks. Returns ``(m_t [B, G²], pt_truth [B, G², 2])``; with
+        ``with_dlam=True`` additionally returns the CLOSED-FORM per-muon
+        ``dpt_truth/dλ`` [B, G², 2] for the change-of-variables Jacobian
+        (λ scales the observed config along the mass direction, pt_cfg = pt·λ,
+        evaluated at λ=1 — what the old autograd λ-leaf differentiated):
 
-        (+EPS inside the σ sqrt keeps the autograd gradient finite as σ²→0, else
+            dqop_obs/dλ = −qop_obs
+            dδqop/dλ    = q·sinθ·(A − 2e·k)·(−k)            (∂δ/∂k · dk/dλ)
+            dqop_t/dqop_s = 1/(1 + ξ·∂σ_eff/∂qop_t)         (implicit fn. thm.,
+                ∂σ_eff/∂qop_t = [σ²>0]·c·k_t·sign(qop_t)/(sinθ·σ_eff))
+            dpt/dqop    = −pt/qop  (zero where the qop=0 pole clamp engaged)
+
+        The implicit-function smear factor is evaluated at the 3-step truncated
+        fixed point rather than the exact root — a relative O(contraction³)
+        ≈ 1e-8 mismatch vs the unrolled-autograd Jacobian, far below quadrature
+        truncation.
+
+        (+EPS inside the σ sqrt keeps the gradient finite as σ²→0, else
         d√v/dv→∞ times ∂v/∂λ→0 gives 0·∞ = NaN → a spurious uniform density at
         c≈0; EPS=1e-14 → σ floor 1e-7, negligible vs ~1e-3.)"""
         sinth = _sintheta_from_eta(etao)                          # [B,·,2]
         qop_obs = qo * sinth / pt_cfg                             # [B,G²,2] (bcast)
+        dqop_dlam = -qop_obs if with_dlam else None               # dqop_obs/dλ|_{λ=1}
 
         # 1) BACKWARD (data → MC) scale — the defining direction: δqop at the
         #    OBSERVED config, explicit, exact, iteration-free.
@@ -1999,24 +2055,51 @@ class JpsiMassMixtureModel(nn.Module):
             AeM = self._scale_AeM_pm(etao, phio, bpo)
             qop_s = qop_obs - self._delta_qop_analytic(AeM, pt_cfg, etao, qo)
             pt_s = self._qop_new_to_pt(qop_obs, qop_s, qo, sinth)
+            if with_dlam:
+                k = 1.0 / pt_cfg
+                # dδqop/dλ = ∂δ/∂k · dk/dλ with ∂δ/∂k = q·sinθ·(A − 2e·k),
+                # dk/dλ = −k at λ=1.
+                dqop_dlam = dqop_dlam - (qo * sinth
+                                         * (AeM[..., 0] - 2.0 * AeM[..., 1] * k)
+                                         * (-k))
         else:
             qop_s, pt_s = qop_obs, pt_cfg
+        qop_fin = qop_s if self.scale_enabled else qop_obs
 
         # 2) Un-smear from the scaled coordinates: σ at the truth pt (forward
         #    MC → data smear convention unchanged) → fixed point over the smear
         #    shift alone.
         pt_truth = pt_s
         if self.smearing_enabled:
+            qop_truth = qop_s
             for _ in range(3):
                 sig = (self._qop_var_pm(etao, phio, bpo, pt_truth).clamp_min(0.0)
                        + 1e-14).sqrt()
                 qop_truth = qop_s - sig * eps
                 pt_truth = self._qop_new_to_pt(qop_s, qop_truth, qo, sinth)
+            qop_fin = qop_truth
+            if with_dlam:
+                # Implicit-function Jacobian of the smear stage at the truncated
+                # fixed point: dqop_t/dqop_s = 1/(1 + ξ·∂σ_eff/∂qop_t).
+                ac = self._smear_ac_pm(etao, phio, bpo)           # [B,·,2,2]
+                c_phys = ac[..., 1] * SMEAR_VAR_SCALE_C
+                var_raw = self._qop_var_pm(etao, phio, bpo, pt_truth)
+                sig_eff = (var_raw.clamp_min(0.0) + 1e-14).sqrt()
+                dsig = ((var_raw > 0).to(sig_eff.dtype) * c_phys
+                        * torch.sign(qop_truth)
+                        / (pt_truth * sinth * sig_eff))           # c·k_t·sign/(sinθ·σ)
+                dqop_dlam = dqop_dlam / (1.0 + eps * dsig)
         m_t = _event_mll(pt_truth, etao, phio)                   # [B,G²]
         # Return the un-kicked nominal momenta; the caller builds the per-node
         # conditioning from them via _node_cond (ρ-only for muon_kin, the full
         # event-level vector for event_level).
-        return m_t, pt_truth
+        if not with_dlam:
+            return m_t, pt_truth
+        # dpt/dqop = −pt/qop (pt = sinθ/|qop|); zero where the qop=0 pole
+        # clamp froze pt.
+        pole = (qop_fin.abs() > QOP_EPS).to(pt_truth.dtype)
+        dpt_dlam = -(pt_truth / qop_fin) * dqop_dlam * pole
+        return m_t, pt_truth, dpt_dlam
 
     def _continuity_logp_gh_qop(self, m_obs, mk, pt_obs, eta_pm, phi_pm, q_pm,
                                 b_pm, n_gh: int = 8, n_iter: int = 2):
@@ -2033,7 +2116,8 @@ class JpsiMassMixtureModel(nn.Module):
         smear width both at the truth pt) to the nominal config → nominal mass
         ``m_t`` and ρ (see ``_gh_qop_unsmear``). ``p_0`` is the frozen flow at
         that nominal mass conditioned on the per-node nominal ρ; the change-of-
-        variables Jacobian ``|∂m_t/∂x|`` is taken by autograd through ``λ``. This
+        variables Jacobian ``|∂m_t/∂x|`` is CLOSED FORM (analytic ∂m/∂pt and the
+        un-kick chain derivative — see ``_gh_qop_unsmear`` with_dlam). This
         is the genuine inverse of the per-muon fold that generates the pseudo-
         data (the GH nodes live in the 2-D qop±-kick space), reproducing its full
         non-Gaussian shape — mean-shift and skew, not just the variance.
@@ -2068,22 +2152,18 @@ class JpsiMassMixtureModel(nn.Module):
         # validation pseudo-data, exactly as for real data — so the density is
         # evaluated at _event_mll(pt_obs) = m_obs directly, no rescaling needed.
 
-        # Per-node mass-scale leaf λ (=1) for the d m_t / d m_obs Jacobian:
-        # perturbing m_obs scales the observed config along pt∝m (fixed obs ρ).
-        train_grad = torch.is_grad_enabled()
-        with torch.enable_grad():
-            lam = torch.ones(B, G2, device=m_obs.device, dtype=m_obs.dtype,
-                             requires_grad=True)
-            pt_cfg = pto * lam.unsqueeze(-1)                            # [B,G²,2]
-            mo_lam = _event_mll(pt_cfg, etao, phio)                    # [B,G²]
-            m_t, pt_truth = self._gh_qop_unsmear(pt_cfg, etao, phio, qo, bpo, eps)
-            g_mt = torch.autograd.grad(
-                m_t.sum(), lam, create_graph=train_grad, retain_graph=True)[0]
-            g_mo = torch.autograd.grad(
-                mo_lam.sum(), lam, create_graph=train_grad, retain_graph=True)[0]
-        if not train_grad:
-            m_t, pt_truth = m_t.detach(), pt_truth.detach()
-            g_mt, g_mo = g_mt.detach(), g_mo.detach()
+        # d m_t / d m_obs Jacobian in CLOSED FORM (no autograd λ-leaf):
+        # perturbing m_obs scales the observed config along pt∝m (fixed obs ρ),
+        # so with pt_cfg = pt_obs·λ at λ=1, |∂m_t/∂x| = |∂m_t/∂λ|/|∂m_obs/∂λ|
+        # with ∂m/∂λ = Σ_μ (∂m/∂pt_μ)·(dpt_μ/dλ) — ∂m/∂pt analytic
+        # (_dm_dpt_analytic) and dpt_t/dλ from the un-kick chain
+        # (_gh_qop_unsmear with_dlam; dpt_cfg/dλ = pt_cfg). θ-gradients flow
+        # through the closed-form expressions by ordinary autograd.
+        pt_cfg = pto.expand(B, G2, 2)                                   # [B,G²,2]
+        m_t, pt_truth, dpt_dlam = self._gh_qop_unsmear(
+            pt_cfg, etao, phio, qo, bpo, eps, with_dlam=True)
+        g_mt = (_dm_dpt_analytic(pt_truth, etao, phio) * dpt_dlam).sum(-1)
+        g_mo = (_dm_dpt_analytic(pt_cfg, etao, phio) * pt_cfg).sum(-1)
         # |∂m_t/∂x| = |∂m_t/∂λ| / |∂m_obs/∂λ|.
         logJ = (torch.log(g_mt.abs().clamp_min(1e-12))
                 - torch.log(g_mo.abs().clamp_min(1e-12)))
