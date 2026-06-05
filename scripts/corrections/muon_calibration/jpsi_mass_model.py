@@ -46,7 +46,7 @@ if _HERE not in sys.path:
 
 from train_muon_response_flow import FlowWithLogProb, build_flow  # noqa: E402
 from compact_flow import CompactMatchedFlow  # noqa: E402
-from dcb_density import DCBDensity  # noqa: E402
+from dcb_density import DCBDensity, EGEDensity  # noqa: E402
 from nce_density import NCEDensity  # noqa: E402
 
 
@@ -864,6 +864,12 @@ class JpsiMassMixtureModel(nn.Module):
         # C¹ at the two core/tail junctions (score continuous; curvature
         # jumps at two isolated points).
         self.flow_is_dcb = (self.flow_arch == "dcb")
+        # ``ege``: Gaussian core + C¹-MATCHED exponential tails (ExpGaussExp;
+        # see dcb_density.EGEDensity) — like dcb but with only (μ, σ, α_L,
+        # α_R) conditional parameters: the tail slopes are FORCED to α by the
+        # C⁰+C¹ matching (the maximum possible for a log-linear tail). Same
+        # window-normalised, analytic-CDF, full-ℝ-tails design.
+        self.flow_is_ege = (self.flow_arch == "ege")
         if self.flow_is_compact:
             a_std = (float(m_lo) - float(mll_mean)) / float(mll_std)
             b_std = (float(m_hi) - float(mll_mean)) / float(mll_std)
@@ -894,6 +900,14 @@ class JpsiMassMixtureModel(nn.Module):
             a_std = (float(m_lo) - float(mll_mean)) / float(mll_std)
             b_std = (float(m_hi) - float(mll_mean)) / float(mll_std)
             self.flow = DCBDensity(
+                n_cond=N_MUON_KIN, a=a_std, b=b_std,
+                hidden_features=flow_hidden_features,
+                n_layers=flow_n_hidden_layers,
+            )
+        elif self.flow_is_ege:
+            a_std = (float(m_lo) - float(mll_mean)) / float(mll_std)
+            b_std = (float(m_hi) - float(mll_mean)) / float(mll_std)
+            self.flow = EGEDensity(
                 n_cond=N_MUON_KIN, a=a_std, b=b_std,
                 hidden_features=flow_hidden_features,
                 n_layers=flow_n_hidden_layers,
@@ -2062,9 +2076,10 @@ class JpsiMassMixtureModel(nn.Module):
             # which is how every consumer uses it (window Z, stage-1 norm,
             # display norm).
             return self.flow.log_cdf(m_std, mk)
-        if getattr(self, "flow_is_dcb", False):
-            # DCB: fully analytic piecewise CDF (Φ core + power-law tail
-            # antiderivatives), normalised so F₀(b)−F₀(a)=1 exactly.
+        if getattr(self, "flow_is_dcb", False) or getattr(self, "flow_is_ege", False):
+            # DCB/EGE: fully analytic piecewise CDF (Φ core + power-law /
+            # exponential tail antiderivatives), normalised so
+            # F₀(b)−F₀(a)=1 exactly.
             return self.flow.log_cdf(m_std, mk)
         dist = self.flow.flow(mk)
         z = dist.transform(m_std.unsqueeze(-1)).squeeze(-1)
@@ -2129,7 +2144,8 @@ class JpsiMassMixtureModel(nn.Module):
         (exact-Z construction / quadrature integral / analytic CDF)."""
         if (getattr(self, "flow_is_compact", False)
                 or getattr(self, "flow_is_nce", False)
-                or getattr(self, "flow_is_dcb", False)):
+                or getattr(self, "flow_is_dcb", False)
+                or getattr(self, "flow_is_ege", False)):
             lo = self._flow_log_cdf(m_lo_t, mk)
             hi = self._flow_log_cdf(m_hi_t, mk)
             return (hi.exp() - lo.exp()).clamp_min(1e-30).log()

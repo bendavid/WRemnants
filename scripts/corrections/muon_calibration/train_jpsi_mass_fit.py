@@ -1707,12 +1707,18 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
     compact = getattr(model, "flow_is_compact", False)
     nce = getattr(model, "flow_is_nce", False)
     dcb = getattr(model, "flow_is_dcb", False)
+    ege = getattr(model, "flow_is_ege", False)
     window_norm = ((not getattr(args, "no_flow_window_norm", False))
-                   and not compact and not nce and not dcb)
+                   and not compact and not nce and not dcb and not ege)
     if dcb:
         print("  likelihood: -logp0 (analytic double-sided Crystal Ball, "
               "MLP-conditional (μ,σ,α_L,n_L,α_R,n_R); window-normalised by "
               "construction — Z ≡ 1, window-norm term skipped)")
+    elif ege:
+        print("  likelihood: -logp0 (analytic Gaussian core + C¹-matched "
+              "exponential tails, MLP-conditional (μ,σ,α_L,α_R); "
+              "window-normalised by construction — Z ≡ 1, window-norm "
+              "term skipped)")
     elif nce:
         print(f"  likelihood: NCE binary cross-entropy — classifier vs "
               f"{args.nce_noise_ratio} uniform-on-window twins per event "
@@ -1758,11 +1764,11 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
             compiled_inwindow = torch.compile(model.flow.forward_inwindow)
             print("  --compile: compact in-window density compiled "
                   "(first batches include one-off compilation)")
-        elif dcb:
-            # The DCB forward is closed-form elementwise everywhere (its
+        elif dcb or ege:
+            # The DCB/EGE forward is closed-form elementwise everywhere (its
             # torch.where branches are traceable) — compile the whole density.
             compiled_inwindow = torch.compile(model.flow.forward)
-            print("  --compile: DCB density compiled "
+            print(f"  --compile: {'DCB' if dcb else 'EGE'} density compiled "
                   "(first batches include one-off compilation)")
         elif nce:
             compiled_nce_loss = torch.compile(model.flow.nce_loss)
@@ -4172,7 +4178,7 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     # during warmup.
     # Flow / MLP hyperparams
     p.add_argument(
-        "--flow-arch", choices=("gf", "nsf", "compact", "nce", "dcb"),
+        "--flow-arch", choices=("gf", "nsf", "compact", "nce", "dcb", "ege"),
         default="gf",
         help="Signal flow architecture: 'gf' = Gaussianization flow (default) — "
         "C∞-smooth density, so the continuity score/Hessian have no knot kinks. "
@@ -4208,7 +4214,12 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         "the operator probes, torch.compile-friendly. C¹ at the two "
         "core/tail junctions (score continuous; the smear d² term sees two "
         "isolated curvature jumps). The rigid-parametrisation baseline: "
-        "closure failures isolate SHAPE-MODEL bias vs flow-training bias.",
+        "closure failures isolate SHAPE-MODEL bias vs flow-training bias. "
+        "'ege' = like dcb but with C¹-MATCHED EXPONENTIAL tails "
+        "(ExpGaussExp): only (μ,σ,α_L,α_R) conditional — the tail slopes are "
+        "forced to α by the C⁰+C¹ matching (the most a log-linear tail can "
+        "match). No n parameters / integrability constraints, an even "
+        "simpler analytic CDF; otherwise identical design to dcb.",
     )
     p.add_argument(
         "--nsf-bins", type=int, default=8,

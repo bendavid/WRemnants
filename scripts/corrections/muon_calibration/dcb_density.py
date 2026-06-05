@@ -193,6 +193,119 @@ class DCBDensity(nn.Module):
         return logF - self._log_window(mu, sig, aL, nL, aR, nR)
 
 
+class EGEDensity(nn.Module):
+    """Gaussian core + C¹-MATCHED exponential tails (ExpGaussExp), conditional
+    on c through an MLP and window-normalised on [a, b].
+
+    Per tail the exponential has two dof (amplitude, slope) and BOTH are spent
+    on the matching: C⁰ fixes the amplitude and C¹ forces the slope λ = α (the
+    junction position in σ units) — "matched derivatives as much as possible"
+    (C² is impossible: a log-linear tail cannot match the core's log-curvature
+    −1). So the shape has only FOUR conditional parameters (μ, σ, α_L, α_R):
+
+        f(t) = exp(α_L²/2 + α_L t)   t < −α_L      (log-linear, slope +α_L)
+             = exp(−t²/2)            −α_L ≤ t ≤ α_R
+             = exp(α_R²/2 − α_R t)   t > α_R
+
+    vs the DCB this trades the power-law tails for exponentials: no n
+    parameters, no n>1 integrability constraint, an even simpler analytic CDF
+    (pure exp + Φ), and the slope matching is exact by construction. Same
+    window-normalised design (Z ≡ 1, no gauge), real tails on all of ℝ for
+    the operator probes, fullgraph-compileable, and the same honest C¹
+    limitation (score continuous EXACTLY; curvature jumps at two points)."""
+
+    def __init__(
+        self,
+        n_cond: int,
+        a: float,
+        b: float,
+        hidden_features: int = 128,
+        n_layers: int = 3,
+        activation: type[nn.Module] = nn.GELU,
+        sigma_floor: float = 0.05,
+        alpha_floor: float = 0.10,
+    ):
+        super().__init__()
+        if not (b > a):
+            raise ValueError(f"need b>a; got a={a}, b={b}")
+        self._af = float(a)
+        self._bf = float(b)
+        self.sigma_floor = float(sigma_floor)
+        self.alpha_floor = float(alpha_floor)
+
+        seq: list[nn.Module] = []
+        d = int(n_cond)
+        for _ in range(int(n_layers)):
+            seq += [nn.Linear(d, hidden_features), activation()]
+            d = hidden_features
+        final = nn.Linear(d, 4)
+        with torch.no_grad():
+            final.weight.zero_()
+            # (μ, σ, α_L, α_R) init = (0, 0.9, 1.4, 1.4)
+            final.bias[0] = 0.0
+            final.bias[1] = _softplus_inv(0.9 - self.sigma_floor)
+            final.bias[2] = _softplus_inv(1.4 - self.alpha_floor)
+            final.bias[3] = _softplus_inv(1.4 - self.alpha_floor)
+        seq.append(final)
+        self.net = nn.Sequential(*seq)
+
+    def _params(self, c: torch.Tensor):
+        h = self.net(c)
+        mu = h[:, 0]
+        sig = self.sigma_floor + F.softplus(h[:, 1])
+        aL = self.alpha_floor + F.softplus(h[:, 2])
+        aR = self.alpha_floor + F.softplus(h[:, 3])
+        return mu, sig, aL, aR
+
+    @staticmethod
+    def _log_f_t(t, aL, aR):
+        """log f(t): Gaussian core, C¹-matched exponential tails. No clamps
+        needed — the tail logs are linear in t (finite everywhere), and the
+        unselected ``where`` branches never pass through an exp."""
+        log_core = -0.5 * t * t
+        log_L = 0.5 * aL * aL + aL * t
+        log_R = 0.5 * aR * aR - aR * t
+        return torch.where(t < -aL, log_L, torch.where(t > aR, log_R, log_core))
+
+    @staticmethod
+    def _F_t(t, aL, aR):
+        """Unnormalised CDF in t units: exp antiderivatives for the tails, Φ
+        for the core. The tail exponents are clamped at 0 so the UNSELECTED
+        ``where`` branch's exp stays finite (the selected region's exponent is
+        ≤ −α²/2 < 0, so the clamp never bites there)."""
+        IL_tot = torch.exp(-0.5 * aL * aL) / aL
+        IR_tot = torch.exp(-0.5 * aR * aR) / aR
+        F_L = (0.5 * aL * aL + aL * t).clamp(max=0.0).exp() / aL
+        F_C = IL_tot + _SQRT2PI * (_phi_cdf(t) - _phi_cdf(-aL))
+        core_tot = _SQRT2PI * (_phi_cdf(aR) - _phi_cdf(-aL))
+        F_R = (IL_tot + core_tot
+               + (IR_tot - (0.5 * aR * aR - aR * t).clamp(max=0.0).exp() / aR))
+        return torch.where(t < -aL, F_L, torch.where(t > aR, F_R, F_C))
+
+    def _t_and_params(self, x, c):
+        mu, sig, aL, aR = self._params(c)
+        t = (x.reshape(-1) - mu) / sig
+        return t, mu, sig, aL, aR
+
+    def _log_window(self, mu, sig, aL, aR):
+        t_a = (self._af - mu) / sig
+        t_b = (self._bf - mu) / sig
+        IW = (self._F_t(t_b, aL, aR) - self._F_t(t_a, aL, aR)).clamp_min(1e-30)
+        return IW.log()
+
+    def forward(self, x: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
+        """log p₀(x_std | c), [B] — window-normalised; evaluable on all of ℝ."""
+        t, mu, sig, aL, aR = self._t_and_params(x, c)
+        return (self._log_f_t(t, aL, aR) - sig.log()
+                - self._log_window(mu, sig, aL, aR))
+
+    def log_cdf(self, x: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
+        """log F₀(x_std | c), [B], with F₀(b) − F₀(a) = 1 exactly."""
+        t, mu, sig, aL, aR = self._t_and_params(x, c)
+        logF = self._F_t(t, aL, aR).clamp_min(1e-300).log()
+        return logF - self._log_window(mu, sig, aL, aR)
+
+
 # ---------------------------------------------------------------------------
 # Self-test: normalisation, CDF↔density consistency, C¹ junctions, tails,
 # gradient flow, extreme-parameter stability, quick MLE recovery.
@@ -298,6 +411,76 @@ def _selftest():
           f"σ {float(sig_f):.4f} (truth {float(sig_t):.4f})")
     assert abs(float(mu_f - mu_t)) < 0.01 and abs(float(sig_f - sig_t)) < 0.02
     print("ALL DCB SELF-TESTS PASSED")
+
+    # ---- EGE (Gaussian core + C¹-matched exponential tails) ----------------
+    torch.manual_seed(2)
+    ege = EGEDensity(7, a, b, hidden_features=64, n_layers=2).double()
+    with torch.no_grad():
+        for p_ in ege.parameters():
+            p_.add_(0.3 * torch.randn_like(p_))
+    c = torch.randn(4, 7, dtype=torch.float64) * 0.5
+    for e in range(4):
+        ce_ = c[e:e + 1].expand(xg.shape[0], -1)
+        I = torch.trapezoid(ege(xg, ce_).exp(), xg).item()
+        Fa = ege.log_cdf(torch.tensor([a], dtype=torch.float64), c[e:e + 1]).exp().item()
+        Fb = ege.log_cdf(torch.tensor([b], dtype=torch.float64), c[e:e + 1]).exp().item()
+        assert abs(I - 1.0) < 1e-6 and abs(Fb - Fa - 1.0) < 1e-12, (I, Fb - Fa)
+    print("EGE: ∫_window p = 1; F(b)−F(a) = 1 exactly (perturbed MLP)")
+    ce = c[:1].expand(xt.shape[0], -1)
+    dF = (ege.log_cdf(xt + h, ce).exp() - ege.log_cdf(xt - h, ce).exp()) / (2 * h)
+    p = ege(xt, ce).exp()
+    rel = float(((dF - p).abs() / p.clamp_min(1e-12)).max())
+    assert rel < 1e-6, rel
+    print(f"EGE: max rel diff dF/dx vs p = {rel:.1e} (incl. out-of-window)")
+    # C¹ junctions: the slope matching is ALGEBRAIC for EGE — test tightly
+    mu, sig, aL, aR = ege._params(c[:1])
+    for tj, slope in ((-aL[0], aL[0]), (aR[0], -aR[0])):
+        xj = (mu[0] + sig[0] * tj).item()
+        eps = 1e-6
+        sc_in = float(ege(torch.tensor([xj - 2 * eps, xj - eps], dtype=torch.float64),
+                          c[:1].expand(2, -1)).diff()) / eps
+        sc_out = float(ege(torch.tensor([xj + eps, xj + 2 * eps], dtype=torch.float64),
+                           c[:1].expand(2, -1)).diff()) / eps
+        assert abs(sc_in - sc_out) < 1e-4 * max(abs(sc_in), 1.0), (sc_in, sc_out)
+    print("EGE: score continuous at both junctions (C¹ algebraic)")
+    for fn in (lambda: ege(xt, ce).sum(), lambda: ege.log_cdf(xt, ce).sum()):
+        ege.zero_grad(); fn().backward()
+        assert all(p_.grad is not None and torch.isfinite(p_.grad).all()
+                   for p_ in ege.parameters())
+    e2 = EGEDensity(7, a, b, hidden_features=64, n_layers=2).double()
+    with torch.no_grad():
+        for p_ in e2.parameters():
+            p_.normal_(0, 3.0)
+    xs_st = torch.linspace(-8, 8, 200, dtype=torch.float64)
+    ok = all(torch.isfinite(e2(xs_st, cc[e:e + 1].expand(200, -1))).all()
+             and torch.isfinite(e2.log_cdf(xs_st, cc[e:e + 1].expand(200, -1))).all()
+             for e in range(64))
+    assert ok
+    print("EGE: gradients finite; overflow stress (64 extreme conditioners) OK")
+    # quick MLE recovery
+    torch.manual_seed(3)
+    tgt = EGEDensity(1, a, b, hidden_features=8, n_layers=1).double()
+    with torch.no_grad():
+        for p_ in tgt.parameters():
+            p_.zero_()
+        tgt.net[-1].bias.copy_(torch.tensor(
+            [0.25, _softplus_inv(0.6 - 0.05), _softplus_inv(1.1 - 0.10),
+             _softplus_inv(2.0 - 0.10)], dtype=torch.float64))
+    w = tgt(xs2 := torch.linspace(a, b, 200001, dtype=torch.float64),
+            torch.zeros(200001, 1, dtype=torch.float64)).exp()
+    idx = torch.multinomial(w, 200000, replacement=True)
+    sample = xs2[idx] + (xs2[1] - xs2[0]) * (torch.rand(200000, dtype=torch.float64) - 0.5)
+    fit2 = EGEDensity(1, a, b, hidden_features=8, n_layers=1).double()
+    opt = torch.optim.Adam(fit2.parameters(), lr=2e-2)
+    cz = torch.zeros(200000, 1, dtype=torch.float64)
+    for it in range(400):
+        opt.zero_grad(); (-fit2(sample, cz).mean()).backward(); opt.step()
+    mu_t, sig_t, *_ = tgt._params(torch.zeros(1, 1, dtype=torch.float64))
+    mu_f, sig_f, *_ = fit2._params(torch.zeros(1, 1, dtype=torch.float64))
+    print(f"EGE MLE recovery: μ {float(mu_f):+.4f} (truth {float(mu_t):+.4f})  "
+          f"σ {float(sig_f):.4f} (truth {float(sig_t):.4f})")
+    assert abs(float(mu_f - mu_t)) < 0.01 and abs(float(sig_f - sig_t)) < 0.02
+    print("ALL EGE SELF-TESTS PASSED")
 
 
 if __name__ == "__main__":
