@@ -483,6 +483,7 @@ def compute_fisher_info_continuity(
     progress: bool = True,
     vectorized: bool = True,
     hess_chunk: int = 0,
+    max_events: int = 0,
 ):
     """Observed (plug-in) Fisher information for the two-stage continuity fit,
     over ``theta_scale`` + the ACTIVE ``theta_smear`` columns jointly, with the
@@ -585,6 +586,8 @@ def compute_fisher_info_continuity(
         sw += float(w.sum().item())
         seen += int(data_mask.sum().item())
         bar.set_postfix_str(f"events={seen:,}")
+        if max_events > 0 and seen >= max_events:
+            break
     bar.close()
     if seen == 0:
         raise RuntimeError(
@@ -593,7 +596,8 @@ def compute_fisher_info_continuity(
     H = 0.5 * (H + H.T)
     layout = {"blocks": blocks, "smear_cols": smear_cols,
               "n_scale": (model.theta_scale.numel() if model.scale_enabled else 0),
-              "sw": sw, "seen": seen, "grad": grad.detach().cpu()}
+              "sw": sw, "seen": seen, "grad": grad.detach().cpu(),
+              "hit_cap": bool(max_events > 0 and seen >= max_events)}
     return H.detach().cpu(), layout
 
 
@@ -2216,8 +2220,12 @@ def _run_fisher_continuity(args, model, shard_files, stats, device) -> None:
     half = _validation_half(args, "fit")
     inj = _inject_theta_np(args, len(stats.eta_edges) - 1) if args.validation else None
     inj_sm = _inject_smear_np(args, len(stats.eta_edges) - 1) if args.validation else None
+    fme = int(getattr(args, "fisher_max_events", 0) or 0)
+    fisher_bs = args.batch_size
+    if fme > 0:
+        fisher_bs = min(fisher_bs, max(1, fme))
     loader = JpsiMassArrowLoader(
-        shard_files, stats, batch_size=args.batch_size, split=args.fisher_split,
+        shard_files, stats, batch_size=fisher_bs, split=args.fisher_split,
         val_fraction=0.0, holdout_fraction=0.0,   # all events, matching the all-events fit
         drop_last=False, half=half, inject_theta_scale=inj,
         inject_theta_smear=inj_sm, inject_seed=int(args.inject_smear_seed),
@@ -2228,13 +2236,32 @@ def _run_fisher_continuity(args, model, shard_files, stats, device) -> None:
           f"fixed flow + MLP) on split={args.fisher_split}"
           + ("  half=%s (MC pseudo-data)" % ('all' if half is None else half)
              if args.validation else "")
-          + f"  [smear_fit={model.smear_fit_params}]")
+          + f"  [smear_fit={model.smear_fit_params}]"
+          + (f"; ≤{fme:,} events (H rescaled to full Σw)" if fme > 0 else ""))
     t0 = time.time()
     H, layout = compute_fisher_info_continuity(
         model, loader, device, mc_as_data=args.validation,
         n_iter=args.continuity_n_iter,
         progress=args.progress, vectorized=args.fisher_vectorized,
-        hess_chunk=int(getattr(args, "fisher_hessian_chunk", 0) or 0))
+        hess_chunk=int(getattr(args, "fisher_hessian_chunk", 0) or 0),
+        max_events=fme)
+    # If the event cap truncated the sum, rescale H (and the gradient) to the
+    # FULL subset Σw so the covariance keeps the 1/N_fit statistical scale of
+    # the actual fit (H and grad are both ∝ Σw). Same convention as the
+    # empirical-Fisher --empirical-fisher-max-events rescaling.
+    if layout.get("hit_cap") and layout["sw"] > 0:
+        sw_total = 0.0
+        for batch in loader:
+            dm = (~batch["is_data_mask"] if args.validation
+                  else batch["is_data_mask"])
+            sw_total += float((batch["w"] * dm.to(batch["w"].dtype)).sum())
+        if sw_total > layout["sw"]:
+            sc = sw_total / layout["sw"]
+            H = H * sc
+            layout["grad"] = layout["grad"] * sc
+            print(f"  scaled H by Σw_total/Σw_seen = {sc:.2f} "
+                  f"(subsampled {layout['seen']:,} events)")
+            layout["sw"] = sw_total
     out = _fisher_save_dict(H, layout, model)
     path = os.path.join(args.output, "fisher_info.pt")
     torch.save(out, path)
@@ -4315,6 +4342,19 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "loop) is the chunk=1 limit. The event dimension is "
                    "bounded separately by --batch-size (the Fisher loader "
                    "uses it directly) / --hess-subsample-events (trust).")
+    p.add_argument("--fisher-max-events", type=int, default=0,
+                   help="(--fisher-info) Cap the OBSERVED Fisher sum at ~this "
+                   "many data-branch events (0 = full sample). H and the "
+                   "gradient are rescaled by Σw_total/Σw_seen afterwards so "
+                   "the covariance keeps the full fit's 1/N statistical "
+                   "scale (same convention as --empirical-fisher-max-events). "
+                   "NB the cap takes the loader PREFIX and the shards are "
+                   "inhomogeneous — a prefix under-represents some η regions "
+                   "(their Fisher blocks come out too small/noisy). For a "
+                   "REPRESENTATIVE subset prefer --event-fraction with "
+                   "--stage uncertainties (per-shard subsampling; do not use "
+                   "the global --max-events/--event-fraction in --stage both, "
+                   "where they also subsample the training).")
     p.add_argument("--fisher-vectorized", default=True,
                    action=argparse.BooleanOptionalAction,
                    help="(two-stage) Compute the Hessian with one vmapped "
