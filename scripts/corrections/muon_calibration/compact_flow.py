@@ -319,9 +319,10 @@ class CompactMatchedFlow(nn.Module):
         return u, logp
 
     def _edges(self, params):
-        """(log q, (log q)', (log q)'') at the window edges — analytic for
-        bernstein, autograd through the composition for logistic. The d2 ≤
-        −curv_floor clamp is shared (see _edges_autograd).
+        """(log q, (log q)', (log q)'') at the window edges — ANALYTIC for both
+        layer types (closed-form endpoint derivatives; `_edges_autograd` is
+        kept only as the selftest reference). No inner autograd → cheaper and
+        torch.compile-traceable. The d2 ≤ −curv_floor clamp is shared.
 
         ALWAYS computed in fp64: when the trained edge density is tiny
         (log q ~ −100s, routine for sharp peaks far from a window edge), the
@@ -335,16 +336,73 @@ class CompactMatchedFlow(nn.Module):
         if dt != torch.float64:
             params = tuple(p.double() for p in params)
         out = (self._edges_bernstein(params) if self.layer_type == "bernstein"
-               else self._edges_autograd(params))
+               else self._edges_logistic(params))
         if dt != torch.float64:
             fmax = float(torch.finfo(dt).max) / 16.0
             out = {k: (v if k.startswith("logq") else v.clamp(-fmax, fmax)).to(dt)
                    for k, v in out.items()}
         return out
 
+    def _edges_logistic(self, params):
+        """ANALYTIC (log q, (log q)', (log q)'') at the window edges for the
+        logistic-mixture layers — closed-form endpoint derivatives replacing
+        the autograd composition (`_edges_autograd`, kept as the selftest
+        reference). At the edges every layer input is exactly 0 (x=a) or 1
+        (x=b): the renormalised mixture CDF is pinned S(0)=0, S(1)=1, and with
+        G(u) = Σ_j π_j σ(z_j), z_j = (u−μ_j)/s_j, D = G(1) − G(0):
+
+            S'(u_e)   = G'(u_e)/D,   G'   = Σ π σ'(z)/s,    σ'  = σ(1−σ)
+            S''(u_e)  = G''(u_e)/D,  G''  = Σ π σ''(z)/s²,  σ'' = σ'(1−2σ)
+            S'''(u_e) = G'''(u_e)/D, G''' = Σ π σ'''(z)/s³, σ''' = σ'(1−6σ(1−σ))
+
+        The affine prewarp u₀ = (x−a)/width contributes log w' = −log width,
+        (log w')' = (log w')'' = 0, t' = 1/width, t'' = 0; then the same chain
+        recursion as `_edges_bernstein`. The S' floor mirrors `_layer_S_logSp`'s
+        ``Gp.clamp_min(1e-30)`` (differs only in unreachable deep saturation).
+        Smooth closed forms of the conditioner outputs → differentiable w.r.t.
+        the conditioning, no inner autograd."""
+        log_pi, mu, s = params
+        B = log_pi.shape[0]
+        pi = log_pi.exp()                                            # [B,L,K]
+        z0 = (0.0 - mu) / s
+        z1 = (1.0 - mu) / s
+        sig0 = torch.sigmoid(z0)
+        sig1 = torch.sigmoid(z1)
+        D = ((pi * sig1).sum(-1) - (pi * sig0).sum(-1)).clamp_min(1e-12)
+        out = {}
+        for tag, sige in (("a", sig0), ("b", sig1)):
+            spr = sige * (1.0 - sige)                                # σ'(z_e)
+            G1 = (pi * spr / s).sum(-1)                              # [B,L]
+            G2 = (pi * spr * (1.0 - 2.0 * sige) / (s * s)).sum(-1)
+            G3 = (pi * spr * (1.0 - 6.0 * spr) / (s * s * s)).sum(-1)
+            s1 = (G1 / D).clamp_min(1e-30)
+            s2 = G2 / D
+            s3 = G3 / D
+            r1 = s2 / s1
+            r2 = s3 / s1
+            lq = log_pi.new_full((B,), -math.log(self._width))
+            d1 = log_pi.new_zeros((B,))
+            d2 = log_pi.new_zeros((B,))
+            tp = log_pi.new_full((B,), 1.0 / self._width)            # t' = u₀'
+            tpp = log_pi.new_zeros((B,))                             # t'' = u₀''
+            for l in range(self.L):
+                lq = lq + s1[:, l].log()
+                d2 = d2 + (r2[:, l] - r1[:, l] * r1[:, l]) * tp * tp + r1[:, l] * tpp
+                d1 = d1 + r1[:, l] * tp
+                tpp = s2[:, l] * tp * tp + s1[:, l] * tpp            # before tp update
+                tp = s1[:, l] * tp
+            # Shared log-concavity clamp (see _edges_autograd).
+            d2 = d2.clamp(max=-self.curv_floor)
+            out[f"logq_{tag}"] = lq
+            out[f"d1_{tag}"] = d1
+            out[f"d2_{tag}"] = d2
+        return out
+
     def _edges_autograd(self, params):
         """(log q, (log q)', (log q)'') at the window edges via autograd through
-        the composition. Differentiable w.r.t. the conditioning when grad is on."""
+        the composition — the SELFTEST REFERENCE for the analytic edges (no
+        longer used in production). Differentiable w.r.t. the conditioning
+        when grad is on."""
         B = params[0].shape[0]
         train_grad = torch.is_grad_enabled()
         out = {}
@@ -474,19 +532,24 @@ class CompactMatchedFlow(nn.Module):
         return logp
 
     def forward(self, x: torch.Tensor, c: torch.Tensor) -> torch.Tensor:
-        """log p₀(x_std | c), [B]. ``x`` may be [B] or [B,1]."""
+        """log p₀(x_std | c), [B]. ``x`` may be [B] or [B,1].
+
+        BRANCHLESS: the in-window density and both matched tails are always
+        evaluated and combined with torch.where — no data-dependent python
+        short-circuit (which was both a GPU sync point and a torch.compile
+        graph break). Pure-interior callers (stage-1 training) use
+        ``forward_inwindow``, which skips the edge computation entirely.
+
+        INCLUSIVE tail branches: at exactly x=a/b the tail value equals the
+        in-window value (C² match), but the tail's x-derivative is clamp-free
+        — the bernstein layers' pow-safety clamp sits exactly at its boundary
+        for u=0/1 and silently ZEROES the autograd derivative of the in-window
+        branch there (the decompose g_norm bug: dZ/ds at the un-shifted window
+        edges came out 0)."""
         x = x.reshape(-1)
         params = self._cond_params(c)
         a, b = self._af, self._bf
         _, logq_in = self._compose(x, params)
-        # STRICT interior fast path / INCLUSIVE tail branches: at exactly x=a/b
-        # the tail value equals the in-window value (C² match), but the tail's
-        # x-derivative is clamp-free — the bernstein layers' pow-safety clamp
-        # sits exactly at its boundary for u=0/1 and silently ZEROES the
-        # autograd derivative of the in-window branch there (the decompose
-        # g_norm bug: dZ/ds at the un-shifted window edges came out 0).
-        if not (bool((x <= a).any()) or bool((x >= b).any())):
-            return logq_in                                  # all in-window (training)
         ed = self._edges(params)
         logp_hi = self._tail_logp(x - b, ed["logq_b"], ed["d1_b"], ed["d2_b"])
         logp_lo = self._tail_logp(x - a, ed["logq_a"], ed["d1_a"], ed["d2_a"])
@@ -634,6 +697,26 @@ def _selftest():
             assert d < 1e-4, (k, tag, d)
     print("bernstein analytic edges == autograd-chain reference "
           "(logq, d1, d2 at both edges; rel <1e-4, reference-limited)")
+    # 3a-log) ANALYTIC logistic edges == autograd reference. Unlike bernstein
+    #    (pow-clamp at u=0/1), the logistic composition is autograd-exact AT
+    #    the edges (clamp boundaries are inclusive), so _edges_autograd at
+    #    x=a/b is a valid direct reference here.
+    for lw in (False, True):
+        fl_ = CompactMatchedFlow(n_cond=7, a=a, b=b, n_components=8,
+                                 n_transforms=5, learn_weights=lw).double()
+        with torch.no_grad():
+            for p_ in fl_.parameters():
+                p_.add_(0.5 * torch.randn_like(p_))
+        prm_l = fl_._cond_params(torch.randn(16, 7, dtype=torch.float64))
+        ana_l = fl_._edges_logistic(prm_l)
+        ref_l = fl_._edges_autograd(prm_l)
+        worst = 0.0
+        for k_ in ana_l:
+            d = float(((ana_l[k_] - ref_l[k_]).abs()
+                       / ref_l[k_].abs().clamp_min(1.0)).max())
+            worst = max(worst, d)
+        print(f"logistic analytic edges == autograd (lw={lw}): rel {worst:.1e}")
+        assert worst < 1e-10, (lw, worst)
     # 3b) EXACT-EDGE shift gradient: dZ/ds at s=0 with Z = F(b+s) − F(a+s)
     #     must equal p(b) − p(a) (the decompose g_norm path; the bernstein
     #     pow-safety clamp used to zero it through the in-window branch).

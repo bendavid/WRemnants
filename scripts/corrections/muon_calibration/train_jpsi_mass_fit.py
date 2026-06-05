@@ -2066,10 +2066,38 @@ def train_stage2(args, model, train_loader, val_loader, stats,
           f"flow_steps={getattr(args, 'smear_flow_steps', 1)}, n_iter="
           f"{args.continuity_n_iter}); normalised by construction")
 
+    # --fit-compile: torch.compile the stage-2 per-event objective. With the
+    # closed-form operator Jacobians + analytic compact-flow edges + the
+    # branchless tail forward, the DEFAULT configuration (gh_convolution_qop +
+    # flow_cdf + compact flow, either layer type) traces without inner
+    # autograd; fullgraph=False keeps the remaining archs/operators working by
+    # letting dynamo graph-break around their untraceable pieces (zuko's inner
+    # grad for gf/nsf, the flow-score Jacobian of pf_ode). The trust-region
+    # drivers build their own objective and are NOT compiled.
+    nll_fn = model.data_nll_continuity
+    if getattr(args, "fit_compile", False):
+        if getattr(args, "fit_optimizer", "adam") in (
+                "trust-krylov", "trust-ncg", "trust-exact"):
+            print("  --fit-compile: SKIPPED (trust-region driver builds its own "
+                  "float64 objective; compile applies to adam/soap/lbfgs)")
+        else:
+            # Pre-warm the GH-node cache for the dtypes/node-counts the
+            # operator will request: with the cache populated, dynamo traces
+            # only the dict hit (the numpy hermgauss cache-miss branch is an
+            # untraceable call → a needless graph break on the first batch).
+            from jpsi_mass_model import _gh_nodes
+            dev_t = next(model.parameters()).device
+            dt_t = _model_dtype(model) or torch.float32
+            for ng_warm in {1, int(args.n_gh_nodes)}:
+                _gh_nodes(ng_warm, dev_t, dt_t)
+            nll_fn = torch.compile(model.data_nll_continuity, fullgraph=False)
+            print("  --fit-compile: torch.compile(data_nll_continuity, "
+                  "fullgraph=False) — first epoch includes compilation")
+
     def step2(model, batch):
         # In validation mode the simulation rows play the role of data.
         data_mask = ~batch["is_data_mask"] if mc_as_data else batch["is_data_mask"]
-        per = model.data_nll_continuity(
+        per = nll_fn(
             batch["mll"], batch["pt_pm"], batch["eta_pm"], batch["phi_pm"],
             batch["q_pm"], batch["b_pm"], batch["cond_std"], data_mask,
             n_iter=args.continuity_n_iter)
@@ -4579,19 +4607,28 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     p.add_argument(
         "--compile", action="store_true",
         help="torch.compile the STAGE-1 hot path for the traceable flow "
-        "archs: compact (the in-window composition — the training forward "
-        "never reaches the matched tails, whose edge autograd.grad cannot "
-        "be traced) and nce (the paired-BCE loss; the seeded-generator "
-        "validation pass stays eager). Targets the actual stage-1 "
+        "archs: compact (the in-window composition) and nce (the paired-BCE "
+        "loss; the seeded-generator validation pass stays eager). Targets "
+        "the actual stage-1 "
         "bottleneck — kernel-launch overhead from long chains of small "
         "elementwise ops around skinny matmuls (which is also why "
         "bf16/fp16 alone barely move the wall clock). SKIPPED with a note "
         "for gf/nsf (zuko's MonotonicTransform uses an inner "
-        "torch.autograd.grad dynamo cannot trace) and for stage 2 (the "
-        "continuity operator's inner Jacobian grads + the double-backward "
-        "consumers — smear d², Fisher, trust HVPs — are unsupported by "
-        "compiled autograd). First batches include one-off compilation "
+        "torch.autograd.grad dynamo cannot trace). For stage 2 use "
+        "--fit-compile. First batches include one-off compilation "
         "(~tens of seconds).",
+    )
+    p.add_argument(
+        "--fit-compile", action="store_true",
+        help="torch.compile the STAGE-2 per-event objective "
+        "(data_nll_continuity) for the adam/soap/lbfgs optimisers. With the "
+        "closed-form operator Jacobians and the analytic compact-flow edge "
+        "derivatives the default configuration (gh_convolution_qop + "
+        "flow_cdf + compact flow, logistic or bernstein) traces without "
+        "inner autograd; other archs/operators still run via dynamo graph "
+        "breaks (fullgraph=False). Trust-region drivers are skipped (they "
+        "build their own float64 objective). First fit batches include "
+        "one-off compilation.",
     )
     p.add_argument(
         "--precision", choices=("fp32", "fp64", "bf16", "fp16"), default="fp32",

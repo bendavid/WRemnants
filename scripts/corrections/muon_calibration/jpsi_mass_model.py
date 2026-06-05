@@ -998,6 +998,11 @@ class JpsiMassMixtureModel(nn.Module):
         # Buffers — Bernstein window, density-rescale, standardisation stats.
         self.register_buffer("m_lo", torch.tensor(float(m_lo)))
         self.register_buffer("m_hi", torch.tensor(float(m_hi)))
+        # Python-float twins of the window buffers for the hot paths:
+        # float(<buffer>) is a hidden .item() — a per-call GPU sync in eager
+        # mode AND a dynamo graph break under --fit-compile.
+        self._m_lo_f = float(m_lo)
+        self._m_hi_f = float(m_hi)
         self.register_buffer("mll_log_scale", torch.tensor(float(mll_log_scale)))
         self.register_buffer("mll_mean_buf", torch.tensor(float(mll_mean)))
         self.register_buffer("mll_std_buf", torch.tensor(float(mll_std)))
@@ -1519,7 +1524,7 @@ class JpsiMassMixtureModel(nn.Module):
         """
         B = mk.shape[0]
         dev, dt = mk.device, mk.dtype
-        mg = torch.linspace(float(self.m_lo) + 1e-3, float(self.m_hi) - 1e-3,
+        mg = torch.linspace(self._m_lo_f + 1e-3, self._m_hi_f - 1e-3,
                             n_grid, device=dev, dtype=dt)            # [G]
         # expand per-event conditioning across the grid, flatten to [B*G, ...]
         def rep(x):
@@ -2413,8 +2418,8 @@ class JpsiMassMixtureModel(nn.Module):
                     y = y - dt * self._flow_score(y, mk_src)
             return y
 
-        m_lo = m_obs.new_full(m_obs.shape, float(self.m_lo))
-        m_hi = m_obs.new_full(m_obs.shape, float(self.m_hi))
+        m_lo = m_obs.new_full(m_obs.shape, self._m_lo_f)
+        m_hi = m_obs.new_full(m_obs.shape, self._m_hi_f)
         # BACKWARD (data → MC) scale images of the window boundaries along the
         # event's observed ray — explicit and exactly θ-differentiable (the
         # defining direction): no boundary fixed point / bisection for the
@@ -2461,11 +2466,11 @@ class JpsiMassMixtureModel(nn.Module):
         # boundary can lie OUTSIDE [m_lo, m_hi]; a window-tight bracket (the
         # old behaviour) silently clamps it to the edge — a first-order logZ
         # error whenever the transport pushes the preimage out.
-        marg = 0.25 * (float(self.m_hi) - float(self.m_lo))
+        marg = 0.25 * (self._m_hi_f - self._m_lo_f)
         @torch.no_grad()
         def bisect(target):
-            lo = m_obs.new_full(m_obs.shape, float(self.m_lo) - marg)
-            hi = m_obs.new_full(m_obs.shape, float(self.m_hi) + marg)
+            lo = m_obs.new_full(m_obs.shape, self._m_lo_f - marg)
+            hi = m_obs.new_full(m_obs.shape, self._m_hi_f + marg)
             for _ in range(n_bisect):
                 mid = 0.5 * (lo + hi)
                 t_mid = forward_sm(mid)
@@ -2521,8 +2526,8 @@ class JpsiMassMixtureModel(nn.Module):
         xig = xi.view(1, G)
 
         # BACKWARD scale images of the boundaries (per event, node-independent).
-        m_lo_t = m_obs.new_full(m_obs.shape, float(self.m_lo))
-        m_hi_t = m_obs.new_full(m_obs.shape, float(self.m_hi))
+        m_lo_t = m_obs.new_full(m_obs.shape, self._m_lo_f)
+        m_hi_t = m_obs.new_full(m_obs.shape, self._m_hi_f)
         m_s_lo, _ = self._scale_backward_mass_linear(
             m_lo_t, m_obs, pt_obs, eta_pm, q_pm, theta_scale_pm)
         m_s_hi, _ = self._scale_backward_mass_linear(
@@ -2545,12 +2550,12 @@ class JpsiMassMixtureModel(nn.Module):
             # boundaries can lie outside [m_lo, m_hi] (window-tight brackets
             # clamp them to the edge — first-order logZ error; see the
             # _norm_correction_log_Z flow_cdf branch).
-            marg = 0.25 * (float(self.m_hi) - float(self.m_lo))
+            marg = 0.25 * (self._m_hi_f - self._m_lo_f)
 
             @torch.no_grad()
             def bisect(target):                            # target [B, 1]
-                lo = m_obs.new_full((B, G), float(self.m_lo) - marg)
-                hi = m_obs.new_full((B, G), float(self.m_hi) + marg)
+                lo = m_obs.new_full((B, G), self._m_lo_f - marg)
+                hi = m_obs.new_full((B, G), self._m_hi_f + marg)
                 for _ in range(n_bisect):
                     mid = 0.5 * (lo + hi)
                     t_mid = forward_at_eps_sm(mid)
@@ -2632,9 +2637,9 @@ class JpsiMassMixtureModel(nn.Module):
         # Nominal masses at the two window boundaries (observed config scaled to
         # m_lo / m_hi along pt∝m, then un-kicked).
         m_t_lo, _ = self._gh_qop_unsmear(
-            pto * (float(self.m_lo) / mo).unsqueeze(-1), etao, phio, qo, bpo, eps)
+            pto * (self._m_lo_f / mo).unsqueeze(-1), etao, phio, qo, bpo, eps)
         m_t_hi, _ = self._gh_qop_unsmear(
-            pto * (float(self.m_hi) / mo).unsqueeze(-1), etao, phio, qo, bpo, eps)
+            pto * (self._m_hi_f / mo).unsqueeze(-1), etao, phio, qo, bpo, eps)
         mk_g = mk.unsqueeze(1).expand(B, G2, mk.shape[-1]).clone()
         if self.scale_enabled or self.smearing_enabled:
             mk_g = self._node_cond(mk_g, pt_truth_evt, etao, phio, qo)
@@ -2687,7 +2692,7 @@ class JpsiMassMixtureModel(nn.Module):
             log_ps = log_ps - log_Z
         if self.background_enabled:
             f = self.f_data(mk)
-            p0b, p1b = bernstein_d1(m, float(self.m_lo), float(self.m_hi))
+            p0b, p1b = bernstein_d1(m, self._m_lo_f, self._m_hi_f)
             p_mix = f[:, 0] * p0b + f[:, 1] * p1b + f[:, 2] * log_ps.exp()
             per_data = -torch.log(p_mix.clamp_min(eps))
         else:
