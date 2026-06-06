@@ -827,8 +827,8 @@ def _setup_common(args, *, stats_override=None):
 
 
 def _make_loaders(args, shard_files, stats, *, half=None, inject_theta=None,
-                  inject_smear=None, val_fraction=None, holdout_fraction=None,
-                  batch_size=None):
+                  inject_smear=None, inject_bkg=None, val_fraction=None,
+                  holdout_fraction=None, batch_size=None):
     """Build the ``(train, val)`` loaders for one stage. ``half`` selects a
     deterministic disjoint event half (0/1) — used by the MC-closure
     validation mode (stage 1 ← half 0, stage 2 ← half 1); ``None`` = all
@@ -851,14 +851,16 @@ def _make_loaders(args, shard_files, stats, *, half=None, inject_theta=None,
         drop_last=True, half=half, inject_theta_scale=inject_theta,
         inject_theta_smear=inject_smear, inject_seed=seed,
         cond_basis=getattr(args, "cond_basis", "muon_kin"),
-        max_events=me, event_fraction=ef, inject_nonuniform=nu)
+        max_events=me, event_fraction=ef, inject_nonuniform=nu,
+        inject_bkg=inject_bkg)
     val_loader = JpsiMassArrowLoader(
         shard_files, stats, batch_size=bs, split="val",
         val_fraction=vf, holdout_fraction=hf,
         drop_last=False, half=half, inject_theta_scale=inject_theta,
         inject_theta_smear=inject_smear, inject_seed=seed,
         cond_basis=getattr(args, "cond_basis", "muon_kin"),
-        max_events=me, event_fraction=ef, inject_nonuniform=nu)
+        max_events=me, event_fraction=ef, inject_nonuniform=nu,
+        inject_bkg=inject_bkg)
     return train_loader, val_loader
 
 
@@ -888,6 +890,19 @@ def _inject_smear_np(args, n_eta):
     t = np.zeros((int(n_eta), 2), dtype=np.float64)
     t[:, 0] = a; t[:, 1] = c
     return t
+
+
+def _inject_bkg_args(args):
+    """``(f0, f1)`` injected Bernstein background-component probabilities for
+    the validation closure, or ``None`` if both are 0. The loader re-labels MC
+    pseudo-data events with these probabilities, draws their observed mass
+    from the corresponding Bernstein-d1 component, and rescales the per-muon
+    pt by a common factor so kinematics stay self-consistent while the
+    muon_kin conditioning is exactly unchanged (see _inject_bkg_np in the
+    loader). The fitted MLP f(c) should recover (f0, f1) flat in η/φ."""
+    f0 = float(getattr(args, "inject_bkg_f0", 0.0) or 0.0)
+    f1 = float(getattr(args, "inject_bkg_f1", 0.0) or 0.0)
+    return (f0, f1) if (f0 > 0.0 or f1 > 0.0) else None
 
 
 # Args that fix the flow's parameter shapes OR conditioning semantics — these
@@ -2281,8 +2296,18 @@ def train_loop(args: argparse.Namespace) -> int:
         else:
             s1_train, s1_val = _make_loaders(args, shard_files, stats, half=h_flow)
         # Fit: ALL events of its half (no held-out val/holdout); stops on train NLL.
+        inj_bkg = _inject_bkg_args(args)
+        if inj_bkg is not None:
+            print(f"    injecting Bernstein background into the stage-2 "
+                  f"pseudo-data: f0={inj_bkg[0]:g}, f1={inj_bkg[1]:g} "
+                  f"(observed-space masses; conditioning unchanged)")
+            if getattr(args, "no_background", False):
+                print("    WARNING: --inject-bkg-* with --no-background — the "
+                      "fit has no background component to absorb the injected "
+                      "events.", file=sys.stderr)
         s2_train, s2_val = _make_loaders(args, shard_files, stats, half=h_fit,
                                          inject_theta=inj, inject_smear=inj_sm,
+                                         inject_bkg=inj_bkg,
                                          val_fraction=0.0, holdout_fraction=0.0,
                                          batch_size=getattr(args, "fit_batch_size", 0) or None)
     else:
@@ -2349,7 +2374,9 @@ def _run_fisher_continuity(args, model, shard_files, stats, device) -> None:
         inject_theta_smear=inj_sm, inject_seed=int(args.inject_smear_seed),
         cond_basis=getattr(args, "cond_basis", "muon_kin"),
         max_events=int(getattr(args, "max_events", 0) or 0),
-        event_fraction=float(getattr(args, "event_fraction", 1.0) or 1.0))
+        event_fraction=float(getattr(args, "event_fraction", 1.0) or 1.0),
+        inject_bkg=(_inject_bkg_args(args)
+                    if getattr(args, "validation", False) else None))
     print(f"\ncomputing observed Fisher information (θ_scale + active θ_smear, "
           f"fixed flow + MLP) on split={args.fisher_split}"
           + ("  half=%s (MC pseudo-data)" % ('all' if half is None else half)
@@ -2474,7 +2501,9 @@ def run_bootstrap_continuity(args, model, shard_files, stats, device, *,
         inject_theta_smear=inj_sm, inject_seed=int(args.inject_smear_seed),
         cond_basis=getattr(args, "cond_basis", "muon_kin"),
         max_events=int(getattr(args, "max_events", 0) or 0),
-        event_fraction=float(getattr(args, "event_fraction", 1.0) or 1.0))
+        event_fraction=float(getattr(args, "event_fraction", 1.0) or 1.0),
+        inject_bkg=(_inject_bkg_args(args)
+                    if getattr(args, "validation", False) else None))
     nominal_sd = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
 
     # Freeze the flow; float the MLP + active θ (the MLP must re-fit per replica
@@ -3016,7 +3045,9 @@ def _run_empirical_fisher_mlp(args, model, shard_files, stats, device) -> None:
         inject_theta_smear=inj_sm, inject_seed=int(args.inject_smear_seed),
         cond_basis=getattr(args, "cond_basis", "muon_kin"),
         max_events=int(getattr(args, "max_events", 0) or 0),
-        event_fraction=float(getattr(args, "event_fraction", 1.0) or 1.0))
+        event_fraction=float(getattr(args, "event_fraction", 1.0) or 1.0),
+        inject_bkg=(_inject_bkg_args(args)
+                    if getattr(args, "validation", False) else None))
     ridge = float(args.empirical_fisher_ridge)
     print(f"\ncomputing θ-NET-weight empirical Fisher (per-event scores → ridge="
           f"{ridge:g} inverse → output Jacobian) on split={args.fisher_split}"
@@ -3430,7 +3461,9 @@ def _run_output_fisher_mlp(args, model, shard_files, stats, device) -> None:
         inject_seed=int(args.inject_smear_seed),
         cond_basis=getattr(args, "cond_basis", "muon_kin"),
         max_events=int(getattr(args, "max_events", 0) or 0),
-        event_fraction=float(getattr(args, "event_fraction", 1.0) or 1.0))
+        event_fraction=float(getattr(args, "event_fraction", 1.0) or 1.0),
+        inject_bkg=(_inject_bkg_args(args)
+                    if getattr(args, "validation", False) else None))
     print(f"\ncomputing OUTPUT-space Fisher (method={method}, project={project}"
           + (f", svd_rtol={svd_rtol:g}" if project == "net" else "")
           + (", marginalize_bkg" if marg_bkg else "")
@@ -3625,7 +3658,9 @@ def _run_empirical_fisher(args, model, shard_files, stats, device) -> None:
         inject_theta_smear=inj_sm, inject_seed=int(args.inject_smear_seed),
         cond_basis=getattr(args, "cond_basis", "muon_kin"),
         max_events=int(getattr(args, "max_events", 0) or 0),
-        event_fraction=float(getattr(args, "event_fraction", 1.0) or 1.0))
+        event_fraction=float(getattr(args, "event_fraction", 1.0) or 1.0),
+        inject_bkg=(_inject_bkg_args(args)
+                    if getattr(args, "validation", False) else None))
     print(f"\ncomputing joint (θ,φ) empirical Fisher (per-event scores → pinv) on "
           f"split={args.fisher_split}"
           + ("  half=%s (MC pseudo-data)" % ('all' if half is None else half)
@@ -3863,6 +3898,20 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    help="(--validation) Inject this constant PHYSICAL qop-variance "
                    "coefficient 'c' (the ∝k²=1/pt² multiple-scattering term; "
                    "physical scale ~1e-6; see --inject-a).")
+    p.add_argument("--inject-bkg-f0", type=float, default=0.0,
+                   help="(--validation) Re-label MC pseudo-data events as "
+                   "Bernstein-d1 background COMPONENT 0 (falling, p ∝ 1−t) "
+                   "with this probability: observed mass redrawn from that "
+                   "component, per-muon pt rescaled by a common factor "
+                   "(kinematics self-consistent; muon_kin conditioning exactly "
+                   "unchanged — ρ is invariant under a common pt scale). "
+                   "Background events do NOT receive the θ kick (the model's "
+                   "background is θ-independent in observed mass). The fitted "
+                   "MLP should recover this fraction, flat in η/φ — see the "
+                   "bkg_fraction closure plots.")
+    p.add_argument("--inject-bkg-f1", type=float, default=0.0,
+                   help="(--validation) Same for Bernstein COMPONENT 1 "
+                   "(rising, p ∝ t).")
     p.add_argument("--inject-smear-seed", type=int, default=12345,
                    help="Seed for the injected-smear Gaussian qop kick, so the "
                    "pseudo-data realisation is reproducible across epochs/runs.")

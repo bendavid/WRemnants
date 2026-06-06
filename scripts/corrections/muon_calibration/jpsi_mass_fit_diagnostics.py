@@ -407,6 +407,35 @@ def _continuity_mc_fold(model, ptm, etam, phim, qm, bm):
     return _event_mll(pt_cur, etam, phim).detach()
 
 
+N_PHI_BKG_BINS = 16
+
+
+def _accum_bkg_frac(acc, f, w, b_pm, phi_pm, label):
+    """Accumulate the background-fraction closure sums per η bin (via the
+    loader's b_pm index) and per φ bin (``N_PHI_BKG_BINS`` uniform over
+    [−π, π]): columns = (Σw, Σw·f0, Σw·f1, Σw·[label==1], Σw·[label==2]),
+    each event filling BOTH muon legs (the MLP conditioning carries both)."""
+    w_np = w.detach().cpu().numpy().astype(np.float64)
+    f_np = f.detach().cpu().numpy().astype(np.float64)
+    lab_np = label.detach().cpu().numpy()
+    vals = np.stack([np.ones_like(w_np), f_np[:, 0], f_np[:, 1],
+                     (lab_np == 1).astype(np.float64),
+                     (lab_np == 2).astype(np.float64)], axis=1) * w_np[:, None]
+    b_np = b_pm.detach().cpu().numpy()
+    phi_np = phi_pm.detach().cpu().numpy()
+    nb_eta = acc["eta"].shape[0]
+    nb_phi = acc["phi"].shape[0]
+    pbin = np.clip(((phi_np + np.pi) / (2.0 * np.pi) * nb_phi).astype(np.int64),
+                   0, nb_phi - 1)
+    for leg in (0, 1):
+        bl = np.clip(b_np[:, leg], 0, nb_eta - 1)
+        for k in range(vals.shape[1]):
+            acc["eta"][:, k] += np.bincount(bl, weights=vals[:, k],
+                                            minlength=nb_eta)[:nb_eta]
+            acc["phi"][:, k] += np.bincount(pbin[:, leg], weights=vals[:, k],
+                                            minlength=nb_phi)[:nb_phi]
+
+
 @torch.no_grad()
 def evaluate_predictions(
     model: JpsiMassMixtureModel,
@@ -520,6 +549,10 @@ def evaluate_predictions(
         inj_smear_full = (np.asarray(inject_smear_phys, dtype=np.float64)
                           if inject_smear_phys is not None else np.zeros((n_eta, 2)))
 
+    # Background-fraction closure sums (η via b_pm; φ via N_PHI_BKG_BINS).
+    bkg_acc = {"eta": np.zeros((model.theta_scale.shape[0], 5)),
+               "phi": np.zeros((N_PHI_BKG_BINS, 5))}
+
     total_events = 0
     bar = tqdm(loader, desc="eval", disable=not progress, unit="batch")
     try:
@@ -548,6 +581,14 @@ def evaluate_predictions(
                     f = torch.zeros((data_idx.numel(), 3), device=batch["cond_std"].device,
                                     dtype=batch["cond_std"].dtype)
                     f[:, 2] = 1.0
+                if getattr(model, "background_enabled", True):
+                    _lab = batch.get("bkg_label")
+                    _lab = (_lab[data_idx] if _lab is not None else
+                            torch.zeros(data_idx.numel(), dtype=torch.int8,
+                                        device=data_idx.device))
+                    _accum_bkg_frac(bkg_acc, f, batch["w"][data_idx],
+                                    batch["b_pm"][data_idx],
+                                    batch["phi_pm"][data_idx], _lab)
                 # Signal density at every bin centre for every data event at the
                 # fitted θ: tilt (continuity) or θ-conditioned flow (legacy).
                 log_p_grid = _sig_grid(data_idx)  # [n_data, n_grid] log-density (1/GeV)
@@ -638,6 +679,7 @@ def evaluate_predictions(
             else:
                 out[k] = np.zeros((0,))
     out["bin_width"] = bin_width
+    out["bkg_frac"] = bkg_acc
     out["continuity"] = True
     out["mc_as_data"] = mc_as_data
     # Basis-aware slice variables (key, label, fmt, mode) consumed by the closure
@@ -1319,6 +1361,52 @@ def plot_mc_closure(
         fig.tight_layout(rect=(0, 0, 1, 0.90))
         for p in _save_fig(fig, output_dir, f"mc_closure_{prefix}"):
             print(f"  wrote {p}")
+
+
+def plot_bkg_fractions(agg, eta_edges, output_dir, inject_bkg=None):
+    """Background-fraction closure vs η and vs φ: the Σw-weighted per-bin
+    mean of the fitted MLP components f0 (falling Bernstein) and f1 (rising),
+    filled PER MUON over the data-branch events, overlaid with the EMPIRICAL
+    injected fractions (per-bin Σw of the truth-labelled background events —
+    present only with --inject-bkg-*) and the constant injected values
+    (dashed). Writes bkg_fraction_eta and bkg_fraction_phi."""
+    import matplotlib.pyplot as plt
+    eta_edges = np.asarray(eta_edges, dtype=float)
+    for tag, acc, centers, xlabel in (
+            ("eta", agg["eta"], 0.5 * (eta_edges[:-1] + eta_edges[1:]), r"$\eta_\mu$"),
+            ("phi", agg["phi"],
+             (-np.pi + (np.arange(agg["phi"].shape[0]) + 0.5)
+              * (2.0 * np.pi / agg["phi"].shape[0])), r"$\phi_\mu$")):
+        sw = np.clip(acc[:, 0], 1e-30, None)
+        n_eff = sw  # unit-ish weights; binomial-style error on the mean of f
+        f0m, f1m = acc[:, 1] / sw, acc[:, 2] / sw
+        e0m, e1m = acc[:, 3] / sw, acc[:, 4] / sw
+        # ~binomial error bars for the empirical fractions (guide the eye)
+        err0 = np.sqrt(np.clip(e0m * (1 - e0m), 0, None) / np.clip(n_eff, 1, None))
+        err1 = np.sqrt(np.clip(e1m * (1 - e1m), 0, None) / np.clip(n_eff, 1, None))
+        fig, ax = plt.subplots(figsize=(7.2, 4.6))
+        ax.plot(centers, f0m, "o-", color="C0", ms=4,
+                label=r"fitted $\langle f_0\rangle$ (falling)")
+        ax.plot(centers, f1m, "s-", color="C3", ms=4,
+                label=r"fitted $\langle f_1\rangle$ (rising)")
+        has_inj = bool(acc[:, 3].sum() > 0 or acc[:, 4].sum() > 0)
+        if has_inj:
+            ax.errorbar(centers, e0m, yerr=err0, fmt=".", color="C0", alpha=0.55,
+                        capsize=2, label="injected (empirical, comp 0)")
+            ax.errorbar(centers, e1m, yerr=err1, fmt=".", color="C3", alpha=0.55,
+                        capsize=2, label="injected (empirical, comp 1)")
+        if inject_bkg is not None:
+            ax.axhline(inject_bkg[0], color="C0", ls="--", lw=1, alpha=0.7)
+            ax.axhline(inject_bkg[1], color="C3", ls="--", lw=1, alpha=0.7)
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel("background fraction")
+        ax.set_ylim(bottom=0.0)
+        ax.legend(fontsize=8, ncol=2)
+        ax.set_title("background-fraction closure (per-muon filled, "
+                     "data branch)")
+        fig.tight_layout()
+        _save_fig(fig, output_dir, f"bkg_fraction_{tag}")
+    print("wrote bkg_fraction_eta / bkg_fraction_phi")
 
 
 def plot_pulls(
@@ -2059,6 +2147,16 @@ def main() -> int:
             print(f"checkpoint injected smear (a,c)=({isa:g},{isc:g}) — replaying "
                   f"the per-muon qop fold into the pseudo-data")
 
+    inject_bkg_np = None
+    if mc_as_data and not is_flow_ckpt:
+        bf0 = float(train_args.get("inject_bkg_f0", 0.0) or 0.0)
+        bf1 = float(train_args.get("inject_bkg_f1", 0.0) or 0.0)
+        if bf0 > 0.0 or bf1 > 0.0:
+            inject_bkg_np = (bf0, bf1)
+            print(f"checkpoint injected Bernstein background (f0,f1)=({bf0:g},"
+                  f"{bf1:g}) — replaying into the pseudo-data; the fitted MLP "
+                  f"f(c) should recover these (see bkg_fraction closure plots)")
+
     nonuniform = bool(train_args.get("inject_nonuniform", False))
     if nonuniform and (inject_np is not None or inject_smear_np is not None):
         print("  injection is NON-UNIFORM (quadratic-η × sinusoidal-φ); the "
@@ -2076,6 +2174,7 @@ def main() -> int:
         inject_seed=int(train_args.get("inject_smear_seed", 12345)),
         cond_basis=train_args.get("cond_basis", "muon_kin"),
         inject_nonuniform=nonuniform,
+        inject_bkg=inject_bkg_np,
     )
     # φ-AVERAGED injected reference for the θ-vs-η plots + χ²: the φ sinusoid
     # averages to 1 over the plotted φ-mean, leaving base·f_η(η) per η-bin
@@ -2539,6 +2638,9 @@ def main() -> int:
     # the fitted scale + smearing). Re-uses pred_signal_mc — no second pass.
     print("plotting MC closure...")
     plot_mc_closure(evals, m_centers_np, eta_slice_edges, out_dir)
+    if getattr(model, "background_enabled", True) and "bkg_frac" in evals:
+        plot_bkg_fractions(evals["bkg_frac"], stats.eta_edges, out_dir,
+                           inject_bkg=inject_bkg_np)
 
     # Plot 7: parameter-sensitivity slices — model density at ±shifts of each
     # fitted param, in conditional slices chosen to break degeneracies.

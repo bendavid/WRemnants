@@ -510,6 +510,55 @@ def _inject_pt_np(pt_pm, eta_pm, q_pm, b_pm, scale_inj, smear_inj, rng,
     return pt_new.astype(np.float32)
 
 
+def _inject_bkg_np(pt_pm, eta_pm, phi_pm, f0, f1, rng, m_lo, m_hi):
+    """Validation-closure BACKGROUND injection. Each event is independently
+    re-labelled as degree-1 Bernstein background of component 0 (falling,
+    p ∝ 1−t) with probability ``f0``, component 1 (rising, p ∝ t) with
+    probability ``f1``, else left signal. For a background event the OBSERVED
+    mass is drawn directly in the observed window — the model defines the
+    background in observed mass space, θ-independent, so background events do
+    NOT additionally receive the θ kick — by inverse CDF (comp 0:
+    t = 1−√(1−v); comp 1: t = √v). The per-muon pt are then rescaled by a
+    COMMON factor along the mass direction so the pseudo-data kinematics stay
+    SELF-CONSISTENT (mll = _event_mll(pt)) while the conditioning is
+    untouched: η, φ are not modified and ρ = (pt₊−pt₋)/(pt₊+pt₋) is exactly
+    invariant under a common pt scale (for the event_level basis the
+    dilepton-pt component necessarily moves — it is pt-dependent by design).
+    The common factor solves ``_event_mll(s·pt) = m_target`` by a short fixed
+    point (the muon-mass term makes m(s·pt) ≠ s·m(pt) at the ~MeV level;
+    3 iterations → sub-keV).
+
+    Returns ``(pt_new [N,2] float32, label [N] int8)`` with label 0 = signal,
+    1 = component 0, 2 = component 1. Draws exactly N + N_bkg variates from
+    ``rng`` (its own dedicated stream — see the loader)."""
+    N = pt_pm.shape[0]
+    u = rng.random(N)
+    label = np.zeros(N, dtype=np.int8)
+    label[u < f0] = 1
+    label[(u >= f0) & (u < f0 + f1)] = 2
+    sel = label > 0
+    pt_out = pt_pm.astype(np.float32, copy=True)
+    if not bool(sel.any()):
+        return pt_out, label
+    v = rng.random(int(sel.sum()))
+    t = np.where(label[sel] == 1, 1.0 - np.sqrt(1.0 - v), np.sqrt(v))
+    # Keep strictly inside the window with a margin safely above the fp32
+    # rounding of the rescaled pt (~3e-7 relative → ~1e-6 GeV on the mass);
+    # without it edge draws land an ulp outside and get zero-weighted by the
+    # in-window cut. 1e-4 of the t range = 36 μ-units of CDF — negligible.
+    t = np.clip(t, 1e-4, 1.0 - 1e-4)
+    m_t = m_lo + (m_hi - m_lo) * t
+    pts = pt_pm[sel].astype(np.float64)
+    etas = eta_pm[sel].astype(np.float64)
+    phis = phi_pm[sel].astype(np.float64)
+    s = m_t / _event_mll_np(pts, etas, phis)
+    for _ in range(3):
+        cur = _event_mll_np(pts * s[:, None], etas, phis)
+        s = s * (m_t / cur)
+    pt_out[sel] = (pts * s[:, None]).astype(np.float32)
+    return pt_out, label
+
+
 def _smear_inject_dmll_np(mll, pt_pm, eta_pm, phi_pm, q_pm, b_pm, smear_inj, rng,
                           qop_floor_frac: float = 0.25):
     """Δm_ll ``[N]`` from injecting a per-muon qop Gaussian smear at the injected
@@ -543,6 +592,8 @@ def _batch_tensors(
     rng: "np.random.Generator | None" = None,
     cond_basis: str = "muon_kin",
     inject_nonuniform: bool = False,
+    inject_bkg: "tuple[float, float] | None" = None,
+    rng_bkg: "np.random.Generator | None" = None,
 ) -> dict[str, torch.Tensor]:
     """Build the tensor batch from one Arrow record batch's columns.
 
@@ -554,6 +605,16 @@ def _batch_tensors(
     ``inject_theta_smear`` ([n_eta, 2] = (a, c), validation closure only): the MC
     m_ll additionally gets the per-muon qop Gaussian smear at those injected
     width coefficients (same fold path as the validation plots; needs ``rng``).
+
+    ``inject_bkg`` ((f0, f1), validation closure only): re-label MC events as
+    degree-1 Bernstein background with those component probabilities — masses
+    drawn in OBSERVED space (no θ kick for background events; the model's
+    background is θ-independent in observed mass), per-muon pt rescaled by a
+    common factor so kinematics stay self-consistent and the muon_kin
+    conditioning is exactly unchanged (see ``_inject_bkg_np``). Uses the
+    dedicated ``rng_bkg`` stream so enabling it does not perturb the smear
+    draws. The emitted ``bkg_label`` tensor carries the per-event truth label
+    for the closure plots.
     """
     y_event, muon_kin = _per_event_features(cols)
 
@@ -573,26 +634,52 @@ def _batch_tensors(
     is_data_mask = (cols["is_data"].astype(np.uint8) != 0)
 
     mll = cols["mll"].astype(np.float32)
+    mc = ~is_data_mask
+    bkg_label = np.zeros(mll.shape[0], dtype=np.int8)
+    if inject_bkg is not None and rng_bkg is not None:
+        # Background re-labelling FIRST (its own rng stream; label draws cover
+        # the full batch for determinism, then masked to MC rows). Background
+        # events are excluded from the θ kick below — the model's background
+        # is defined θ-independent in observed mass space.
+        pt_bkg, lab = _inject_bkg_np(
+            pt_pm, eta_pm, phi_pm, float(inject_bkg[0]), float(inject_bkg[1]),
+            rng_bkg, float(stats.m_lo), float(stats.m_hi))
+        bkg_label = np.where(mc, lab, 0).astype(np.int8)
     if inject_theta_scale is not None or inject_theta_smear is not None:
         # Validation closure: apply the injected scale + smear to the per-muon pt
-        # in qop space (MC rows only) and propagate FULLY CONSISTENT observed
-        # quantities — smeared pt, mll = _event_mll(pt), ρ = ρ(pt) — so the
-        # pseudo-data is coherent exactly like real data and every downstream
+        # in qop space (MC SIGNAL rows only) and propagate FULLY CONSISTENT
+        # observed quantities — smeared pt, mll = _event_mll(pt), ρ = ρ(pt) — so
+        # the pseudo-data is coherent exactly like real data and every downstream
         # consumer (both smear operators, the fold, the diagnostics) uses it
         # directly with no rescaling. (Previously the smear was injected as an
         # additive m_ll shift with pt left at its nominal value, leaving mll and
         # pt_pm inconsistent; the qop operator, which reconstructs the mass from
         # pt, then saw the nominal mass and missed the injected smear.)
-        mc = ~is_data_mask
+        sig = mc & (bkg_label == 0)
         pt_inj = _inject_pt_np(
             pt_pm, eta_pm, q_pm, b_pm, inject_theta_scale, inject_theta_smear, rng,
             phi_pm=phi_pm, nonuniform=inject_nonuniform)
         mll_inj = _event_mll_np(pt_inj, eta_pm, phi_pm).astype(np.float32)
         rho_inj = ((pt_inj[:, 0] - pt_inj[:, 1]) /
                    (pt_inj[:, 0] + pt_inj[:, 1])).astype(np.float32)
-        mll = np.where(mc, mll_inj, mll).astype(np.float32)
-        pt_pm = np.where(mc[:, None], pt_inj, pt_pm).astype(np.float32)
-        muon_kin[:, -1] = np.where(mc, rho_inj, muon_kin[:, -1])
+        mll = np.where(sig, mll_inj, mll).astype(np.float32)
+        pt_pm = np.where(sig[:, None], pt_inj, pt_pm).astype(np.float32)
+        muon_kin[:, -1] = np.where(sig, rho_inj, muon_kin[:, -1])
+    if bool((bkg_label > 0).any()):
+        # Background rows: mass + ray-rescaled pt from the NOMINAL momenta
+        # (mll recomputed from the final pt → exactly self-consistent). The
+        # common-factor rescale leaves ρ — and hence the muon_kin conditioning
+        # — exactly unchanged; no muon_kin patch needed.
+        is_b = bkg_label > 0
+        # fp32 recompute — the SAME convention as the θ-injection path, so
+        # mll == _event_mll_np(pt) exactly. The fp32 m² = E² − P² cancellation
+        # noise (~0.1 MeV at J/ψ kinematics) can push a rare edge draw past
+        # the clip margin and outside the window; the in-window weight cut
+        # then zero-weights it, exactly as intended (O(1e-4) of the injected
+        # background at most).
+        mll_b = _event_mll_np(pt_bkg, eta_pm, phi_pm).astype(np.float32)
+        mll = np.where(is_b, mll_b, mll).astype(np.float32)
+        pt_pm = np.where(is_b[:, None], pt_bkg, pt_pm).astype(np.float32)
     mll_std = ((mll - stats.mll_mean) / stats.mll_std).astype(np.float32)
 
     y_event_std = _standardise(y_event, stats.y_event_mean, stats.y_event_std)
@@ -639,6 +726,10 @@ def _batch_tensors(
         "eta_pm": torch.from_numpy(eta_pm),
         "phi_pm": torch.from_numpy(phi_pm),
         "q_pm": torch.from_numpy(q_pm),
+        # Per-event truth label of the injected background (0 = signal,
+        # 1/2 = Bernstein component; all-zero when injection is off) — the
+        # empirical reference for the background-fraction closure plots.
+        "bkg_label": torch.from_numpy(bkg_label),
     }
 
 
@@ -685,6 +776,7 @@ class JpsiMassArrowLoader(IterableDataset):
         max_events: int = 0,
         event_fraction: float = 1.0,
         inject_nonuniform: bool = False,
+        inject_bkg: "tuple[float, float] | None" = None,
     ):
         if split not in self._SPLITS:
             raise ValueError(f"split must be one of {self._SPLITS}, got {split!r}")
@@ -738,6 +830,13 @@ class JpsiMassArrowLoader(IterableDataset):
         self.event_fraction = float(event_fraction)
         # Non-uniform (η²·sin φ) modulation of the injected θ (validation closure).
         self.inject_nonuniform = bool(inject_nonuniform)
+        # (f0, f1) Bernstein background-injection probabilities (validation
+        # closure; None = off). Drawn from a DEDICATED rng stream so enabling
+        # it does not perturb the θ smear-injection realisation.
+        self.inject_bkg = (tuple(float(x) for x in inject_bkg)
+                           if inject_bkg is not None
+                           and (float(inject_bkg[0]) > 0.0
+                                or float(inject_bkg[1]) > 0.0) else None)
 
     # -- helpers --------------------------------------------------------
 
@@ -833,8 +932,11 @@ class JpsiMassArrowLoader(IterableDataset):
         accum: dict[str, list[np.ndarray]] = {c: [] for c in _RAW_COLUMNS}
         accum_n = 0
         # Reseed each pass so the injected smear realisation is reproducible
-        # (and identical across epochs → a fixed pseudo-data set).
+        # (and identical across epochs → a fixed pseudo-data set). The
+        # background injection gets its own stream (fixed offset) so the two
+        # injections are independent and individually reproducible.
         rng = np.random.default_rng(self.inject_seed)
+        rng_bkg = np.random.default_rng(self.inject_seed + 1000003)
 
         for cols in self._iter_shard_cols():
             for c in _RAW_COLUMNS:
@@ -849,7 +951,7 @@ class JpsiMassArrowLoader(IterableDataset):
                 yield _batch_tensors(
                     emit, self.stats, self.inject_theta_scale,
                     self.inject_theta_smear, rng, self.cond_basis,
-                self.inject_nonuniform)
+                    self.inject_nonuniform, self.inject_bkg, rng_bkg)
 
         # Final partial batch.
         if accum_n > 0 and not self.drop_last:
@@ -857,7 +959,7 @@ class JpsiMassArrowLoader(IterableDataset):
             yield _batch_tensors(
                 cols, self.stats, self.inject_theta_scale,
                 self.inject_theta_smear, rng, self.cond_basis,
-                self.inject_nonuniform)
+                self.inject_nonuniform, self.inject_bkg, rng_bkg)
 
 
 # ---------------------------------------------------------------------------
