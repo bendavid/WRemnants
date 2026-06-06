@@ -760,7 +760,9 @@ def _bkg_bin_integrals_model(model, m_edges: np.ndarray) -> np.ndarray:
             pk = bernstein_basis_n(
                 g, model._m_lo_f, model._m_hi_f,
                 int(getattr(model, "bkg_degree", 1))).T
-        out[:, j] = np.trapz(pk.numpy(), g.numpy(), axis=1)
+        # np.trapz was removed in numpy 2 (renamed np.trapezoid); torch's
+        # trapezoid exists in every torch we support — use it directly.
+        out[:, j] = torch.trapezoid(pk, g, dim=1).numpy()
     return out
 
 
