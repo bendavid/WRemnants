@@ -1016,7 +1016,9 @@ def plot_mll_closure(
             if data_mask.any() and w_mc_sum > 0:
                 w_d = evals["w_data"][data_mask]
                 f_d = evals["f_data"][data_mask]
-                scale = float((w_d * f_d[:, 2]).sum()) / w_mc_sum
+                # signal fraction is the LAST mixture output (generalises
+                # the historical f[:, 2] of the 3-way deg-1 Bernstein head)
+                scale = float((w_d * f_d[:, -1]).sum()) / w_mc_sum
             mc_hist = mc_hist_raw * scale
             mc_label = ("MC (shifted+smeared, scaled to signal wt)" if cont
                         else "MC (scale+smear folded, scaled to signal wt)")
