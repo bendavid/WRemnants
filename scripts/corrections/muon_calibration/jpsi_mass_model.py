@@ -1992,9 +1992,19 @@ class JpsiMassMixtureModel(nn.Module):
         dim in chunks of ``_FLOW_EVAL_CHUNK`` rows and concatenate. The flow is
         row-independent so this is EXACT; it just caps the single-call
         allocation (the qop operator's B·n_gh² rows can otherwise trip the CUDA
-        allocator on one matmul). Gradients flow normally through the chunks."""
+        allocator on one matmul). Gradients flow normally through the chunks.
+
+        BYPASSED under torch.compile (--fit-compile): the python chunk loop
+        (a) UNROLLS — duplicating the flow subgraph once per chunk, so graph
+        size and compile time grow ∝ batch size — and (b) SPECIALISES the
+        graph on the exact row count, so every batch with a different
+        data-mask count triggers a FULL recompile (observed as 'compiling on
+        every batch' at large --fit-batch-size) until dynamo's recompile cap
+        silently falls back to eager. The chunking is only an eager-mode
+        allocation cap; under --fit-compile the single-call allocation is
+        governed by --fit-batch-size directly."""
         n = m_flat.shape[0]
-        if n <= _FLOW_EVAL_CHUNK:
+        if torch.compiler.is_compiling() or n <= _FLOW_EVAL_CHUNK:
             return fn(m_flat, mk_flat)
         return torch.cat([
             fn(m_flat[i:i + _FLOW_EVAL_CHUNK], mk_flat[i:i + _FLOW_EVAL_CHUNK])
@@ -2342,9 +2352,10 @@ class JpsiMassMixtureModel(nn.Module):
         return self._log_phi_window(z_lo, z_hi)
 
     def _flow_log_window_Z_chunked(self, m_lo_flat, m_hi_flat, mk_flat):
-        """Chunked ``_flow_log_window_Z`` (same chunking as _flow_eval_chunked)."""
+        """Chunked ``_flow_log_window_Z`` (same chunking as _flow_eval_chunked,
+        incl. the torch.compile bypass — see there for the recompile story)."""
         n = m_lo_flat.shape[0]
-        if n <= _FLOW_EVAL_CHUNK:
+        if torch.compiler.is_compiling() or n <= _FLOW_EVAL_CHUNK:
             return self._flow_log_window_Z(m_lo_flat, m_hi_flat, mk_flat)
         return torch.cat([
             self._flow_log_window_Z(m_lo_flat[i:i + _FLOW_EVAL_CHUNK],
