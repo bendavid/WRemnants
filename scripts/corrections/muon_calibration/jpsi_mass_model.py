@@ -213,9 +213,13 @@ N_THETA_SMEAR_PM = 2 * N_THETA_SMEAR   # 4 — flat per-event smear vector
 # θ_smear_pm); the background-fraction MLP conditions on muon_kin alone (same
 # kinematics, no nuisances). ``y_event`` (dilepton-level vars) is the OPTIONAL
 # alternative basis selected by ``cond_basis='event_level'`` (--cond-basis):
-# (yll, ln ptll, cosPhill, sinPhill, cosθ*, sinφ*, cosφ*). Unlike muon_kin it is
-# pt-dependent, so the qop scale/smear must propagate to the whole vector (see
-# _cond_from_muons). Default stays the leak-free muon_kin.
+# (yll, ln(ptll/mll), cosPhill, sinPhill, cosθ*, sinφ*, cosφ*). Every component
+# is DIMENSIONLESS → invariant under the common-pt dilation that is the mass
+# direction of the 1-D conditional (plain ln ptll moves 1:1 with the mass there
+# and is forbidden — it makes the fixed-conditioning density model inconsistent
+# at first order in θ). Residual pt-dependence (e/M/smear, ρ-class) propagates
+# through the per-node recompute (see _cond_from_muons). Default stays the
+# leak-free muon_kin.
 N_Y_EVENT = 7    # event-level basis dim (== N_MUON_KIN, so no flow-shape change)
 N_MUON_KIN = 7
 N_FLOW_COND = N_MUON_KIN + N_THETA_SCALE_PM + N_THETA_SMEAR_PM  # 17
@@ -511,10 +515,21 @@ def _event_cond_raw(
     pt_pm: torch.Tensor, eta_pm: torch.Tensor, phi_pm: torch.Tensor,
     eps: float = 1e-6,
 ) -> torch.Tensor:
-    """Event-level conditioning ``(yll, ln ptll, cosPhill, sinPhill, cosθ*,
+    """Event-level conditioning ``(yll, ln(ptll/mll), cosPhill, sinPhill, cosθ*,
     sinφ*, cosφ*)`` from the two muon momenta — a differentiable torch port of
     the ROOT snapshot's dilepton + Collins–Soper computation
     (wremnants/production/include/csVariables.hpp ``csSineCosThetaPhi``).
+
+    The dilepton-pt component is the DIMENSIONLESS ``ln(ptll/mll)``: along the
+    mass direction (a common pt dilation, the slice the 1-D conditional + its
+    window norm are taken on) ptll scales 1:1 with mll, so the ratio — like
+    yll, φll and the CS angles — is dilation-INVARIANT. This is the leak-free
+    requirement: a conditioner that shifts coherently with the mass coordinate
+    (e.g. plain ln ptll) makes the fixed-conditioning 1-D density model
+    inconsistent at first order in θ (missing conditioning-Jacobian/marginal
+    terms on the steep ptll spectrum → the A/e sloppy-direction blow-up seen
+    in validation). Residual e/M/smear shifts of the ratio are the same class
+    as muon_kin's ρ and are carried by the per-node recompute.
 
     Inputs ``[..., 2]`` per (+, −); ``eta_pm``/``phi_pm`` broadcast against
     ``pt_pm`` (so a per-GH-node ``pt`` [.,G²,2] works with [.,1,2] η/φ). Output
@@ -528,6 +543,8 @@ def _event_cond_raw(
     E = torch.sqrt(px * px + py * py + pz * pz + MUON_MASS_GEV * MUON_MASS_GEV)
     Px, Py, Pz, Etot = px.sum(-1), py.sum(-1), pz.sum(-1), E.sum(-1)
     ptll = torch.sqrt((Px * Px + Py * Py).clamp_min(eps * eps))
+    mll = torch.sqrt(
+        (Etot * Etot - (Px * Px + Py * Py + Pz * Pz)).clamp_min(eps * eps))
     yll = 0.5 * torch.log(((Etot + Pz) / (Etot - Pz)).clamp_min(eps))
     cosPhill = Px / ptll
     sinPhill = Py / ptll
@@ -570,7 +587,8 @@ def _event_cond_raw(
     sinphi = (yx * lx + yy * ly + yz * lz) / sintheta
     cosphi = (xx * lx + xy * ly + xz * lz) / sintheta
     return torch.stack(
-        [yll, torch.log(ptll), cosPhill, sinPhill, costheta, sinphi, cosphi],
+        [yll, torch.log(ptll) - torch.log(mll), cosPhill, sinPhill, costheta,
+         sinphi, cosphi],
         dim=-1)
 
 
@@ -867,10 +885,12 @@ class JpsiMassMixtureModel(nn.Module):
         theta_mlp_layers: int = 2,
         # Flow + background-MLP conditioning basis. 'muon_kin' (default): the
         # leak-free per-muon (η±, cosφ±, sinφ±, ρ). 'event_level': the dilepton
-        # vars (yll, ln ptll, cosPhill, sinPhill, cosθ*, sinφ*, cosφ*) — all
-        # pt-dependent, so the qop scale/smear propagates to the WHOLE
-        # conditioning (see _cond_from_muons). Both are 7-dim (no flow-shape
-        # change); the basis must match between stage-1 and stage-2.
+        # vars (yll, ln(ptll/mll), cosPhill, sinPhill, cosθ*, sinφ*, cosφ*) —
+        # all DIMENSIONLESS, hence invariant under the common-pt-dilation mass
+        # direction (the leak-free criterion); residual e/M/smear shifts
+        # propagate through the per-node recompute (see _cond_from_muons).
+        # Both are 7-dim (no flow-shape change); the basis must match between
+        # stage-1 and stage-2.
         cond_basis: str = "muon_kin",
         # Degeneracy-whitening preconditioner (see _WhitenGradFn). When True,
         # the gradient of the (A, e) and (a, c) pairs is rotated into a
@@ -1487,7 +1507,9 @@ class JpsiMassMixtureModel(nn.Module):
           pt-invariant, so recomputing the full vector reproduces the ρ-only
           update (kept as a fast path in ``_node_cond``).
         - ``event_level``: the dilepton vars via ``_event_cond_raw`` (all
-          pt-dependent). ``q_pm`` is unused (μ± identified by index)."""
+          dilation-invariant, residually pt-dependent through the
+          charge-differential terms). ``q_pm`` is unused (μ± identified by
+          index)."""
         if self.cond_basis == "event_level":
             raw = _event_cond_raw(pt_pm, eta_pm, phi_pm)
             return (raw - self.y_event_mean) / self.y_event_std

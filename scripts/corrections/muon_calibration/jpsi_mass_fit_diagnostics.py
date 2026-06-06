@@ -161,8 +161,9 @@ def _tilt_density_on_grid(
     eta = batch["eta_pm"][idx]; q = batch["q_pm"][idx]; b = batch["b_pm"][idx]
     phi = batch["phi_pm"][idx]
     # For event_level the operator recomputes the conditioning from the
-    # grid-scaled pt_g (so ln ptll tracks the grid mass); the passed mk is used
-    # only for muon_kin's pt-invariant η/φ.
+    # grid-scaled pt_g (a pure dilation, under which the dimensionless basis is
+    # invariant — the recompute is then a consistency no-op); the passed mk is
+    # used only for muon_kin's pt-invariant η/φ.
     mk = batch["cond_std"][idx]; pt = batch["pt_pm"][idx]
     m_obs = batch["mll"][idx]
     out = torch.empty((n, G), device=m_centers_dev.device, dtype=mk.dtype)
@@ -893,13 +894,14 @@ def _diag_slice_vars(cond_basis):
 
     - ``muon_kin``: |η₊| (directions are in the basis), ρ (= muon_kin[-1]), and
       cos α (3-D opening angle, a pure function of the muon directions).
-    - ``event_level``: the conditioning components themselves — p_T^ll, y_ll, and
+    - ``event_level``: the conditioning components themselves — p_T^ll/m_ll, y_ll, and
       cos θ* (CS polar decay angle). cos α / |η₊| / ρ are NOT used here: they
       depend on the lab→CS boost (hence m_ll), so they are not functions of the
       event-level conditioning alone. cos θ* is the event-level analog of ρ for
-      M-sensitivity; p_T^ll discriminates the A/e and a/c pt-scale degeneracies."""
+      M-sensitivity; p_T^ll/m_ll (the basis' dimensionless dilepton-pt ratio)
+      discriminates the A/e and a/c pt-scale degeneracies."""
     if cond_basis == "event_level":
-        return [("ptll", "p_T^ll [GeV]", ".1f", "tertile"),
+        return [("ptll_over_mll", "p_T^ll/m_ll", ".2f", "tertile"),
                 ("yll", "y_ll", ".2f", "tertile"),
                 ("costhetastar", "cos θ*", ".2f", "tertile")]
     return [("eta", "|η₊|", ".1f", "eta_edges"),
@@ -909,7 +911,8 @@ def _diag_slice_vars(cond_basis):
 
 def _slice_vals_np(keys, pt_pm, eta_pm, phi_pm):
     """``{key: [N] array}`` for the requested tertile slice keys, from per-muon
-    pt/η/φ. ptll/yll/cosθ* come from ``_event_cond_raw_np`` (cols 1/0/4); ρ and
+    pt/η/φ. ptll/mll, yll, cosθ* come from ``_event_cond_raw_np`` (cols 1/0/4
+    — col 1 is u = ln(ptll/mll), so exp(u) is the dimensionless ratio); ρ and
     cos α are the pt-asymmetry and opening angle. cos α uses only directions
     (pt cancels): ``(cosΔφ + sinhη₊sinhη₋)/(coshη₊coshη₋)``."""
     keys = set(keys)
@@ -922,11 +925,11 @@ def _slice_vals_np(keys, pt_pm, eta_pm, phi_pm):
     if "cosalpha" in keys:
         num = np.cos(p[:, 0] - p[:, 1]) + np.sinh(e[:, 0]) * np.sinh(e[:, 1])
         out["cosalpha"] = num / (np.cosh(e[:, 0]) * np.cosh(e[:, 1]))
-    if keys & {"ptll", "yll", "costhetastar"}:
+    if keys & {"ptll_over_mll", "yll", "costhetastar"}:
         ev = _event_cond_raw_np(pt.astype(np.float32), e.astype(np.float32),
                                 p.astype(np.float32))
-        if "ptll" in keys:
-            out["ptll"] = np.exp(ev[:, 1].astype(np.float64))
+        if "ptll_over_mll" in keys:
+            out["ptll_over_mll"] = np.exp(ev[:, 1].astype(np.float64))
         if "yll" in keys:
             out["yll"] = ev[:, 0]
         if "costhetastar" in keys:
@@ -1841,14 +1844,16 @@ def plot_param_sensitivity(model, loader, stats, m_centers, out_dir, *,
     # Slice variables, chosen for the active basis so each is a function of the
     # CONDITIONING (never the observable m_ll). For event_level, cos α / |η₊| / ρ
     # depend on the lab→CS boost (hence m_ll) and are NOT conditional, so use the
-    # conditioning components themselves: p_T^ll discriminates the A/e and a/c
-    # pt-scale degeneracies; cos θ* (CS polar angle) is the M-sensitive analog
-    # of ρ (it controls the charge-odd pt sharing).
+    # conditioning components themselves: p_T^ll/m_ll (the dimensionless ratio in
+    # the basis) discriminates the A/e and a/c pt-scale degeneracies; cos θ*
+    # (CS polar angle) is the M-sensitive analog of ρ (it controls the
+    # charge-odd pt sharing).
     if getattr(model, "cond_basis", "muon_kin") == "event_level":
         def _ev(b):
             return _event_cond_raw(b["pt_pm"], b["eta_pm"], b["phi_pm"])
         slice_vars = {
-            "ptll": (lambda b: torch.exp(_ev(b)[:, 1]), "p_T^ll [GeV]"),
+            "ptll_over_mll": (lambda b: torch.exp(_ev(b)[:, 1]),
+                              "p_T^ll/m_ll"),
             "yll": (lambda b: _ev(b)[:, 0], "y_ll"),
             "costhetastar": (lambda b: _ev(b)[:, 4], "cos θ*"),
         }

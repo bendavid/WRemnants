@@ -11,9 +11,11 @@ Tensor schema produced per batch:
   Observed (reco) flow inputs — standardised:
     mll            ``[B]``      raw m_ll [GeV]
     mll_std        ``[B]``      standardised m_ll
-    y_event_std    ``[B, 7]``   standardised (y_ll, ln pt_ll, cos φ_ll,
-                                sin φ_ll, cos θ*, sin φ*, cos φ*) — LEGACY,
-                                emitted but unused by the model
+    y_event_std    ``[B, 7]``   standardised (y_ll, ln(pt_ll/m_ll), cos φ_ll,
+                                sin φ_ll, cos θ*, sin φ*, cos φ*) — the
+                                event_level conditioning basis (emitted always;
+                                consumed as cond_std when --cond-basis
+                                event_level)
     muon_kin_std   ``[B, 7]``   standardised (η_+, η_-, cos φ_+, sin φ_+,
                                 cos φ_-, sin φ_-, ρ) — conditioning for BOTH the
                                 signal flow (+ θ) and the background-fraction MLP
@@ -110,10 +112,13 @@ _RAW_COLUMNS = (
 # Per-event derived feature ordering (matches jpsi_mass_model.N_Y_EVENT / N_MUON_KIN).
 #
 # Two feature blocks:
-#   y_event  — dilepton-level kinematics. LEGACY: still computed/emitted, but
-#              the model no longer consumes it (it includes pt_ll, which would
-#              re-pin m_ll if it conditioned the signal flow).
-#   muon_kin — the conditioning for BOTH the signal flow (+ θ) and the
+#   y_event  — dilepton-level kinematics: the --cond-basis event_level
+#              conditioning (yll, ln(ptll/mll), cosφll, sinφll, cosθ*, sinφ*,
+#              cosφ*). Every component is DIMENSIONLESS → invariant under the
+#              common-pt dilation that is the 1-D conditional's mass direction
+#              (the leak-free criterion; plain ln ptll moves 1:1 with the mass
+#              there and is forbidden — it biases the fit at first order in θ).
+#   muon_kin — the DEFAULT conditioning for BOTH the signal flow (+ θ) and the
 #              background-fraction MLP: per-muon (η, φ) plus the pt asymmetry
 #              ρ = (pt_+ − pt_-)/(pt_+ + pt_-). These span 5 of the 6 dimuon
 #              DOF (η_±, φ_±, ρ), leaving the pt *scale* ↔ m_ll free, so the
@@ -122,7 +127,7 @@ _RAW_COLUMNS = (
 #              φ-response is not azimuthally symmetric).
 _Y_EVENT_FEATURES = (
     "yll",
-    "log_ptll",
+    "log_ptll_over_mll",
     "cosPhill",
     "sinPhill",
     "cosThetaStarll",
@@ -159,7 +164,12 @@ def _per_event_features(cols: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]
     """Derive ``(y_event_raw [N,7], muon_kin_raw [N,8], extras_raw [N,*])``
     from the snapshot's raw columns.
     """
-    log_ptll = np.log(cols["ptll"].astype(np.float64, copy=False)).astype(np.float32)
+    # Dimensionless dilation-invariant dilepton-pt component (see the block
+    # comment above): ln(ptll/mll) from the snapshot's own columns.
+    log_ptll_over_mll = (
+        np.log(cols["ptll"].astype(np.float64, copy=False))
+        - np.log(cols["mll"].astype(np.float64, copy=False))
+    ).astype(np.float32)
     eta_plus = cols["eta_plus"]
     eta_minus = cols["eta_minus"]
     pt_plus = cols["pt_plus"].astype(np.float64, copy=False)
@@ -174,7 +184,7 @@ def _per_event_features(cols: dict) -> tuple[np.ndarray, np.ndarray, np.ndarray]
     y_event = np.stack(
         [
             cols["yll"],
-            log_ptll,
+            log_ptll_over_mll,
             cols["cosPhill"],
             cols["sinPhill"],
             cols["cosThetaStarll"],
@@ -366,10 +376,12 @@ def _event_mll_np(pt_pm, eta_pm, phi_pm):
 
 
 def _event_cond_raw_np(pt_pm, eta_pm, phi_pm, eps=1e-6):
-    """Event-level conditioning ``[N,7]`` = (yll, ln ptll, cosPhill, sinPhill,
-    cosθ*, sinφ*, cosφ*) — float64 numpy twin of ``jpsi_mass_model._event_cond_raw``
-    (the ROOT snapshot's dilepton + Collins–Soper computation). Inputs ``[N,2]``;
-    μ+ is index 0 (antilepton), μ− index 1 (lepton). Returns float32."""
+    """Event-level conditioning ``[N,7]`` = (yll, ln(ptll/mll), cosPhill,
+    sinPhill, cosθ*, sinφ*, cosφ*) — float64 numpy twin of
+    ``jpsi_mass_model._event_cond_raw`` (the ROOT snapshot's dilepton +
+    Collins–Soper computation; see there for why the pt component is the
+    DIMENSIONLESS dilation-invariant ratio). Inputs ``[N,2]``; μ+ is index 0
+    (antilepton), μ− index 1 (lepton). Returns float32."""
     pt = pt_pm.astype(np.float64, copy=False)
     eta = eta_pm.astype(np.float64, copy=False)
     phi = phi_pm.astype(np.float64, copy=False)
@@ -377,6 +389,8 @@ def _event_cond_raw_np(pt_pm, eta_pm, phi_pm, eps=1e-6):
     E = np.sqrt(px * px + py * py + pz * pz + _MUON_MASS_GEV * _MUON_MASS_GEV)
     Px = px.sum(1); Py = py.sum(1); Pz = pz.sum(1); Etot = E.sum(1)
     ptll = np.sqrt(np.clip(Px * Px + Py * Py, eps * eps, None))
+    mll = np.sqrt(np.clip(Etot * Etot - (Px * Px + Py * Py + Pz * Pz),
+                          eps * eps, None))
     yll = 0.5 * np.log(np.clip((Etot + Pz) / (Etot - Pz), eps, None))
     cosPhill = Px / ptll; sinPhill = Py / ptll
     bx, by, bz = -Px / Etot, -Py / Etot, -Pz / Etot
@@ -415,8 +429,8 @@ def _event_cond_raw_np(pt_pm, eta_pm, phi_pm, eps=1e-6):
                                eps * eps, None))
     sinphi = (yax[0] * lu[0] + yax[1] * lu[1] + yax[2] * lu[2]) / sintheta
     cosphi = (xax[0] * lu[0] + xax[1] * lu[1] + xax[2] * lu[2]) / sintheta
-    return np.stack([yll, np.log(ptll), cosPhill, sinPhill, costheta,
-                     sinphi, cosphi], axis=1).astype(np.float32)
+    return np.stack([yll, np.log(ptll) - np.log(mll), cosPhill, sinPhill,
+                     costheta, sinphi, cosphi], axis=1).astype(np.float32)
 
 
 def _inverse_cs_np(m_target, yll, ptll, cosPhill, sinPhill,
@@ -630,8 +644,8 @@ def _inject_bkg_np(pt_pm, eta_pm, phi_pm, f0, f1, rng, m_lo, m_hi,
     COMMON factor along the mass direction so the pseudo-data kinematics stay
     SELF-CONSISTENT (mll = _event_mll(pt)) while the conditioning is
     untouched: η, φ are not modified and ρ = (pt₊−pt₋)/(pt₊+pt₋) is exactly
-    invariant under a common pt scale (for the event_level basis the
-    dilepton-pt component necessarily moves — it is pt-dependent by design).
+    invariant under a common pt scale (and so is the event_level basis —
+    every component is dimensionless/dilation-invariant).
     The common factor solves ``_event_mll(s·pt) = m_target`` by a short fixed
     point (the muon-mass term makes m(s·pt) ≠ s·m(pt) at the ~MeV level;
     3 iterations → sub-keV).
@@ -640,15 +654,18 @@ def _inject_bkg_np(pt_pm, eta_pm, phi_pm, f0, f1, rng, m_lo, m_hi,
 
     * ``muon_kin`` — COMMON pt rescale along the mass direction (short fixed
       point through the muon-mass term): η, φ untouched, ρ exactly invariant
-      → the muon_kin conditioning is bit-identical; ln pt_ll moves.
+      → the muon_kin conditioning is bit-identical (pt_ll moves, but it is
+      not part of this basis).
     * ``event_level`` — INVERSE Collins–Soper reconstruction
-      (``_inverse_cs_np``) at fixed (y_ll, pt_ll, φ_ll, cosθ*, φ*): those are
-      a complete mass-complement coordinate set, so ALL 7 event-level
-      conditioning components are fixed (to fp32 round-off of the stored
-      conditioning) and the mass is exact, closed form. The per-muon
-      (pt, η, φ) all move at O(δm/m); muons drifting past ``eta_max`` are
-      flagged in the fiducial mask (caller zero-weights them, ~2e-3 of
-      adjusted muons at J/ψ kinematics).
+      (``_inverse_cs_np``) at fixed (y_ll, pt_ll/m_ll, φ_ll, cosθ*, φ*):
+      those are a complete mass-complement coordinate set, so ALL 7
+      event-level conditioning components are fixed (to fp32 round-off of
+      the stored conditioning) and the mass is exact, closed form. Holding
+      the DIMENSIONLESS ratio fixed means pt_ll itself scales with the drawn
+      mass (pt_ll_new = e^u·m_target). The per-muon (pt, η, φ) all move at
+      O(δm/m); muons drifting past ``eta_max`` are flagged in the fiducial
+      mask (caller zero-weights them, ~2e-3 of adjusted muons at J/ψ
+      kinematics).
 
     Returns ``(pt_new [N,2], eta_new [N,2], phi_new [N,2] — all float32,
     label [N] int8, fid_ok [N] bool)`` with label 0 = signal, 1 = component 0,
@@ -678,8 +695,10 @@ def _inject_bkg_np(pt_pm, eta_pm, phi_pm, f0, f1, rng, m_lo, m_hi,
     if cond_basis == "event_level":
         cond = _event_cond_raw_np(pt_pm[sel], eta_pm[sel],
                                   phi_pm[sel]).astype(np.float64)
+        # cond[:, 1] is u = ln(ptll/mll); hold u fixed at the drawn mass, so
+        # the pt_ll handed to the inverse-CS is e^u·m_target.
         pt_n, eta_n, phi_n = _inverse_cs_np(
-            m_t, cond[:, 0], np.exp(cond[:, 1]), cond[:, 2], cond[:, 3],
+            m_t, cond[:, 0], np.exp(cond[:, 1]) * m_t, cond[:, 2], cond[:, 3],
             cond[:, 4], cond[:, 5], cond[:, 6])
         pt_out[sel] = pt_n.astype(np.float32)
         eta_out[sel] = eta_n.astype(np.float32)
@@ -863,7 +882,8 @@ def _batch_tensors(
     # The active flow/MLP conditioning. For event_level, recompute the dilepton
     # vars from the (post-injection) per-muon pt so the conditioning is derived
     # from the same momenta the model sees — self-consistent for injected
-    # pseudo-data (all 7 components are pt-dependent) and matching the operator's
+    # pseudo-data (dilation-invariant but still pt-dependent through the
+    # charge-differential e/M/smear terms) and matching the operator's
     # _cond_from_muons recompute. muon_kin's ρ was already patched above.
     if cond_basis == "event_level":
         cond_raw = _event_cond_raw_np(pt_pm, eta_pm, phi_pm)
