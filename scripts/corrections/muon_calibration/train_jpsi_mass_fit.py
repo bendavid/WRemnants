@@ -191,6 +191,21 @@ def _lr_str(optim: torch.optim.Optimizer) -> str:
     return "/".join(f"{x:.2g}" for x in lrs)
 
 
+def _persistent_inductor_cache():
+    """Point the torch.compile (inductor) fx-graph cache at a PERSISTENT
+    directory unless the user already set one. The default lives under
+    $TMPDIR — per-job on the batch/GPU nodes — so every run pays the full
+    cold compile (~2 min for the stage-2 objective); with a warm persistent
+    cache the same compile is ~10× faster (cache load + guard re-check only).
+    An existing TORCHINDUCTOR_CACHE_DIR is respected. Must run BEFORE the
+    first torch.compile call of the process."""
+    path = os.environ.setdefault(
+        "TORCHINDUCTOR_CACHE_DIR",
+        os.path.join(os.path.expanduser("~"), ".cache", "torchinductor-wrem"))
+    print(f"  torch.compile cache: {path}"
+          + ("" if "torchinductor-wrem" in path else " (user TORCHINDUCTOR_CACHE_DIR)"))
+
+
 def _float_or_auto(s: str):
     """argparse type for --patience-threshold: a float, or the literal 'auto'."""
     return s if s == "auto" else float(s)
@@ -1827,6 +1842,7 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
     compiled_inwindow = None
     compiled_nce_loss = None
     if getattr(args, "compile", False):
+        _persistent_inductor_cache()
         if compact:
             compiled_inwindow = torch.compile(model.flow.forward_inwindow)
             print("  --compile: compact in-window density compiled "
@@ -2076,6 +2092,7 @@ def train_stage2(args, model, train_loader, val_loader, stats,
     # drivers build their own objective and are NOT compiled.
     nll_fn = model.data_nll_continuity
     if getattr(args, "fit_compile", False):
+        _persistent_inductor_cache()
         if getattr(args, "fit_optimizer", "adam") in (
                 "trust-krylov", "trust-ncg", "trust-exact"):
             print("  --fit-compile: SKIPPED (trust-region driver builds its own "
