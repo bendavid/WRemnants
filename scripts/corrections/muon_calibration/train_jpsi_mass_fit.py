@@ -2665,22 +2665,41 @@ def _theta_cov_extras(cov_theta: torch.Tensor, model, smear_cols, n_scale: int) 
         n_eta, n_comp = model.theta_smear.shape
         cv = cov_theta[n_scale:, n_scale:]
         sig_raw = torch.sqrt(torch.clamp(torch.diag(cv), min=0.0))
-        smear_scale = (SMEAR_VAR_SCALE_A, SMEAR_VAR_SCALE_C)  # θ→physical (linear)
+        smear_scale = (SMEAR_VAR_SCALE_A, SMEAR_VAR_SCALE_C)
+        # Delta method raw → PHYSICAL: the Jacobian is reparam'(raw)·SCALE —
+        # sigmoid(raw) for softplus, 2|raw| for square, 1 for linear (matching
+        # the observed-Fisher exporter). The old SCALE-only conversion was the
+        # linear-form special case; under softplus it overstated σ by
+        # 1/sigmoid(raw) — ×20–40 for healthy bins and ×100–1000 for
+        # boundary-pinned ones (the 'pathological error bar' bins). NB at a
+        # pinned bin (raw → −∞) the delta method itself degrades: the raw σ is
+        # ridge-floor dominated and the physical profile is one-sided; treat
+        # those bins' σ as indicative (the smear_param_form note recommends
+        # --output-fisher / bootstrap there).
+        form = getattr(model, "smear_param_form", "linear")
+        with torch.no_grad():
+            th = model.theta_smear.detach().cpu().to(cov_theta.dtype)
+            if form == "softplus":
+                drep = torch.sigmoid(th)
+            elif form == "square":
+                drep = (2.0 * th).abs()
+            else:
+                drep = torch.ones_like(th)
         sig_eff = torch.zeros(n_eta, n_comp)
+        jac = torch.zeros(len(smear_cols) * n_eta, dtype=cov_theta.dtype)
         k = 0
         for b in range(n_eta):
             for c in smear_cols:
-                sig_eff[b, c] = smear_scale[c] * sig_raw[k]
+                jac[k] = float(drep[b, c]) * smear_scale[c]
+                sig_eff[b, c] = float(jac[k]) * sig_raw[k]
                 k += 1
         out["sigma_smear_eff_24_2"] = sig_eff
         # Full PHYSICAL (a,c) covariance (24×2×24×2) — needed for the whitened
         # (stiff/sloppy) band, which mixes a and c. Only when BOTH float (the
         # whitened smear plot requires smear_fit_params=='both'); cv is then
-        # ordered (bin0_a, bin0_c, bin1_a, …).
+        # ordered (bin0_a, bin0_c, bin1_a, …). Same delta-method Jacobian.
         if smear_cols == [0, 1]:
-            sv = torch.tensor([SMEAR_VAR_SCALE_A, SMEAR_VAR_SCALE_C] * n_eta,
-                              dtype=cv.dtype)
-            cv_phys = cv * sv.unsqueeze(0) * sv.unsqueeze(1)
+            cv_phys = cv * jac.unsqueeze(0) * jac.unsqueeze(1)
             out["covariance_smear_24_2_24_2"] = cv_phys.view(n_eta, 2, n_eta, 2)
     return out
 
