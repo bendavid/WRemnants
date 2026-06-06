@@ -822,13 +822,14 @@ def _setup_common(args, *, stats_override=None):
     with open(stats_path, "w") as f:
         json.dump(_stats_to_dict(stats), f, indent=2)
     print(f"wrote {stats_path}")
-    train_loader, val_loader = _make_loaders(args, shard_files, stats)
+    train_loader, val_loader = _make_loaders(
+        args, shard_files, stats, m_window=_stage_windows(args, stats)[0])
     return shard_files, stats, train_loader, val_loader
 
 
 def _make_loaders(args, shard_files, stats, *, half=None, inject_theta=None,
                   inject_smear=None, inject_bkg=None, val_fraction=None,
-                  holdout_fraction=None, batch_size=None):
+                  holdout_fraction=None, batch_size=None, m_window=None):
     """Build the ``(train, val)`` loaders for one stage. ``half`` selects a
     deterministic disjoint event half (0/1) — used by the MC-closure
     validation mode (stage 1 ← half 0, stage 2 ← half 1); ``None`` = all
@@ -852,7 +853,7 @@ def _make_loaders(args, shard_files, stats, *, half=None, inject_theta=None,
         inject_theta_smear=inject_smear, inject_seed=seed,
         cond_basis=getattr(args, "cond_basis", "muon_kin"),
         max_events=me, event_fraction=ef, inject_nonuniform=nu,
-        inject_bkg=inject_bkg)
+        inject_bkg=inject_bkg, m_window=m_window)
     val_loader = JpsiMassArrowLoader(
         shard_files, stats, batch_size=bs, split="val",
         val_fraction=vf, holdout_fraction=hf,
@@ -860,7 +861,7 @@ def _make_loaders(args, shard_files, stats, *, half=None, inject_theta=None,
         inject_theta_smear=inject_smear, inject_seed=seed,
         cond_basis=getattr(args, "cond_basis", "muon_kin"),
         max_events=me, event_fraction=ef, inject_nonuniform=nu,
-        inject_bkg=inject_bkg)
+        inject_bkg=inject_bkg, m_window=m_window)
     return train_loader, val_loader
 
 
@@ -916,6 +917,8 @@ _FLOW_ARCH_KEYS = (
     "flow_arch", "flow_n_transforms", "flow_hidden", "flow_n_hidden",
     "gf_components", "nsf_bins", "cond_basis", "compact_learn_weights",
     "compact_layer", "bernstein_degree", "nce_quad_nodes",
+    # the compact/nce/dcb/ege flows' standardised [a, b] are the FLOW window
+    "flow_m_lo", "flow_m_hi",
 )
 
 
@@ -947,9 +950,41 @@ def _apply_flow_arch_from_ckpt(args, ck_args: dict, state_dict=None) -> None:
         print("  flow-architecture args already match the checkpoint")
 
 
+def _stage_windows(args, stats):
+    """Resolve the per-stage mass windows ``(flow_win, fit_win)`` from
+    --flow-m-lo/-hi and --fit-m-lo/-hi (each defaulting to the shard window
+    stats.m_lo/m_hi). Enforces fit ⊆ flow ⊆ shard: a fit window wider than
+    the flow window would evaluate the frozen flow's extrapolated matched
+    tails as physics, and neither stage can see events the shards never
+    stored. The fit's truncated likelihood renormalises the flow over the
+    fit window via the window-Z machinery, so a tighter fit window needs no
+    other special handling."""
+    base = (float(stats.m_lo), float(stats.m_hi))
+    fl = (float(getattr(args, "flow_m_lo", None) or base[0]),
+          float(getattr(args, "flow_m_hi", None) or base[1]))
+    ft = (float(getattr(args, "fit_m_lo", None) or fl[0]),
+          float(getattr(args, "fit_m_hi", None) or fl[1]))
+    if not (base[0] <= fl[0] < fl[1] <= base[1]):
+        raise ValueError(f"--flow-m window {fl} must lie inside the shard "
+                         f"window {base}")
+    if not (fl[0] <= ft[0] < ft[1] <= fl[1]):
+        raise ValueError(f"--fit-m window {ft} must lie inside the flow "
+                         f"window {fl} (the frozen flow must cover the fit "
+                         f"range so the window-Z renormalisation stays an "
+                         f"interpolation)")
+    return fl, ft
+
+
 def _build_model(args, stats, device):
+    flow_win, fit_win = _stage_windows(args, stats)
+    if not (flow_win == (float(stats.m_lo), float(stats.m_hi)) and flow_win == fit_win):
+        print(f"  mass windows: shard [{stats.m_lo:g}, {stats.m_hi:g}]  "
+              f"flow [{flow_win[0]:g}, {flow_win[1]:g}]  "
+              f"fit [{fit_win[0]:g}, {fit_win[1]:g}] "
+              f"(flow renormalised over the fit window via window-Z)")
     return JpsiMassMixtureModel(
-        m_lo=stats.m_lo, m_hi=stats.m_hi, mll_log_scale=stats.mll_log_scale,
+        m_lo=fit_win[0], m_hi=fit_win[1], mll_log_scale=stats.mll_log_scale,
+        flow_m_lo=flow_win[0], flow_m_hi=flow_win[1],
         mll_mean=stats.mll_mean, mll_std=stats.mll_std,
         y_event_mean=torch.from_numpy(stats.y_event_mean),
         y_event_std_tensor=torch.from_numpy(stats.y_event_std),
@@ -1830,7 +1865,7 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
               "window by construction; window-norm term ≡ 0, skipped)")
     elif window_norm:
         print(f"  likelihood: TRUNCATED  -(logp0 - logZ_window), "
-              f"Z = F0({model.m_hi:g}|c) - F0({model.m_lo:g}|c)  "
+              f"Z = F0({model._flow_m_hi_f:g}|c) - F0({model._flow_m_lo_f:g}|c)  "
               f"(consistent with stage-2 flow_cdf; the frozen flow is the "
               f"truncated-MLE on the mass window)")
     else:
@@ -1947,8 +1982,8 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
             # affected events silently switched to unnormalised-density
             # maximisation (observed as e−40-scale window masses at forward η).
             log_Z = model._flow_log_window_Z(
-                m.new_full(m.shape, float(model.m_lo)),
-                m.new_full(m.shape, float(model.m_hi)), mk)
+                m.new_full(m.shape, model._flow_m_lo_f),
+                m.new_full(m.shape, model._flow_m_hi_f), mk)
             logp = logp - log_Z
         w = batch["w"][idx].double()                 # float64 reduction: the model
         sw = float(w.sum().clamp_min(1e-30))         # runs at --precision, but the
@@ -2018,8 +2053,8 @@ def _report_nce_calibration(args, model, loader, max_events: int = 100_000):
         if idx.numel() == 0:
             continue
         mk = batch["cond_std"][idx]
-        m_hi = batch["mll"].new_full((idx.numel(),), float(model.m_hi))
-        m_lo = batch["mll"].new_full((idx.numel(),), float(model.m_lo))
+        m_hi = batch["mll"].new_full((idx.numel(),), model._flow_m_hi_f)
+        m_lo = batch["mll"].new_full((idx.numel(),), model._flow_m_lo_f)
         z = (model._flow_log_cdf(m_hi, mk).exp()
              - model._flow_log_cdf(m_lo, mk).exp())
         zs.append(z.double().cpu())
@@ -2322,12 +2357,15 @@ def train_loop(args: argparse.Namespace) -> int:
         # Flow loaders (NOT injected). --flow-monitor train (default): stage 1
         # trains on ALL events of its half (no val/holdout carve-out) and
         # stops on the train-NLL plateau like the fit; no val loader.
+        flow_win, fit_win = _stage_windows(args, stats)
         if getattr(args, "flow_monitor", "train") == "train":
             s1_train, _ = _make_loaders(args, shard_files, stats, half=h_flow,
-                                        val_fraction=0.0, holdout_fraction=0.0)
+                                        val_fraction=0.0, holdout_fraction=0.0,
+                                        m_window=flow_win)
             s1_val = None
         else:
-            s1_train, s1_val = _make_loaders(args, shard_files, stats, half=h_flow)
+            s1_train, s1_val = _make_loaders(args, shard_files, stats,
+                                             half=h_flow, m_window=flow_win)
         # Fit: ALL events of its half (no held-out val/holdout); stops on train NLL.
         inj_bkg = _inject_bkg_args(args)
         if inj_bkg is not None:
@@ -2340,7 +2378,7 @@ def train_loop(args: argparse.Namespace) -> int:
                       "events.", file=sys.stderr)
         s2_train, s2_val = _make_loaders(args, shard_files, stats, half=h_fit,
                                          inject_theta=inj, inject_smear=inj_sm,
-                                         inject_bkg=inj_bkg,
+                                         inject_bkg=inj_bkg, m_window=fit_win,
                                          val_fraction=0.0, holdout_fraction=0.0,
                                          batch_size=getattr(args, "fit_batch_size", 0) or None)
     else:
@@ -2348,15 +2386,18 @@ def train_loop(args: argparse.Namespace) -> int:
                 or _inject_smear_np(args, len(stats.eta_edges) - 1) is not None):
             print("warning: --inject-A/e/M/a/c only apply in --validation mode; ignoring.",
                   file=sys.stderr)
+        flow_win, fit_win = _stage_windows(args, stats)
         if getattr(args, "flow_monitor", "train") == "train":
             s1_train, _ = _make_loaders(args, shard_files, stats,
-                                        val_fraction=0.0, holdout_fraction=0.0)
+                                        val_fraction=0.0, holdout_fraction=0.0,
+                                        m_window=flow_win)
             s1_val = None
         else:
             s1_train, s1_val = train_loader, val_loader
         # Fit: ALL events (no held-out val/holdout); stops on train NLL.
         s2_train, s2_val = _make_loaders(args, shard_files, stats,
                                          val_fraction=0.0, holdout_fraction=0.0,
+                                         m_window=fit_win,
                                          batch_size=getattr(args, "fit_batch_size", 0) or None)
 
     if args.stage in ("both", "flow"):
@@ -2409,7 +2450,8 @@ def _run_fisher_continuity(args, model, shard_files, stats, device) -> None:
         max_events=int(getattr(args, "max_events", 0) or 0),
         event_fraction=float(getattr(args, "event_fraction", 1.0) or 1.0),
         inject_bkg=(_inject_bkg_args(args)
-                    if getattr(args, "validation", False) else None))
+                    if getattr(args, "validation", False) else None),
+        m_window=_stage_windows(args, stats)[1])
     print(f"\ncomputing observed Fisher information (θ_scale + active θ_smear, "
           f"fixed flow + MLP) on split={args.fisher_split}"
           + ("  half=%s (MC pseudo-data)" % ('all' if half is None else half)
@@ -2536,7 +2578,8 @@ def run_bootstrap_continuity(args, model, shard_files, stats, device, *,
         max_events=int(getattr(args, "max_events", 0) or 0),
         event_fraction=float(getattr(args, "event_fraction", 1.0) or 1.0),
         inject_bkg=(_inject_bkg_args(args)
-                    if getattr(args, "validation", False) else None))
+                    if getattr(args, "validation", False) else None),
+        m_window=_stage_windows(args, stats)[1])
     nominal_sd = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
 
     # Freeze the flow; float the MLP + active θ (the MLP must re-fit per replica
@@ -3099,7 +3142,8 @@ def _run_empirical_fisher_mlp(args, model, shard_files, stats, device) -> None:
         max_events=int(getattr(args, "max_events", 0) or 0),
         event_fraction=float(getattr(args, "event_fraction", 1.0) or 1.0),
         inject_bkg=(_inject_bkg_args(args)
-                    if getattr(args, "validation", False) else None))
+                    if getattr(args, "validation", False) else None),
+        m_window=_stage_windows(args, stats)[1])
     ridge = float(args.empirical_fisher_ridge)
     print(f"\ncomputing θ-NET-weight empirical Fisher (per-event scores → ridge="
           f"{ridge:g} inverse → output Jacobian) on split={args.fisher_split}"
@@ -3515,7 +3559,8 @@ def _run_output_fisher_mlp(args, model, shard_files, stats, device) -> None:
         max_events=int(getattr(args, "max_events", 0) or 0),
         event_fraction=float(getattr(args, "event_fraction", 1.0) or 1.0),
         inject_bkg=(_inject_bkg_args(args)
-                    if getattr(args, "validation", False) else None))
+                    if getattr(args, "validation", False) else None),
+        m_window=_stage_windows(args, stats)[1])
     print(f"\ncomputing OUTPUT-space Fisher (method={method}, project={project}"
           + (f", svd_rtol={svd_rtol:g}" if project == "net" else "")
           + (", marginalize_bkg" if marg_bkg else "")
@@ -3712,7 +3757,8 @@ def _run_empirical_fisher(args, model, shard_files, stats, device) -> None:
         max_events=int(getattr(args, "max_events", 0) or 0),
         event_fraction=float(getattr(args, "event_fraction", 1.0) or 1.0),
         inject_bkg=(_inject_bkg_args(args)
-                    if getattr(args, "validation", False) else None))
+                    if getattr(args, "validation", False) else None),
+        m_window=_stage_windows(args, stats)[1])
     print(f"\ncomputing joint (θ,φ) empirical Fisher (per-event scores → pinv) on "
           f"split={args.fisher_split}"
           + ("  half=%s (MC pseudo-data)" % ('all' if half is None else half)
@@ -4267,6 +4313,22 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    help="Lower edge of the m_ll fit window [GeV].")
     p.add_argument("--m-hi", type=float, default=3.28, dest="m_hi",
                    help="Upper edge of the m_ll fit window [GeV].")
+    p.add_argument("--flow-m-lo", type=float, default=None,
+                   help="Optional TIGHTER lower mass edge for STAGE 1 (flow "
+                   "training + the flow's own normalisation window). Default: "
+                   "--m-lo (the shard window).")
+    p.add_argument("--flow-m-hi", type=float, default=None,
+                   help="Optional tighter upper mass edge for stage 1 "
+                   "(see --flow-m-lo). Default: --m-hi.")
+    p.add_argument("--fit-m-lo", type=float, default=None,
+                   help="Optional TIGHTER lower mass edge for STAGE 2: event "
+                   "selection, the truncated-likelihood window-Z "
+                   "normalisation of the frozen flow, and the background "
+                   "window all use it. Must lie inside the flow window. "
+                   "Default: the flow window's lower edge.")
+    p.add_argument("--fit-m-hi", type=float, default=None,
+                   help="Optional tighter upper mass edge for stage 2 "
+                   "(see --fit-m-lo). Default: the flow window's upper edge.")
     p.add_argument("--n-eta-bins", type=int, default=None,
                    help="Number of η bins for the BINNED θ parameters (and the "
                    "diagnostics' per-η tables), spanning ±--eta-range. Default 24 "

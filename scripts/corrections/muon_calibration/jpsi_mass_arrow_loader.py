@@ -733,6 +733,7 @@ def _batch_tensors(
     inject_nonuniform: bool = False,
     inject_bkg: "tuple[float, float] | None" = None,
     rng_bkg: "np.random.Generator | None" = None,
+    m_window: "tuple[float, float] | None" = None,
 ) -> dict[str, torch.Tensor]:
     """Build the tensor batch from one Arrow record batch's columns.
 
@@ -744,6 +745,13 @@ def _batch_tensors(
     ``inject_theta_smear`` ([n_eta, 2] = (a, c), validation closure only): the MC
     m_ll additionally gets the per-muon qop Gaussian smear at those injected
     width coefficients (same fold path as the validation plots; needs ``rng``).
+
+    ``m_window`` ((lo, hi), optional): a TIGHTER mass window than the shard
+    window ``stats.m_lo/m_hi`` — the per-stage window of the consuming stage.
+    Events outside it are DROPPED from the batch (not just zero-weighted: a
+    much tighter window would otherwise waste flow evaluations on dead rows),
+    and the background injection draws its masses inside it. Defaults to the
+    stats window (exact historical behaviour, no filtering).
 
     ``inject_bkg`` ((f0, f1), validation closure only): re-label MC events as
     degree-1 Bernstein background with those component probabilities — masses
@@ -787,7 +795,9 @@ def _batch_tensors(
         # (all 7 conditioning components fixed; per-muon kinematics move).
         pt_bkg, eta_bkg, phi_bkg, lab, fid = _inject_bkg_np(
             pt_pm, eta_pm, phi_pm, float(inject_bkg[0]), float(inject_bkg[1]),
-            rng_bkg, float(stats.m_lo), float(stats.m_hi),
+            rng_bkg,
+            float(m_window[0]) if m_window is not None else float(stats.m_lo),
+            float(m_window[1]) if m_window is not None else float(stats.m_hi),
             cond_basis=cond_basis,
             eta_max=float(np.max(np.abs(stats.eta_edges))))
         bkg_label = np.where(mc, lab, 0).astype(np.int8)
@@ -875,31 +885,42 @@ def _batch_tensors(
     # zero-weights ~0.06% of central / ~3% of |η|>1.8 events; both the
     # weighted numerator AND denominator drop them, so the mean NLL is
     # computed correctly over the in-window subset.
-    in_window = ((mll >= float(stats.m_lo)) & (mll <= float(stats.m_hi)))
+    w_lo = float(m_window[0]) if m_window is not None else float(stats.m_lo)
+    w_hi = float(m_window[1]) if m_window is not None else float(stats.m_hi)
+    in_window = ((mll >= w_lo) & (mll <= w_hi))
     # ... and the η-fiducial guard for inverse-CS-adjusted background rows
     # whose muons drifted past the outermost η edge (~2e-3 of adjusted
     # muons): zero-weight them like the window cut (b_pm would be clipped to
     # the edge bin and the event sits outside the modelled acceptance).
     w = w * (in_window & bkg_fid).astype(np.float32)
+    keep = None
+    if m_window is not None and (w_lo > float(stats.m_lo)
+                                 or w_hi < float(stats.m_hi)):
+        # Tighter-than-shard window: DROP the out-of-window rows (they carry
+        # w = 0 and would only burn flow evaluations downstream).
+        keep = in_window & bkg_fid
+
+    def _sel(arr):
+        return arr if keep is None else arr[keep]
 
     return {
-        "mll": torch.from_numpy(mll),
-        "mll_std": torch.from_numpy(mll_std),
-        "y_event_std": torch.from_numpy(y_event_std),
-        "muon_kin_std": torch.from_numpy(muon_kin_std),
-        "cond_std": torch.from_numpy(cond_std),
-        "b_pm": torch.from_numpy(b_pm),
-        "is_data_mask": torch.from_numpy(is_data_mask),
-        "w": torch.from_numpy(w),
-        "pt_pm": torch.from_numpy(pt_pm),
-        "pt_pm_nominal": torch.from_numpy(pt_pm_nominal),
-        "eta_pm": torch.from_numpy(eta_pm),
-        "phi_pm": torch.from_numpy(phi_pm),
-        "q_pm": torch.from_numpy(q_pm),
+        "mll": torch.from_numpy(_sel(mll)),
+        "mll_std": torch.from_numpy(_sel(mll_std)),
+        "y_event_std": torch.from_numpy(_sel(y_event_std)),
+        "muon_kin_std": torch.from_numpy(_sel(muon_kin_std)),
+        "cond_std": torch.from_numpy(_sel(cond_std)),
+        "b_pm": torch.from_numpy(_sel(b_pm)),
+        "is_data_mask": torch.from_numpy(_sel(is_data_mask)),
+        "w": torch.from_numpy(_sel(w)),
+        "pt_pm": torch.from_numpy(_sel(pt_pm)),
+        "pt_pm_nominal": torch.from_numpy(_sel(pt_pm_nominal)),
+        "eta_pm": torch.from_numpy(_sel(eta_pm)),
+        "phi_pm": torch.from_numpy(_sel(phi_pm)),
+        "q_pm": torch.from_numpy(_sel(q_pm)),
         # Per-event truth label of the injected background (0 = signal,
         # 1/2 = Bernstein component; all-zero when injection is off) — the
         # empirical reference for the background-fraction closure plots.
-        "bkg_label": torch.from_numpy(bkg_label),
+        "bkg_label": torch.from_numpy(_sel(bkg_label)),
     }
 
 
@@ -947,6 +968,7 @@ class JpsiMassArrowLoader(IterableDataset):
         event_fraction: float = 1.0,
         inject_nonuniform: bool = False,
         inject_bkg: "tuple[float, float] | None" = None,
+        m_window: "tuple[float, float] | None" = None,
     ):
         if split not in self._SPLITS:
             raise ValueError(f"split must be one of {self._SPLITS}, got {split!r}")
@@ -1007,6 +1029,9 @@ class JpsiMassArrowLoader(IterableDataset):
                            if inject_bkg is not None
                            and (float(inject_bkg[0]) > 0.0
                                 or float(inject_bkg[1]) > 0.0) else None)
+        # Optional per-stage tighter mass window (lo, hi); None = shard window.
+        self.m_window = (tuple(float(x) for x in m_window)
+                         if m_window is not None else None)
 
     # -- helpers --------------------------------------------------------
 
@@ -1121,7 +1146,8 @@ class JpsiMassArrowLoader(IterableDataset):
                 yield _batch_tensors(
                     emit, self.stats, self.inject_theta_scale,
                     self.inject_theta_smear, rng, self.cond_basis,
-                    self.inject_nonuniform, self.inject_bkg, rng_bkg)
+                    self.inject_nonuniform, self.inject_bkg, rng_bkg,
+                    self.m_window)
 
         # Final partial batch.
         if accum_n > 0 and not self.drop_last:
@@ -1129,7 +1155,8 @@ class JpsiMassArrowLoader(IterableDataset):
             yield _batch_tensors(
                 cols, self.stats, self.inject_theta_scale,
                 self.inject_theta_smear, rng, self.cond_basis,
-                self.inject_nonuniform, self.inject_bkg, rng_bkg)
+                self.inject_nonuniform, self.inject_bkg, rng_bkg,
+                self.m_window)
 
 
 # ---------------------------------------------------------------------------

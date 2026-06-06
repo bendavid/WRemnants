@@ -832,6 +832,15 @@ class JpsiMassMixtureModel(nn.Module):
         # where the MLP grows f_bkg in forward |η| bins to absorb tail
         # events the signal model can't broaden into.
         background_enabled: bool = True,
+        # FLOW-stage mass window override (defaults to the model/fit window
+        # m_lo/m_hi). The compact/nce/dcb/ege flows are defined and
+        # normalised on THIS window (their standardised [a, b]); the fit's
+        # truncated likelihood then renormalises the frozen flow over the
+        # (possibly tighter) FIT window m_lo/m_hi via the window-Z machinery
+        # exactly as for any transformed window — so the per-stage windows
+        # compose without special cases as long as fit ⊆ flow.
+        flow_m_lo: "float | None" = None,
+        flow_m_hi: "float | None" = None,
         # Background model on the observed window: 'bernstein' = positive
         # degree-`bkg_degree` Bernstein mixture (bkg_degree+1 fractions from
         # the MLP; degree 1 is the historical default); 'exp' = window-
@@ -984,9 +993,11 @@ class JpsiMassMixtureModel(nn.Module):
         # C⁰+C¹ matching (the maximum possible for a log-linear tail). Same
         # window-normalised, analytic-CDF, full-ℝ-tails design.
         self.flow_is_ege = (self.flow_arch == "ege")
+        self._flow_m_lo_f = float(flow_m_lo if flow_m_lo is not None else m_lo)
+        self._flow_m_hi_f = float(flow_m_hi if flow_m_hi is not None else m_hi)
         if self.flow_is_compact:
-            a_std = (float(m_lo) - float(mll_mean)) / float(mll_std)
-            b_std = (float(m_hi) - float(mll_mean)) / float(mll_std)
+            a_std = (self._flow_m_lo_f - float(mll_mean)) / float(mll_std)
+            b_std = (self._flow_m_hi_f - float(mll_mean)) / float(mll_std)
             self.flow = CompactMatchedFlow(
                 n_cond=N_MUON_KIN, a=a_std, b=b_std,
                 hidden_features=flow_hidden_features,
@@ -1002,8 +1013,8 @@ class JpsiMassMixtureModel(nn.Module):
                 bernstein_degree=bernstein_degree,
             )
         elif self.flow_is_nce:
-            a_std = (float(m_lo) - float(mll_mean)) / float(mll_std)
-            b_std = (float(m_hi) - float(mll_mean)) / float(mll_std)
+            a_std = (self._flow_m_lo_f - float(mll_mean)) / float(mll_std)
+            b_std = (self._flow_m_hi_f - float(mll_mean)) / float(mll_std)
             self.flow = NCEDensity(
                 n_cond=N_MUON_KIN, a=a_std, b=b_std,
                 hidden_features=flow_hidden_features,
@@ -1011,16 +1022,16 @@ class JpsiMassMixtureModel(nn.Module):
                 quad_nodes=nce_quad_nodes,
             )
         elif self.flow_is_dcb:
-            a_std = (float(m_lo) - float(mll_mean)) / float(mll_std)
-            b_std = (float(m_hi) - float(mll_mean)) / float(mll_std)
+            a_std = (self._flow_m_lo_f - float(mll_mean)) / float(mll_std)
+            b_std = (self._flow_m_hi_f - float(mll_mean)) / float(mll_std)
             self.flow = DCBDensity(
                 n_cond=N_MUON_KIN, a=a_std, b=b_std,
                 hidden_features=flow_hidden_features,
                 n_layers=flow_n_hidden_layers,
             )
         elif self.flow_is_ege:
-            a_std = (float(m_lo) - float(mll_mean)) / float(mll_std)
-            b_std = (float(m_hi) - float(mll_mean)) / float(mll_std)
+            a_std = (self._flow_m_lo_f - float(mll_mean)) / float(mll_std)
+            b_std = (self._flow_m_hi_f - float(mll_mean)) / float(mll_std)
             self.flow = EGEDensity(
                 n_cond=N_MUON_KIN, a=a_std, b=b_std,
                 hidden_features=flow_hidden_features,

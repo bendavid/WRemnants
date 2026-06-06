@@ -75,9 +75,18 @@ def load_model_from_checkpoint(checkpoint_path: str, device: str):
     ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
     args = ckpt["args"]
     stats = _stats_from_dict(ckpt["stats"])
+    # Per-stage mass windows (default = the shard window in stats): the model
+    # window is the FIT window (window-Z, background, plots); the flow window
+    # sets the compact/nce/dcb/ege [a, b].
+    _fl_lo = float(args.get("flow_m_lo") or stats.m_lo)
+    _fl_hi = float(args.get("flow_m_hi") or stats.m_hi)
+    _ft_lo = float(args.get("fit_m_lo") or _fl_lo)
+    _ft_hi = float(args.get("fit_m_hi") or _fl_hi)
     model = JpsiMassMixtureModel(
-        m_lo=stats.m_lo,
-        m_hi=stats.m_hi,
+        m_lo=_ft_lo,
+        m_hi=_ft_hi,
+        flow_m_lo=_fl_lo,
+        flow_m_hi=_fl_hi,
         mll_log_scale=stats.mll_log_scale,
         mll_mean=stats.mll_mean,
         mll_std=stats.mll_std,
@@ -2292,6 +2301,7 @@ def main() -> int:
         cond_basis=train_args.get("cond_basis", "muon_kin"),
         inject_nonuniform=nonuniform,
         inject_bkg=inject_bkg_np,
+        m_window=(model._m_lo_f, model._m_hi_f),
     )
     # φ-AVERAGED injected reference for the θ-vs-η plots + χ²: the φ sinusoid
     # averages to 1 over the plotted φ-mean, leaving base·f_η(η) per η-bin
@@ -2304,7 +2314,7 @@ def main() -> int:
                            else inject_smear_np * _feta[:, None])
 
     # m_ll grid.
-    m_edges = torch.linspace(stats.m_lo, stats.m_hi, args.n_mll_bins + 1)
+    m_edges = torch.linspace(model._m_lo_f, model._m_hi_f, args.n_mll_bins + 1)
     bin_width = float((m_edges[1] - m_edges[0]).item())
     m_centers = 0.5 * (m_edges[:-1] + m_edges[1:])
     m_centers_np = m_centers.cpu().numpy()
@@ -2343,7 +2353,7 @@ def main() -> int:
     print("plotting m_ll closure...")
     plot_mll_closure(
         evals, m_centers_np, eta_slice_edges,
-        stats.m_lo, stats.m_hi, out_dir,
+        model._m_lo_f, model._m_hi_f, out_dir,
     )
 
     # Fisher info → ±1σ for θ_scale (and θ_smear, when present).
@@ -2570,7 +2580,8 @@ def main() -> int:
                 inject_theta_scale=inject_np, inject_theta_smear=inject_smear_np,
                 inject_seed=int(train_args.get("inject_smear_seed", 12345)),
                 cond_basis=train_args.get("cond_basis", "muon_kin"),
-                inject_nonuniform=nonuniform)
+                inject_nonuniform=nonuniform,
+                m_window=(model._m_lo_f, model._m_hi_f))
             plot_theta_scale_likelihood_scan(
                 model, scan_loader, device, out_dir,
                 scale_fit_params=model.scale_fit_params,
@@ -2748,7 +2759,7 @@ def main() -> int:
     print("plotting per-bin pulls...")
     plot_pulls(
         evals, m_centers_np, eta_slice_edges,
-        stats.m_lo, stats.m_hi, out_dir,
+        model._m_lo_f, model._m_hi_f, out_dir,
     )
 
     # Plot 6: MC closure (forward-folded MC vs flow density curve, both at

@@ -149,7 +149,8 @@ loader = JpsiMassArrowLoader(
     half=half, event_fraction=efrac,
     inject_theta_scale=inj, inject_theta_smear=None,
     inject_seed=int(targs.get("inject_smear_seed", 12345)),
-    cond_basis=targs.get("cond_basis", "muon_kin"))
+    cond_basis=targs.get("cond_basis", "muon_kin"),
+    m_window=(model._m_lo_f, model._m_hi_f))
 
 with torch.no_grad():
     model.theta_scale[0, 0] = float(args.A_raw)
