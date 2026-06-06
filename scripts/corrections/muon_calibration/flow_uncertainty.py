@@ -31,17 +31,31 @@ Per column j (a unit vector in the θ-active block):
 the stage-2 scale factors cancel exactly in the chain (H_ww⁻¹·H_wφ·…·H_ww⁻¹
 carries net power 0 of the stage-2 normalisation), so only α₁ survives.
 
-Scope: binned θ (the θ-mlp output-grid case needs the sketched variant to be
-affordable and is rejected with a message). Flow archs with a plain NLL
-stage-1 objective (compact/dcb/ege: −Σw·log p₀ on the FLOW window) and
-gf/nsf (truncated window-norm + gauge penalty, replicating step1); nce's
-BCE objective is not supported.
+Scope: binned θ AND θ-mlp. For ``--theta-mlp`` the quantities of interest are
+the net OUTPUTS T_j on a fixed (η-bin-centre × φ-bin-centre) grid — physical
+(A, e, M) and O(1) effective (a, c), the SAME active table layout and units as
+the output-space Fisher (``--output-fisher``) — propagated by the delta
+method: Cov(T) = J_T·Cov(ŵ)·J_Tᵀ with w = (θ-net ⊕ background-MLP weights),
+so the only change to the chain is the RHS column e_j → g_j = ∂T_j/∂w (one
+cheap autograd row each). Exact, column per grid output, no sketching — the
+cost scales linearly in n_η·n_φ·n_comp. The θ-net weight space is
+over-parameterised (near-null weight directions), so ``--ridge-w`` is more
+consequential there: scan it for a plateau like ``--ridge-flow``.
 
-Output: ``flow_uncertainty.pt`` with the raw-θ covariance in the SAME active
-layout as ``empirical_fisher.pt`` (combine by addition), the physical-units
-extras via the shared ``_theta_cov_extras`` (softplus delta-method included),
-and CG diagnostics. With ``--fisher <empirical_fisher.pt>`` the combined
-(data + flow) covariance and a per-parameter σ budget table are also written.
+Flow archs with a plain NLL stage-1 objective (compact/dcb/ege: −Σw·log p₀ on
+the FLOW window) and gf/nsf (truncated window-norm + gauge penalty,
+replicating step1); nce's BCE objective is not supported.
+
+Output: ``flow_uncertainty.pt``. Binned: the raw-θ covariance in the SAME
+active layout as ``empirical_fisher.pt`` (combine by addition), the
+physical-units extras via the shared ``_theta_cov_extras`` (softplus
+delta-method included), and CG diagnostics; with ``--fisher
+<empirical_fisher.pt>`` the combined (data + flow) covariance and a
+per-parameter σ budget table are also written. θ-mlp: the grid-output
+covariance plus the φ-collapsed per-η keys mirroring the output-space Fisher
+file (``*_flow`` suffix); with ``--fisher`` (an ``--output-fisher`` file with
+the same n_phi) the blockwise totals (``*_total``) and a per-component σ
+budget summary.
 """
 
 from __future__ import annotations
@@ -102,6 +116,64 @@ def _w_layout(model):
             labels += [f"mlp[{i}][{k}]" for k in range(p.numel())]
             off += idx.numel()
     return params, segs, labels, n_theta_active, smear_cols
+
+
+def _w_layout_mlp(model):
+    """θ-mlp w-layout: w = [θ-net (all) | background MLP (all)]. The grid
+    outputs T(η, φ) are FUNCTIONS of w, so every net weight is active and the
+    chain's RHS columns are the output gradients ∂T_j/∂w (delta method)
+    instead of unit vectors. Returns (params, segs, n_net)."""
+    params, segs = [], []
+    off = 0
+    for p in model.theta_net.parameters():
+        idx = torch.arange(p.numel())
+        params.append(p)
+        segs.append((off, idx))
+        off += idx.numel()
+    n_net = off
+    if model.background_enabled:
+        for p in model.mlp.parameters():
+            idx = torch.arange(p.numel())
+            params.append(p)
+            segs.append((off, idx))
+            off += idx.numel()
+    return params, segs, n_net
+
+
+def _grid_outputs(model, eta_edges, n_phi_g, scale_cols, smear_cols, device):
+    """Evaluate the θ-net on the fixed (η-bin-centre × φ-bin-centre) grid and
+    return the ACTIVE output vector (autograd graph attached) in the SAME
+    active ordering and units as ``compute_output_fisher_2d`` / the
+    ``--output-fisher`` file: scale block then smear block, each (η outer, φ
+    middle, active-col inner); scale = PHYSICAL (A, e, M), smear = O(1)
+    EFFECTIVE (a, c) so the positivity-reparam delta method is automatic
+    through autograd. Returns (o_active, labels, eta_centres, phi_centres)."""
+    mdt = next(model.theta_net.parameters()).dtype
+    centres = 0.5 * (np.asarray(eta_edges[:-1]) + np.asarray(eta_edges[1:]))
+    n_eta = int(len(centres))
+    eta_c = torch.as_tensor(centres, dtype=mdt, device=device)
+    phi_edges = torch.linspace(-float(np.pi), float(np.pi), n_phi_g + 1,
+                               dtype=mdt, device=device)
+    phi_c = 0.5 * (phi_edges[:-1] + phi_edges[1:])
+    eg = eta_c[:, None, None].expand(n_eta, n_phi_g, 2).reshape(-1, 2)
+    pg = phi_c[None, :, None].expand(n_eta, n_phi_g, 2).reshape(-1, 2)
+    AeM, ac = model.theta_net(eg, pg)                    # physical A,e,M; raw a,c
+    AeM = AeM[:, 0, :]                                   # [n_eta*n_phi_g, 3]
+    ac_eff = model._smear_raw_to_effective(ac[:, 0, :])  # [n_eta*n_phi_g, 2]
+    rows, labels = [], []
+    comp_s, comp_c = ("A", "e", "M"), ("a", "c")
+    for ie in range(n_eta):
+        for ip in range(n_phi_g):
+            for c in scale_cols:
+                rows.append(AeM[ie * n_phi_g + ip, c])
+                labels.append(f"{comp_s[c]}[{ie},{ip}]")
+    for ie in range(n_eta):
+        for ip in range(n_phi_g):
+            for c in smear_cols:
+                rows.append(ac_eff[ie * n_phi_g + ip, c])
+                labels.append(f"{comp_c[c]}[{ie},{ip}]")
+    return (torch.stack(rows), labels, centres,
+            phi_c.detach().cpu().numpy())
 
 
 def _pack(grads, params, segs, n_w, device, dtype=torch.float64):
@@ -249,6 +321,97 @@ def _materialise(loader, device, dtype, take_data_branch, mc_as_data,
 
 
 # ---------------------------------------------------------------------------
+# θ-mlp grid post-processing (mirrors _run_output_fisher_mlp's saved keys)
+# ---------------------------------------------------------------------------
+
+
+def _phi_collapse_np(block, aw, n_eta, n_phi_g, cols):
+    """Occupancy-weighted φ-collapse of an active-table covariance block:
+    cov_φmean[η,c,η',c'] = Σ_{φ,φ'} a[η,φ] a[η',φ'] B[η,φ,c,η',φ',c']."""
+    nc = len(cols)
+    B = block.reshape(n_eta, n_phi_g, nc, n_eta, n_phi_g, nc)
+    return np.einsum("ep,EP,epcEPC->ecEC", aw, aw, B)
+
+
+def _mlp_grid_keys(C, n_eta, n_phi_g, scale_cols, smear_cols, aw, suffix=""):
+    """Build the φ-collapsed per-η covariance keys + the full 2-D blocks from
+    the active-table covariance ``C`` [n_act, n_act] (np.float64), in the SAME
+    shapes/units as the ``--output-fisher`` empirical_fisher.pt (physical
+    A,e,M; smear converted O(1) effective → PHYSICAL via SMEAR_VAR_SCALE)."""
+    from jpsi_mass_model import SMEAR_VAR_SCALE_A, SMEAR_VAR_SCALE_C
+    out = {}
+    n_sa = n_eta * n_phi_g * len(scale_cols)
+    if scale_cols:
+        Cs = _phi_collapse_np(C[:n_sa, :n_sa], aw, n_eta, n_phi_g, scale_cols)
+        cov_s = np.zeros((n_eta, 3, n_eta, 3), dtype=np.float64)
+        for i, ci in enumerate(scale_cols):
+            for j, cj in enumerate(scale_cols):
+                cov_s[:, ci, :, cj] = Cs[:, i, :, j]
+        cs2 = cov_s.reshape(n_eta * 3, n_eta * 3)     # symmetrise ULP asymmetry
+        cov_s = (0.5 * (cs2 + cs2.T)).reshape(n_eta, 3, n_eta, 3)
+        out[f"covariance_24_3_24_3{suffix}"] = torch.tensor(
+            cov_s, dtype=torch.float32)
+        out[f"sigma_scale_24_3{suffix}"] = torch.sqrt(torch.clamp(
+            torch.tensor(np.einsum("icic->ic", cov_s)), min=0.0)).float()
+        Cs2d = C[:n_sa, :n_sa].reshape(n_eta, n_phi_g, len(scale_cols),
+                                       n_eta, n_phi_g, len(scale_cols))
+        full_s = np.zeros((n_eta, n_phi_g, 3, n_eta, n_phi_g, 3),
+                          dtype=np.float64)
+        for i, ci in enumerate(scale_cols):
+            for j, cj in enumerate(scale_cols):
+                full_s[:, :, ci, :, :, cj] = Cs2d[:, :, i, :, :, j]
+        out[f"covariance_scale_2d{suffix}"] = torch.tensor(
+            full_s, dtype=torch.float32)
+    if smear_cols:
+        sv = [SMEAR_VAR_SCALE_A, SMEAR_VAR_SCALE_C]
+        Cc = _phi_collapse_np(C[n_sa:, n_sa:], aw, n_eta, n_phi_g, smear_cols)
+        cov_c = np.zeros((n_eta, 2, n_eta, 2), dtype=np.float64)
+        for i, ci in enumerate(smear_cols):
+            for j, cj in enumerate(smear_cols):
+                cov_c[:, ci, :, cj] = Cc[:, i, :, j] * sv[ci] * sv[cj]
+        cc2 = cov_c.reshape(n_eta * 2, n_eta * 2)     # symmetrise ULP asymmetry
+        cov_c = (0.5 * (cc2 + cc2.T)).reshape(n_eta, 2, n_eta, 2)
+        out[f"covariance_smear_24_2_24_2{suffix}"] = torch.tensor(
+            cov_c, dtype=torch.float32)
+        out[f"sigma_smear_eff_24_2{suffix}"] = torch.sqrt(torch.clamp(
+            torch.tensor(np.einsum("icic->ic", cov_c)), min=0.0)).float()
+        Cc2d = C[n_sa:, n_sa:].reshape(n_eta, n_phi_g, len(smear_cols),
+                                       n_eta, n_phi_g, len(smear_cols))
+        full_c = np.zeros((n_eta, n_phi_g, 2, n_eta, n_phi_g, 2),
+                          dtype=np.float64)
+        for i, ci in enumerate(smear_cols):
+            for j, cj in enumerate(smear_cols):
+                full_c[:, :, ci, :, :, cj] = Cc2d[:, :, i, :, :, j] \
+                    * sv[ci] * sv[cj]
+        out[f"covariance_smear_2d{suffix}"] = torch.tensor(
+            full_c, dtype=torch.float32)
+    return out
+
+
+def _grid_phi_weights(fit_ev, n_eta, n_phi_g):
+    """Per-(η,φ)-cell Σw occupancy of the fit sample (both muons) → the
+    normalised per-η φ-weights for the collapse (uniform for empty η rows).
+    Returns (aw [n_eta, n_phi_g], cell_w [n_eta, n_phi_g])."""
+    bnd = torch.linspace(-float(np.pi), float(np.pi), n_phi_g + 1,
+                         device=fit_ev["phi_pm"].device,
+                         dtype=fit_ev["phi_pm"].dtype)[1:-1].contiguous()
+    pb = torch.clamp(torch.bucketize(fit_ev["phi_pm"], bnd), 0, n_phi_g - 1)
+    eb = fit_ev["b_pm"].long()
+    flat = (eb * n_phi_g + pb).reshape(-1)
+    cw = torch.zeros(n_eta * n_phi_g, dtype=torch.float64,
+                     device=flat.device)
+    cw.index_add_(0, flat,
+                  fit_ev["w"].double().unsqueeze(1).expand(-1, 2).reshape(-1))
+    cell_w = cw.view(n_eta, n_phi_g).cpu().numpy()
+    aw = cell_w.copy()
+    rs = aw.sum(axis=1, keepdims=True)
+    unif = (rs <= 0).reshape(-1)
+    aw[unif] = 1.0
+    rs[unif.reshape(-1, 1)] = n_phi_g
+    return aw / rs, cell_w
+
+
+# ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 
@@ -277,6 +440,12 @@ def parse_args(argv=None):
                    "the regulariser of the near-null (early-stopping-flat) "
                    "flow directions. SCAN this (e.g. ×10 up/down) and quote "
                    "the plateau.")
+    p.add_argument("--grid-nphi", type=int, default=0,
+                   help="θ-mlp only: uniform φ bins of the fixed (η,φ) output "
+                   "grid (η = the stats η-bin centres); 0 = match the "
+                   "checkpoint's output_fisher_nphi (default 4) so the "
+                   "covariance combines with the --output-fisher file. The "
+                   "columns are EXACT — cost is linear in n_η·n_φ·n_comp.")
     p.add_argument("--cg-tol", type=float, default=1e-4,
                    help="CG relative-residual tolerance.")
     p.add_argument("--cg-max-iter-w", type=int, default=200)
@@ -307,11 +476,7 @@ def main(argv=None) -> int:
         print("error: this is a stage-1 flow checkpoint; run on fit_best.pt",
               file=sys.stderr)
         return 1
-    if getattr(model, "theta_mode", "binned") == "mlp":
-        print("error: θ-mlp output-space propagation needs the sketched "
-              "variant (exact columns over the output grid are not "
-              "affordable); binned θ only for now.", file=sys.stderr)
-        return 1
+    is_mlp = getattr(model, "theta_mode", "binned") == "mlp"
     arch = getattr(model, "flow_arch", "gf")
     if arch == "nce":
         print("error: the nce stage-1 objective (paired BCE) is not an NLL; "
@@ -326,12 +491,46 @@ def main(argv=None) -> int:
     for p in flow_params:
         p.requires_grad_(True)
     n_phi = sum(p.numel() for p in flow_params)
-    params, segs, labels, n_theta, smear_cols = _w_layout(model)
+    if is_mlp:
+        params, segs, n_net = _w_layout_mlp(model)
+        scale_cols = ([c for c in range(3)
+                       if float(model.scale_param_mask[c]) != 0.0]
+                      if model.scale_enabled else [])
+        smear_cols = (T._smear_active_cols(model)
+                      if model.smearing_enabled else [])
+    else:
+        params, segs, labels, n_theta, smear_cols = _w_layout(model)
     for p in params:
         p.requires_grad_(True)
     n_w = segs[-1][0] + segs[-1][1].numel()
-    print(f"w-space: {n_w} active ({n_theta} θ + {n_w - n_theta} background); "
-          f"φ-space: {n_phi} flow weights; arch={arch}")
+    if is_mlp:
+        # Fixed (η, φ) output grid: T_j = the θ-net outputs at the grid points
+        # in the output-fisher table layout; the chain columns are the delta-
+        # method RHS g_j = ∂T_j/∂w (zeros on the background-MLP block).
+        n_phi_g = args.grid_nphi or int(targs.get("output_fisher_nphi", 4)
+                                        or 4)
+        o_active, labels, eta_centres, phi_centres = _grid_outputs(
+            model, stats.eta_edges, n_phi_g, scale_cols, smear_cols, dev)
+        n_theta = int(o_active.numel())
+        n_eta_g = len(eta_centres)
+        n_net_tensors = sum(1 for _ in model.theta_net.parameters())
+        net_params = params[:n_net_tensors]
+        net_segs = segs[:n_net_tensors]
+        G = torch.zeros((n_theta, n_w), dtype=torch.float64, device=dev)
+        for k in range(n_theta):
+            g = torch.autograd.grad(o_active[k], net_params,
+                                    retain_graph=(k < n_theta - 1),
+                                    allow_unused=True)
+            G[k] = _pack(g, net_params, net_segs, n_w, dev)
+        del o_active
+        print(f"w-space: {n_w} active ({n_net} θ-net + {n_w - n_net} "
+              f"background); φ-space: {n_phi} flow weights; arch={arch}")
+        print(f"output grid: {n_eta_g} η × {n_phi_g} φ × "
+              f"{len(scale_cols) + len(smear_cols)} comp = {n_theta} columns "
+              f"(physical A,e,M; O(1) effective a,c)")
+    else:
+        print(f"w-space: {n_w} active ({n_theta} θ + {n_w - n_theta} "
+              f"background); φ-space: {n_phi} flow weights; arch={arch}")
 
     # ---- loaders (mirror the fit's and the flow's event selections) -------
     shard_files = discover_shards([args.shards])
@@ -478,8 +677,11 @@ def main(argv=None) -> int:
     t0 = time.time()
     cg_stats = []
     for j in range(n_theta):
-        e = torch.zeros(n_w, dtype=torch.float64, device=dev)
-        e[j] = 1.0
+        if is_mlp:
+            e = G[j]                    # delta-method RHS g_j = ∂T_j/∂w
+        else:
+            e = torch.zeros(n_w, dtype=torch.float64, device=dev)
+            e[j] = 1.0
         x, it_w, res_w = _cg(hvp_w, e, args.cg_tol, args.cg_max_iter_w,
                              label=f"w:{labels[j]}")
         u = mixed_u(x)
@@ -500,12 +702,9 @@ def main(argv=None) -> int:
                  / cov_flow.abs().max().clamp_min(1e-300))
     print(f"covariance asymmetry (CG-residual scale check): {asym:.2e}")
 
-    n_scale = model.theta_scale.numel() if model.scale_enabled else 0
-    extras = T._theta_cov_extras(cov_flow, model, smear_cols, n_scale)
     out = {
         "covariance_flow": cov_flow,
-        "labels": labels[:n_theta],
-        "n_scale": n_scale,
+        "labels": labels if is_mlp else labels[:n_theta],
         "smear_cols": smear_cols,
         "alpha1": alpha1,
         "ridge_w": args.ridge_w,
@@ -516,32 +715,116 @@ def main(argv=None) -> int:
         "cg_stats": cg_stats,
         "asymmetry": asym,
     }
-    for k, v in extras.items():
-        out[f"{k}_flow"] = v
 
-    if args.fisher and os.path.exists(args.fisher):
-        ef = torch.load(args.fisher, map_location="cpu", weights_only=False)
-        cov_d = ef["covariance"].double()
-        if cov_d.shape == cov_flow.shape:
-            cov_tot = cov_d + cov_flow
-            out["covariance_total"] = cov_tot
-            ex_t = T._theta_cov_extras(cov_tot, model, smear_cols, n_scale)
-            for k, v in ex_t.items():
-                out[f"{k}_total"] = v
-            sd = cov_d.diagonal().clamp_min(0).sqrt()
-            sf = cov_flow.diagonal().clamp_min(0).sqrt()
-            st = cov_tot.diagonal().clamp_min(0).sqrt()
-            print("\nσ budget (raw θ units): data-stat | flow | total "
-                  "(inflation)")
-            for j in range(n_theta):
-                infl = float(st[j] / sd[j].clamp_min(1e-300))
-                print(f"  {labels[j]:14s} {float(sd[j]):.3e} | "
-                      f"{float(sf[j]):.3e} | {float(st[j]):.3e}  "
-                      f"(x{infl:.2f})")
-        else:
-            print(f"warning: --fisher covariance shape {tuple(cov_d.shape)} "
-                  f"does not match the θ-active block "
-                  f"{tuple(cov_flow.shape)}; not combined", file=sys.stderr)
+    if is_mlp:
+        # ``covariance_flow`` is the active-table grid covariance (physical
+        # A,e,M; O(1) effective a,c) in the output-fisher ordering. Collapse
+        # over φ (occupancy-weighted) and emit the same per-η keys as the
+        # --output-fisher file, ``_flow`` suffix; if --fisher points at a
+        # matching output-fisher file, also write the blockwise totals.
+        aw, cell_w = _grid_phi_weights(fit_ev, n_eta_g, n_phi_g)
+        ef = None
+        if args.fisher and os.path.exists(args.fisher):
+            ef = torch.load(args.fisher, map_location="cpu",
+                            weights_only=False)
+            if (ef.get("theta_mode") != "mlp"
+                    or int(ef.get("n_phi", -1)) != n_phi_g):
+                print(f"warning: --fisher file is not an --output-fisher "
+                      f"θ-mlp file with n_phi={n_phi_g} "
+                      f"(theta_mode={ef.get('theta_mode')!r}, "
+                      f"n_phi={ef.get('n_phi')!r}); not combined",
+                      file=sys.stderr)
+                ef = None
+            else:
+                pw = ef.get("phi_weights")
+                if pw is not None and tuple(pw.shape) == (n_eta_g, n_phi_g):
+                    # Collapse with the SAME φ-weights the data file used so
+                    # the collapsed totals are exactly additive.
+                    aw = pw.double().numpy()
+        out.update({
+            "theta_mode": "mlp",
+            "n_phi": n_phi_g,
+            "scale_cols": scale_cols,
+            "eta_centres": torch.tensor(eta_centres, dtype=torch.float32),
+            "phi_centres": torch.tensor(phi_centres, dtype=torch.float32),
+            "phi_weights": torch.tensor(aw, dtype=torch.float32),
+            "cell_w": torch.tensor(cell_w, dtype=torch.float32),
+            "param_space": ("2-D (η,φ) θ-table outputs "
+                            "(physical A,e,M; O(1) a,c)"),
+        })
+        out.update(_mlp_grid_keys(cov_flow.numpy(), n_eta_g, n_phi_g,
+                                  scale_cols, smear_cols, aw,
+                                  suffix="_flow"))
+        if ef is not None:
+            for k in ("covariance_24_3_24_3", "covariance_scale_2d",
+                      "covariance_smear_24_2_24_2", "covariance_smear_2d"):
+                kf = f"{k}_flow"
+                if (k in ef and kf in out
+                        and tuple(ef[k].shape) == tuple(out[kf].shape)):
+                    out[f"{k}_total"] = (ef[k].double()
+                                         + out[kf].double()).float()
+            comp_s, comp_c = ("A", "e", "M"), ("a", "c")
+            if "covariance_24_3_24_3_total" in out:
+                ct = out["covariance_24_3_24_3_total"].double().numpy()
+                out["sigma_scale_24_3_total"] = torch.sqrt(torch.clamp(
+                    torch.tensor(np.einsum("icic->ic", ct)), min=0.0)).float()
+            if "covariance_smear_24_2_24_2_total" in out:
+                ct = out["covariance_smear_24_2_24_2_total"].double().numpy()
+                out["sigma_smear_eff_24_2_total"] = torch.sqrt(torch.clamp(
+                    torch.tensor(np.einsum("icic->ic", ct)), min=0.0)).float()
+            print("\nσ budget (per-η φ-mean, median over η): "
+                  "data-stat | flow | total (inflation)")
+
+            def _budget_row(name, sd, sf, st):
+                d, f, t = (float(np.median(x)) for x in (sd, sf, st))
+                print(f"  {name:3s} {d:.3e} | {f:.3e} | {t:.3e}  "
+                      f"(x{t / max(d, 1e-300):.2f})")
+
+            if "sigma_scale_24_3_total" in out and "sigma_scale_24_3" in ef:
+                for c in scale_cols:
+                    _budget_row(comp_s[c],
+                                ef["sigma_scale_24_3"].numpy()[:, c],
+                                out["sigma_scale_24_3_flow"].numpy()[:, c],
+                                out["sigma_scale_24_3_total"].numpy()[:, c])
+            if ("sigma_smear_eff_24_2_total" in out
+                    and "sigma_smear_eff_24_2" in ef):
+                for c in smear_cols:
+                    _budget_row(comp_c[c],
+                                ef["sigma_smear_eff_24_2"].numpy()[:, c],
+                                out["sigma_smear_eff_24_2_flow"].numpy()[:, c],
+                                out["sigma_smear_eff_24_2_total"].numpy()[:, c])
+    else:
+        n_scale = model.theta_scale.numel() if model.scale_enabled else 0
+        out["n_scale"] = n_scale
+        extras = T._theta_cov_extras(cov_flow, model, smear_cols, n_scale)
+        for k, v in extras.items():
+            out[f"{k}_flow"] = v
+
+        if args.fisher and os.path.exists(args.fisher):
+            ef = torch.load(args.fisher, map_location="cpu",
+                            weights_only=False)
+            cov_d = ef["covariance"].double()
+            if cov_d.shape == cov_flow.shape:
+                cov_tot = cov_d + cov_flow
+                out["covariance_total"] = cov_tot
+                ex_t = T._theta_cov_extras(cov_tot, model, smear_cols, n_scale)
+                for k, v in ex_t.items():
+                    out[f"{k}_total"] = v
+                sd = cov_d.diagonal().clamp_min(0).sqrt()
+                sf = cov_flow.diagonal().clamp_min(0).sqrt()
+                st = cov_tot.diagonal().clamp_min(0).sqrt()
+                print("\nσ budget (raw θ units): data-stat | flow | total "
+                      "(inflation)")
+                for j in range(n_theta):
+                    infl = float(st[j] / sd[j].clamp_min(1e-300))
+                    print(f"  {labels[j]:14s} {float(sd[j]):.3e} | "
+                          f"{float(sf[j]):.3e} | {float(st[j]):.3e}  "
+                          f"(x{infl:.2f})")
+            else:
+                print(f"warning: --fisher covariance shape "
+                      f"{tuple(cov_d.shape)} does not match the θ-active "
+                      f"block {tuple(cov_flow.shape)}; not combined",
+                      file=sys.stderr)
 
     out_path = args.output or os.path.join(
         os.path.dirname(os.path.abspath(args.checkpoint)),
