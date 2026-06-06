@@ -4868,10 +4868,11 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         help="Data-branch background model on the observed window: "
         "'bernstein' = positive degree-(--bkg-degree) Bernstein mixture "
         "(degree+1 conditioning-dependent fractions from the MLP); 'exp' = "
-        "window-normalised exponential with ONE fraction plus a single "
-        "fitted dimensionless slope s = lambda*width (signed; s=0 init = "
-        "uniform; the slope parameter lives on the MLP module so it joins "
-        "the background optimiser group / Fisher automatically).")
+        "window-normalised exponential with ONE fraction plus a "
+        "CONDITIONING-DEPENDENT dimensionless slope s(c) = lambda(c)*width "
+        "(signed; an extra unconstrained MLP head sharing the body with the "
+        "fractions — zero-initialised, so s(c)=0 = uniform at the start; "
+        "joins the background optimiser group / Fisher automatically).")
     p.add_argument(
         "--bkg-degree", type=int, default=1,
         help="Bernstein background degree (>=1; --bkg-model bernstein only). "

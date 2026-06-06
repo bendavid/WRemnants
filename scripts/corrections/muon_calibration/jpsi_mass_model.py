@@ -429,7 +429,8 @@ def bernstein_basis_n(mll: torch.Tensor, m_lo: float, m_hi: float,
 def exp_bkg_density(mll: torch.Tensor, m_lo: float, m_hi: float,
                     slope: torch.Tensor) -> torch.Tensor:
     """Window-normalised EXPONENTIAL background density, parameterised by the
-    DIMENSIONLESS slope ``s`` (= λ·width, the fitted raw parameter):
+    DIMENSIONLESS slope ``s`` (= λ·width; scalar or per-event [..] tensor —
+    the conditioning-dependent MLP head):
 
         p(m) = s·e^{−s·u} / (width·(1 − e^{−s})),  u = (m − m_lo)/width,
 
@@ -583,27 +584,43 @@ class MixtureMLP(nn.Module):
     function of the conditioning — SIGNAL LAST (``f[:, -1]``; for the
     historical degree-1 Bernstein this is the (f_0, f_1, f_s) 3-way softmax).
     ``n_frac`` = number of background components + 1. With ``exp_slope`` the
-    module additionally carries the scalar dimensionless slope parameter of
-    the exponential background (kept ON the MLP module so every
+    final layer carries one extra UNCONSTRAINED output: the
+    conditioning-dependent dimensionless slope s(c) = λ(c)·width of the
+    exponential background (sharing the MLP body with the fractions, so every
     "background parameters" collection — optimiser group, Fisher, freezing —
-    picks it up automatically)."""
+    covers it automatically)."""
 
     def __init__(self, n_input: int = N_MUON_KIN, hidden: int = 32,
                  n_layers: int = 2, n_frac: int = 3, exp_slope: bool = False):
         super().__init__()
+        self.n_frac = int(n_frac)
+        self.exp_slope = bool(exp_slope)
         layers: list[nn.Module] = []
         d_in = n_input
         for _ in range(n_layers):
             layers += [nn.Linear(d_in, hidden), nn.GELU()]
             d_in = hidden
-        layers.append(nn.Linear(d_in, int(n_frac)))
+        layers.append(nn.Linear(d_in, self.n_frac + (1 if exp_slope else 0)))
         self.net = nn.Sequential(*layers)
         if exp_slope:
-            # s = λ·width (dimensionless); init 0 → uniform background.
-            self.bkg_slope = nn.Parameter(torch.zeros(()))
+            # The slope head s(c) = λ(c)·width (dimensionless, signed,
+            # UNconstrained — no softmax) shares the MLP body with the
+            # fractions. Zero-init its final-layer row so s(c) ≡ 0 at init
+            # (uniform background), matching the fractions' near-uniform
+            # softmax start.
+            with torch.no_grad():
+                self.net[-1].weight[-1].zero_()
+                self.net[-1].bias[-1].zero_()
 
     def forward(self, y_std: torch.Tensor) -> torch.Tensor:
-        return F.softmax(self.net(y_std), dim=-1)
+        out = self.net(y_std)
+        return F.softmax(out[..., :self.n_frac], dim=-1)
+
+    def forward_with_slope(self, y_std: torch.Tensor):
+        """(fractions [.., n_frac], slope s(c) [..]) in ONE body evaluation —
+        the exp-background hot path."""
+        out = self.net(y_std)
+        return F.softmax(out[..., :self.n_frac], dim=-1), out[..., -1]
 
 
 class ThetaNet(nn.Module):
@@ -818,8 +835,9 @@ class JpsiMassMixtureModel(nn.Module):
         # Background model on the observed window: 'bernstein' = positive
         # degree-`bkg_degree` Bernstein mixture (bkg_degree+1 fractions from
         # the MLP; degree 1 is the historical default); 'exp' = window-
-        # normalised exponential with ONE fraction and a fitted dimensionless
-        # slope s = lambda*width (carried on the MLP module).
+        # normalised exponential with ONE fraction plus a CONDITIONING-
+        # DEPENDENT dimensionless slope s(c) = lambda(c)*width — an extra
+        # unconstrained MLP head sharing the body with the fractions.
         bkg_model: str = "bernstein",
         bkg_degree: int = 1,
         # Smear-Jacobian formula for the continuity density. 'softlog' (default):
@@ -2781,11 +2799,13 @@ class JpsiMassMixtureModel(nn.Module):
                 m, mk, pt, eta, phi, q, b, n_iter=n_iter)
             log_ps = log_ps - log_Z
         if self.background_enabled:
-            f = self.f_data(mk)                       # [n_d, n_bkg+1], signal LAST
             if self.bkg_model == "exp":
+                # fractions + conditioning-dependent slope in one MLP pass
+                f, s_bkg = self.mlp.forward_with_slope(mk)
                 p_bkg = f[:, 0] * exp_bkg_density(
-                    m, self._m_lo_f, self._m_hi_f, self.mlp.bkg_slope)
+                    m, self._m_lo_f, self._m_hi_f, s_bkg)
             else:
+                f = self.f_data(mk)                   # [n_d, n_bkg+1], signal LAST
                 basis = bernstein_basis_n(
                     m, self._m_lo_f, self._m_hi_f, self.bkg_degree)
                 p_bkg = (f[:, :-1] * basis).sum(-1)

@@ -413,7 +413,7 @@ def _continuity_mc_fold(model, ptm, etam, phim, qm, bm):
 N_PHI_BKG_BINS = 16
 
 
-def _accum_bkg_frac(acc, f, w, b_pm, phi_pm, label):
+def _accum_bkg_frac(acc, f, w, b_pm, phi_pm, label, slope=None):
     """Accumulate the background-fraction closure sums per η bin (via the
     loader's b_pm index) and per φ bin (``N_PHI_BKG_BINS`` uniform over
     [−π, π]): columns = (Σw, Σw·f_k for each background component,
@@ -428,6 +428,8 @@ def _accum_bkg_frac(acc, f, w, b_pm, phi_pm, label):
             + [1.0 - f_np[:, -1],
                (lab_np == 1).astype(np.float64),
                (lab_np == 2).astype(np.float64)])
+    if slope is not None:   # exp model: Σw·s(c) for the per-bin mean slope
+        cols.append(slope.detach().cpu().numpy().astype(np.float64))
     vals = np.stack(cols, axis=1) * w_np[:, None]
     b_np = b_pm.detach().cpu().numpy()
     phi_np = phi_pm.detach().cpu().numpy()
@@ -523,6 +525,7 @@ def evaluate_predictions(
 
     out = {
         "mll_data": [], "w_data": [], "eta_data": [], "f_data": [],
+        "bkg_slope_data": [],
         "pred_signal_data": [],
         "mll_mc_fold": [], "w_mc": [], "eta_mc": [],
         "pred_signal_mc": [],
@@ -561,8 +564,10 @@ def evaluate_predictions(
     # Columns: Σw, Σw·f_k (one per background component), Σw·f_bkg_total,
     # Σw·[label==1], Σw·[label==2].
     _nbk = int(getattr(model, "n_bkg_comp", 2))
-    bkg_acc = {"eta": np.zeros((model.theta_scale.shape[0], _nbk + 4)),
-               "phi": np.zeros((N_PHI_BKG_BINS, _nbk + 4))}
+    _nac = _nbk + 4 + (1 if getattr(model, "bkg_model", "bernstein") == "exp"
+                       else 0)   # exp: + Σw·s(c) column (LAST)
+    bkg_acc = {"eta": np.zeros((model.theta_scale.shape[0], _nac)),
+               "phi": np.zeros((N_PHI_BKG_BINS, _nac))}
 
     total_events = 0
     bar = tqdm(loader, desc="eval", disable=not progress, unit="batch")
@@ -582,8 +587,13 @@ def evaluate_predictions(
 
             if bool(data_sel.any()):
                 data_idx = data_sel.nonzero(as_tuple=True)[0]
+                _slope_d = None
                 if getattr(model, "background_enabled", True):
-                    f = model.f_data(batch["cond_std"][data_idx])  # [n_data, 3]
+                    if getattr(model, "bkg_model", "bernstein") == "exp":
+                        f, _slope_d = model.mlp.forward_with_slope(
+                            batch["cond_std"][data_idx])
+                    else:
+                        f = model.f_data(batch["cond_std"][data_idx])
                 else:
                     # --no-background: data branch is pure signal. The MLP is
                     # bypassed in data_nll_continuity; mirror that here so the
@@ -601,7 +611,8 @@ def evaluate_predictions(
                                         device=data_idx.device))
                     _accum_bkg_frac(bkg_acc, f, batch["w"][data_idx],
                                     batch["b_pm"][data_idx],
-                                    batch["phi_pm"][data_idx], _lab)
+                                    batch["phi_pm"][data_idx], _lab,
+                                    slope=_slope_d)
                 # Signal density at every bin centre for every data event at the
                 # fitted θ: tilt (continuity) or θ-conditioned flow (legacy).
                 log_p_grid = _sig_grid(data_idx)  # [n_data, n_grid] log-density (1/GeV)
@@ -614,6 +625,8 @@ def evaluate_predictions(
                 for _k in _tkeys:
                     out[f"sl_{_k}_data"].append(_sv_d[_k])
                 out["f_data"].append(f.cpu().numpy())
+                if _slope_d is not None:
+                    out["bkg_slope_data"].append(_slope_d.detach().cpu().numpy())
                 out["pred_signal_data"].append(log_p_grid.exp().cpu().numpy())
 
             if bool(mc_sel.any()):
@@ -728,30 +741,42 @@ def _bernstein_bin_integrals(m_lo: float, m_hi: float, m_edges: np.ndarray):
 
 
 def _bkg_bin_integrals_model(model, m_edges: np.ndarray) -> np.ndarray:
-    """Per-component ``∫_bin p_k(m) dm`` for the ACTIVE background model —
-    degree-n Bernstein components or the fitted-slope exponential — by
+    """Per-component ``∫_bin p_k(m) dm`` for the BERNSTEIN background by
     composite trapezoid on a 32-point subgrid per bin (plot-precision exact).
-    Returns ``[n_bkg_comp, n_bins]``."""
+    Returns ``[n_bkg_comp, n_bins]``. The exp model's per-EVENT slope makes
+    its bin contents event-dependent — handled by the closed-form CDF in
+    ``_model_pred_histograms`` instead (returns zeros here)."""
     n_bins = len(m_edges) - 1
     n_bkg = int(getattr(model, "n_bkg_comp", 2))
     out = np.zeros((n_bkg, n_bins))
-    if not getattr(model, "background_enabled", True):
+    if (not getattr(model, "background_enabled", True)
+            or getattr(model, "bkg_model", "bernstein") == "exp"):
         return out
     n_sub = 32
     for j in range(n_bins):
         g = torch.linspace(float(m_edges[j]), float(m_edges[j + 1]), n_sub + 1,
                            dtype=torch.float64)
         with torch.no_grad():
-            if getattr(model, "bkg_model", "bernstein") == "exp":
-                pk = exp_bkg_density(
-                    g, model._m_lo_f, model._m_hi_f,
-                    model.mlp.bkg_slope.detach().double().cpu()).unsqueeze(0)
-            else:
-                pk = bernstein_basis_n(
-                    g, model._m_lo_f, model._m_hi_f,
-                    int(getattr(model, "bkg_degree", 1))).T
+            pk = bernstein_basis_n(
+                g, model._m_lo_f, model._m_hi_f,
+                int(getattr(model, "bkg_degree", 1))).T
         out[:, j] = np.trapz(pk.numpy(), g.numpy(), axis=1)
     return out
+
+
+def _exp_bin_fractions_np(u_edges: np.ndarray, slopes: np.ndarray) -> np.ndarray:
+    """Closed-form per-event exp-background bin fractions
+    ``F(u_{j+1}; s_e) − F(u_j; s_e)`` with ``F(u; s) = (1−e^{−s·u})/(1−e^{−s})``
+    (window CDF), stable through s → 0 via ``F ≈ u·(1 + s(1−u)/2)``.
+    ``u_edges [n_bins+1]``, ``slopes [n_e]`` → ``[n_e, n_bins]``."""
+    s = slopes[:, None]
+    u = u_edges[None, :]
+    small = np.abs(s) < 1e-4
+    s_safe = np.where(small, 1.0, s)
+    F_exact = -np.expm1(-s_safe * u) / (-np.expm1(-s_safe))
+    F_small = u * (1.0 + s * (1.0 - u) / 2.0)
+    F = np.where(small, F_small, F_exact)
+    return np.diff(F, axis=1)
 
 
 def _model_pred_histograms(
@@ -779,13 +804,21 @@ def _model_pred_histograms(
         pred = evals["pred_signal_data"][slice_mask_data]  # [n_d, n_bins]
         weights = (w_d * f_d[:, -1])[:, None]  # [n_d, 1]
         sig = bin_width * (pred * weights).sum(axis=0)
-        sum_fk_w = (w_d[:, None] * f_d[:, :-1]).sum(axis=0)   # [n_bkg]
-        I = evals.get("bkg_bin_integrals")
-        if I is not None and I.shape[0] == sum_fk_w.shape[0]:
-            bkg = (sum_fk_w[:, None] * I).sum(axis=0)
-        else:  # legacy fallback: degree-1 closed form
-            I0, I1 = _bernstein_bin_integrals(m_lo, m_hi, m_edges)
-            bkg = sum_fk_w[0] * I0 + (sum_fk_w[1] * I1 if len(sum_fk_w) > 1 else 0.0)
+        slopes = np.asarray(evals.get("bkg_slope_data", np.zeros(0)))
+        if slopes.size == evals["mll_data"].size and slopes.size > 0:
+            # exp model (per-event slope array parallel to the data events):
+            # closed-form per-event bin fractions × fraction weights.
+            u_edges = (np.asarray(m_edges) - m_lo) / (m_hi - m_lo)
+            dF = _exp_bin_fractions_np(u_edges, slopes[slice_mask_data])
+            bkg = ((w_d * f_d[:, 0])[:, None] * dF).sum(axis=0)
+        else:
+            sum_fk_w = (w_d[:, None] * f_d[:, :-1]).sum(axis=0)   # [n_bkg]
+            I = evals.get("bkg_bin_integrals")
+            if I is not None and I.shape[0] == sum_fk_w.shape[0]:
+                bkg = (sum_fk_w[:, None] * I).sum(axis=0)
+            else:  # legacy fallback: degree-1 closed form
+                I0, I1 = _bernstein_bin_integrals(m_lo, m_hi, m_edges)
+                bkg = sum_fk_w[0] * I0 + (sum_fk_w[1] * I1 if len(sum_fk_w) > 1 else 0.0)
 
     return sig, bkg
 
@@ -1410,7 +1443,7 @@ def plot_mc_closure(
 
 
 def plot_bkg_fractions(agg, eta_edges, output_dir, inject_bkg=None,
-                       bkg_model="bernstein", bkg_slope=None):
+                       bkg_model="bernstein"):
     """Background-fraction closure vs η and vs φ: the Σw-weighted per-bin
     means of the fitted MLP background components (and their TOTAL), filled
     PER MUON over the data-branch events, overlaid with the EMPIRICAL
@@ -1420,10 +1453,12 @@ def plot_bkg_fractions(agg, eta_edges, output_dir, inject_bkg=None,
     degree-1 Bernstein model, whose components match the injection's; for
     higher degrees / 'exp' the TOTAL closure is the meaningful comparison.
     Accumulator columns: (Σw, Σw·f_k…, Σw·f_bkg_tot, Σw·[lab==1],
-    Σw·[lab==2]). Writes bkg_fraction_eta and bkg_fraction_phi."""
+    Σw·[lab==2][, Σw·s(c) for 'exp' — drawn as the per-bin mean slope on a
+    twin axis]). Writes bkg_fraction_eta and bkg_fraction_phi."""
     import matplotlib.pyplot as plt
     eta_edges = np.asarray(eta_edges, dtype=float)
-    n_bkg = agg["eta"].shape[1] - 4
+    has_slope = (bkg_model == "exp")
+    n_bkg = agg["eta"].shape[1] - 4 - (1 if has_slope else 0)
     comp_refs = (bkg_model == "bernstein" and n_bkg == 2)
     for tag, acc, centers, xlabel in (
             ("eta", agg["eta"], 0.5 * (eta_edges[:-1] + eta_edges[1:]), r"$\eta_\mu$"),
@@ -1433,7 +1468,8 @@ def plot_bkg_fractions(agg, eta_edges, output_dir, inject_bkg=None,
         sw = np.clip(acc[:, 0], 1e-30, None)
         fk = acc[:, 1:1 + n_bkg] / sw[:, None]
         ftot = acc[:, 1 + n_bkg] / sw
-        e0m, e1m = acc[:, -2] / sw, acc[:, -1] / sw
+        lab_off = 2 + n_bkg
+        e0m, e1m = acc[:, lab_off] / sw, acc[:, lab_off + 1] / sw
         etot = e0m + e1m
         err = lambda p: np.sqrt(np.clip(p * (1 - p), 0, None)
                                 / np.clip(sw, 1, None))
@@ -1447,7 +1483,7 @@ def plot_bkg_fractions(agg, eta_edges, output_dir, inject_bkg=None,
                     color=comp_colors[k % len(comp_colors)], label=lab)
         ax.plot(centers, ftot, "k^-", ms=4, lw=1.4,
                 label=r"fitted $\langle f_{bkg}\rangle$ (total)")
-        has_inj = bool(acc[:, -2].sum() > 0 or acc[:, -1].sum() > 0)
+        has_inj = bool(acc[:, lab_off].sum() > 0 or acc[:, lab_off + 1].sum() > 0)
         if has_inj:
             if comp_refs:
                 ax.errorbar(centers, e0m, yerr=err(e0m), fmt=".", color="C0",
@@ -1466,10 +1502,19 @@ def plot_bkg_fractions(agg, eta_edges, output_dir, inject_bkg=None,
         ax.set_ylabel("background fraction")
         ax.set_ylim(bottom=0.0)
         ax.legend(fontsize=8, ncol=2)
+        if has_slope:
+            ax2 = ax.twinx()
+            ax2.plot(centers, acc[:, -1] / sw, color="0.4", ls="-.", lw=1.2,
+                     label=r"fitted $\langle s(c)\rangle$")
+            ax2.set_ylabel("exp slope s = λ·width", color="0.35", fontsize=9)
+            ax2.tick_params(axis="y", labelcolor="0.35")
+            h2, l2 = ax2.get_legend_handles_labels()
+            h1, l1 = ax.get_legend_handles_labels()
+            ax.legend(h1 + h2, l1 + l2, fontsize=8, ncol=2)
         ttl = "background-fraction closure (per-muon filled, data branch)"
-        if bkg_model == "exp" and bkg_slope is not None:
-            ttl += f"  [exp, fitted s = {bkg_slope:+.3f}]"
-        elif bkg_model == "bernstein" and not (n_bkg == 2):
+        if bkg_model == "exp":
+            ttl += "  [exp: fraction + conditioning-dependent slope]"
+        elif bkg_model == "bernstein" and n_bkg > 2:
             ttl += f"  [bernstein deg {n_bkg - 1}]"
         ax.set_title(ttl, fontsize=10)
         fig.tight_layout()
@@ -2707,12 +2752,9 @@ def main() -> int:
     print("plotting MC closure...")
     plot_mc_closure(evals, m_centers_np, eta_slice_edges, out_dir)
     if getattr(model, "background_enabled", True) and "bkg_frac" in evals:
-        _slope = (float(model.mlp.bkg_slope.detach())
-                  if getattr(model, "bkg_model", "bernstein") == "exp" else None)
         plot_bkg_fractions(evals["bkg_frac"], stats.eta_edges, out_dir,
                            inject_bkg=inject_bkg_np,
-                           bkg_model=getattr(model, "bkg_model", "bernstein"),
-                           bkg_slope=_slope)
+                           bkg_model=getattr(model, "bkg_model", "bernstein"))
 
     # Plot 7: parameter-sensitivity slices — model density at ±shifts of each
     # fitted param, in conditional slices chosen to break degeneracies.
