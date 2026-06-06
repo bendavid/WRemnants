@@ -2122,9 +2122,36 @@ def train_stage2(args, model, train_loader, val_loader, stats,
             dt_t = _model_dtype(model) or torch.float32
             for ng_warm in {1, int(args.n_gh_nodes)}:
                 _gh_nodes(ng_warm, dev_t, dt_t)
-            nll_fn = torch.compile(model.data_nll_continuity, fullgraph=False)
-            print("  --fit-compile: torch.compile(data_nll_continuity, "
-                  "fullgraph=False) — first epoch includes compilation")
+            compiled_nll = torch.compile(model.data_nll_continuity,
+                                         fullgraph=False)
+            # EVENT-LEVEL chunking OUTSIDE the compiled region. The eager
+            # _flow_eval_chunked cap is bypassed under compile (its python
+            # loop would shape-specialise → per-batch recompiles), so a large
+            # --fit-batch-size would otherwise flatten B·n_gh² rows into one
+            # compiled graph and OOM on the planned buffers (observed at
+            # batch 524288 × 16 GH nodes → 7M-row activations). Slicing the
+            # batch into FIXED-size event chunks keeps the per-call peak
+            # bounded exactly like eager chunking, with static shapes (one
+            # compile for the full chunk + one dynamic compile for the
+            # remainder). The per-event NLL is row-independent → exact.
+            fc_chunk = int(getattr(args, "fit_compile_chunk", 65536) or 0)
+
+            def nll_fn(mll, pt, eta, phi, q, b, cond, mask, n_iter=2):
+                n = mll.shape[0]
+                if fc_chunk <= 0 or n <= fc_chunk:
+                    return compiled_nll(mll, pt, eta, phi, q, b, cond, mask,
+                                        n_iter=n_iter)
+                return torch.cat([
+                    compiled_nll(mll[i:i + fc_chunk], pt[i:i + fc_chunk],
+                                 eta[i:i + fc_chunk], phi[i:i + fc_chunk],
+                                 q[i:i + fc_chunk], b[i:i + fc_chunk],
+                                 cond[i:i + fc_chunk], mask[i:i + fc_chunk],
+                                 n_iter=n_iter)
+                    for i in range(0, n, fc_chunk)])
+
+            print(f"  --fit-compile: torch.compile(data_nll_continuity, "
+                  f"fullgraph=False), event chunk {fc_chunk or 'off'} — "
+                  f"first epoch includes compilation")
 
     def step2(model, batch):
         # In validation mode the simulation rows play the role of data.
@@ -4719,6 +4746,16 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         "breaks (fullgraph=False). Trust-region drivers are skipped (they "
         "build their own float64 objective). First fit batches include "
         "one-off compilation.",
+    )
+    p.add_argument(
+        "--fit-compile-chunk", type=int, default=65536,
+        help="(--fit-compile) Event-chunk size for the compiled stage-2 "
+        "objective: the batch is sliced OUTSIDE the compiled region so the "
+        "per-call B·n_gh² activation peak stays bounded like eager mode's "
+        "internal chunking (which is bypassed under compile — its python "
+        "loop would shape-specialise and recompile every batch). 0 disables "
+        "(whole batch in one compiled call — only safe for small "
+        "--fit-batch-size).",
     )
     p.add_argument(
         "--precision", choices=("fp32", "fp64", "bf16", "fp16"), default="fp32",
