@@ -399,6 +399,56 @@ def bernstein_d1(
     return p0, p1
 
 
+_BKG_BINOM_CACHE: dict = {}
+
+
+def bernstein_basis_n(mll: torch.Tensor, m_lo: float, m_hi: float,
+                      degree: int) -> torch.Tensor:
+    """Degree-n Bernstein basis DENSITIES on ``[m_lo, m_hi]``, each ∫ = 1:
+
+        p_i(m) = (n+1)·C(n,i)·u^i·(1−u)^{n−i} / width,  i = 0..n.
+
+    Returns ``[..., n+1]`` in 1/GeV (mixture-compatible with the signal
+    density). degree=1 reproduces ``bernstein_d1``. The binomial row is
+    cached per (degree, device, dtype) — pre-warm under torch.compile (the
+    miss branch is an untraceable constant build, same pattern as
+    ``_gh_nodes``)."""
+    key = (int(degree), str(mll.device), str(mll.dtype))
+    if key not in _BKG_BINOM_CACHE:
+        import math as _math
+        _BKG_BINOM_CACHE[key] = (
+            torch.tensor([_math.comb(degree, k) for k in range(degree + 1)],
+                         device=mll.device, dtype=mll.dtype),
+            torch.arange(degree + 1, device=mll.device, dtype=mll.dtype))
+    binom, k = _BKG_BINOM_CACHE[key]
+    width = m_hi - m_lo
+    u = ((mll - m_lo) / width).unsqueeze(-1).clamp(0.0, 1.0)
+    return ((degree + 1.0) / width) * binom * u.pow(k) * (1.0 - u).pow(degree - k)
+
+
+def exp_bkg_density(mll: torch.Tensor, m_lo: float, m_hi: float,
+                    slope: torch.Tensor) -> torch.Tensor:
+    """Window-normalised EXPONENTIAL background density, parameterised by the
+    DIMENSIONLESS slope ``s`` (= λ·width, the fitted raw parameter):
+
+        p(m) = s·e^{−s·u} / (width·(1 − e^{−s})),  u = (m − m_lo)/width,
+
+    signed (s > 0 falls with mass, s < 0 rises), ∫_window = 1 exactly for any
+    s. The s → 0 limit is the uniform density 1/width — taken through a
+    2nd-order expansion below |s| < 1e-4 (the exact form is 0/0 there; the
+    expansion keeps the s-gradient alive through the limit, unlike a
+    where-switch to a constant)."""
+    width = m_hi - m_lo
+    u = ((mll - m_lo) / width).clamp(0.0, 1.0)
+    small = slope.abs() < 1e-4
+    s_safe = torch.where(small, torch.ones_like(slope), slope)
+    p_exact = s_safe * torch.exp(-s_safe * u) / (-torch.expm1(-s_safe) * width)
+    # p(u; s) = (1/width)·(1 + s·(½ − u) + s²·(u²/2 − u/2 + 1/12) + O(s³))
+    p_small = (1.0 + slope * (0.5 - u)
+               + slope * slope * (0.5 * u * u - 0.5 * u + 1.0 / 12.0)) / width
+    return torch.where(small, p_small, p_exact)
+
+
 # ---------------------------------------------------------------------------
 # Event-level kinematic helpers (autograd-friendly)
 # ---------------------------------------------------------------------------
@@ -529,17 +579,28 @@ def _event_cond_raw(
 
 
 class MixtureMLP(nn.Module):
-    """3-way softmax over (f_0, f_1, f_s) as a function of ``muon_kin_std``."""
+    """Softmax mixture fractions (f_bkg_0, …, f_bkg_{n−1}, f_signal) as a
+    function of the conditioning — SIGNAL LAST (``f[:, -1]``; for the
+    historical degree-1 Bernstein this is the (f_0, f_1, f_s) 3-way softmax).
+    ``n_frac`` = number of background components + 1. With ``exp_slope`` the
+    module additionally carries the scalar dimensionless slope parameter of
+    the exponential background (kept ON the MLP module so every
+    "background parameters" collection — optimiser group, Fisher, freezing —
+    picks it up automatically)."""
 
-    def __init__(self, n_input: int = N_MUON_KIN, hidden: int = 32, n_layers: int = 2):
+    def __init__(self, n_input: int = N_MUON_KIN, hidden: int = 32,
+                 n_layers: int = 2, n_frac: int = 3, exp_slope: bool = False):
         super().__init__()
         layers: list[nn.Module] = []
         d_in = n_input
         for _ in range(n_layers):
             layers += [nn.Linear(d_in, hidden), nn.GELU()]
             d_in = hidden
-        layers.append(nn.Linear(d_in, 3))
+        layers.append(nn.Linear(d_in, int(n_frac)))
         self.net = nn.Sequential(*layers)
+        if exp_slope:
+            # s = λ·width (dimensionless); init 0 → uniform background.
+            self.bkg_slope = nn.Parameter(torch.zeros(()))
 
     def forward(self, y_std: torch.Tensor) -> torch.Tensor:
         return F.softmax(self.net(y_std), dim=-1)
@@ -754,6 +815,13 @@ class JpsiMassMixtureModel(nn.Module):
         # where the MLP grows f_bkg in forward |η| bins to absorb tail
         # events the signal model can't broaden into.
         background_enabled: bool = True,
+        # Background model on the observed window: 'bernstein' = positive
+        # degree-`bkg_degree` Bernstein mixture (bkg_degree+1 fractions from
+        # the MLP; degree 1 is the historical default); 'exp' = window-
+        # normalised exponential with ONE fraction and a fitted dimensionless
+        # slope s = lambda*width (carried on the MLP module).
+        bkg_model: str = "bernstein",
+        bkg_degree: int = 1,
         # Smear-Jacobian formula for the continuity density. 'softlog' (default):
         # autograd-derived G' = dx/dm' of the actual forward map, with a C¹
         # tangent extension below SMEAR_GP_FLOOR so the optimiser is pulled BACK
@@ -953,10 +1021,21 @@ class JpsiMassMixtureModel(nn.Module):
             )
             self.flow = FlowWithLogProb(flow_inner)
 
+        # Background model: 'bernstein' (degree-n positive mixture, n+1
+        # components) or 'exp' (one fraction + a fitted dimensionless slope).
+        # Signal fraction is always the LAST softmax output.
+        if bkg_model not in ("bernstein", "exp"):
+            raise ValueError(f"bkg_model must be 'bernstein' or 'exp', got {bkg_model.__repr__()}")
+        if bkg_model == "bernstein" and int(bkg_degree) < 1:
+            raise ValueError("bkg_degree must be >= 1")
+        self.bkg_model = str(bkg_model)
+        self.bkg_degree = int(bkg_degree)
+        self.n_bkg_comp = 1 if bkg_model == "exp" else self.bkg_degree + 1
         # Background-fraction MLP conditions on the same kinematics as the
         # flow (muon_kin), minus the nuisances.
         self.mlp = MixtureMLP(
-            n_input=N_MUON_KIN, hidden=mlp_hidden, n_layers=mlp_n_layers
+            n_input=N_MUON_KIN, hidden=mlp_hidden, n_layers=mlp_n_layers,
+            n_frac=self.n_bkg_comp + 1, exp_slope=(bkg_model == "exp")
         )
 
         # Learnable nuisances.
@@ -2702,9 +2781,15 @@ class JpsiMassMixtureModel(nn.Module):
                 m, mk, pt, eta, phi, q, b, n_iter=n_iter)
             log_ps = log_ps - log_Z
         if self.background_enabled:
-            f = self.f_data(mk)
-            p0b, p1b = bernstein_d1(m, self._m_lo_f, self._m_hi_f)
-            p_mix = f[:, 0] * p0b + f[:, 1] * p1b + f[:, 2] * log_ps.exp()
+            f = self.f_data(mk)                       # [n_d, n_bkg+1], signal LAST
+            if self.bkg_model == "exp":
+                p_bkg = f[:, 0] * exp_bkg_density(
+                    m, self._m_lo_f, self._m_hi_f, self.mlp.bkg_slope)
+            else:
+                basis = bernstein_basis_n(
+                    m, self._m_lo_f, self._m_hi_f, self.bkg_degree)
+                p_bkg = (f[:, :-1] * basis).sum(-1)
+            p_mix = p_bkg + f[:, -1] * log_ps.exp()
             per_data = -torch.log(p_mix.clamp_min(eps))
         else:
             # Background disabled (validation closure mode): the data branch

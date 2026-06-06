@@ -974,6 +974,8 @@ def _build_model(args, stats, device):
         smear_param_form=getattr(args, "smear_param_form", "linear"),
         norm_correction=getattr(args, "norm_correction", "none"),
         background_enabled=not getattr(args, "no_background", False),
+        bkg_model=getattr(args, "bkg_model", "bernstein"),
+        bkg_degree=int(getattr(args, "bkg_degree", 1)),
         theta_mode=("mlp" if getattr(args, "theta_mlp", False) else "binned"),
         cond_basis=getattr(args, "cond_basis", "muon_kin"),
         theta_mlp_hidden=getattr(args, "theta_mlp_hidden", 32),
@@ -2117,11 +2119,15 @@ def train_stage2(args, model, train_loader, val_loader, stats,
             # operator will request: with the cache populated, dynamo traces
             # only the dict hit (the numpy hermgauss cache-miss branch is an
             # untraceable call → a needless graph break on the first batch).
-            from jpsi_mass_model import _gh_nodes
+            from jpsi_mass_model import _gh_nodes, bernstein_basis_n
             dev_t = next(model.parameters()).device
             dt_t = _model_dtype(model) or torch.float32
             for ng_warm in {1, int(args.n_gh_nodes)}:
                 _gh_nodes(ng_warm, dev_t, dt_t)
+            if model.background_enabled and model.bkg_model == "bernstein":
+                # warm the binomial-row cache too (same miss-branch break)
+                bernstein_basis_n(torch.zeros(1, device=dev_t, dtype=dt_t),
+                                  model._m_lo_f, model._m_hi_f, model.bkg_degree)
             compiled_nll = torch.compile(model.data_nll_continuity,
                                          fullgraph=False)
             # EVENT-LEVEL chunking OUTSIDE the compiled region. The eager
@@ -4857,6 +4863,21 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         "--disable-scale and --disable-smearing, only the flow and the MLP "
         "(background normalisation) are trained.",
     )
+    p.add_argument(
+        "--bkg-model", choices=["bernstein", "exp"], default="bernstein",
+        help="Data-branch background model on the observed window: "
+        "'bernstein' = positive degree-(--bkg-degree) Bernstein mixture "
+        "(degree+1 conditioning-dependent fractions from the MLP); 'exp' = "
+        "window-normalised exponential with ONE fraction plus a single "
+        "fitted dimensionless slope s = lambda*width (signed; s=0 init = "
+        "uniform; the slope parameter lives on the MLP module so it joins "
+        "the background optimiser group / Fisher automatically).")
+    p.add_argument(
+        "--bkg-degree", type=int, default=1,
+        help="Bernstein background degree (>=1; --bkg-model bernstein only). "
+        "Degree 1 is the historical (falling+rising) pair; higher degrees add "
+        "curvature — e.g. the edge-localised data/model residuals a linear "
+        "background cannot absorb.")
     p.add_argument(
         "--no-background", action="store_true",
         help="Disable the data-branch background mixture: the data NLL "
