@@ -419,6 +419,113 @@ def _event_cond_raw_np(pt_pm, eta_pm, phi_pm, eps=1e-6):
                      sinphi, cosphi], axis=1).astype(np.float32)
 
 
+def _inverse_cs_np(m_target, yll, ptll, cosPhill, sinPhill,
+                   costh, sinphi, cosphi, eps=1e-6):
+    """INVERSE Collins–Soper construction — the exact complement of
+    ``_event_cond_raw_np``: given the 5 mass-complement event coordinates
+    (y_ll, pt_ll, φ_ll, cosθ*, φ*) and a TARGET mass, reconstruct the two
+    muon momenta. (m, y_ll, pt_ll, φ_ll, cosθ*, φ*) is a complete 6-DOF
+    parameterisation of the dimuon system, so this is closed form — no
+    fixed point:
+
+      1. dilepton 4-vector from (m, y_ll, pt_ll, φ_ll):
+         m_T = √(m²+pt_ll²), E = m_T·cosh y, P_z = m_T·sinh y;
+      2. CS axes from the boosted beam directions of the NEW dilepton
+         vector (same conventions as the forward: zsign = sign(P_z),
+         z = bisector, y = normal, E_beam = 6500 GeV with the proton mass);
+      3. rest-frame μ⁻ at |p*| = √(m²/4 − m_μ²) along
+         u* = cosθ*·ẑ_CS + sinθ*·(cosφ*·x̂_CS + sinφ*·ŷ_CS), E* = m/2;
+      4. boost back to the lab (boost +P/E); μ⁺ = dilepton − μ⁻.
+
+    Because the axes are built from the same dilepton vector the forward
+    computation uses, re-running ``_event_cond_raw_np`` on the output
+    reproduces ALL the input coordinates (to fp round-off). All math in
+    float64. Inputs ``[n]``; returns ``(pt_pm, eta_pm, phi_pm)`` each
+    ``[n, 2]`` float64, index 0 = μ⁺, 1 = μ⁻."""
+    m = np.asarray(m_target, dtype=np.float64)
+    yll = np.asarray(yll, dtype=np.float64)
+    ptll = np.asarray(ptll, dtype=np.float64)
+    cosPhill = np.asarray(cosPhill, dtype=np.float64)
+    sinPhill = np.asarray(sinPhill, dtype=np.float64)
+    costh = np.clip(np.asarray(costh, dtype=np.float64), -1.0, 1.0)
+    sinphi = np.asarray(sinphi, dtype=np.float64)
+    cosphi = np.asarray(cosphi, dtype=np.float64)
+
+    # Normalise the (cosφ_ll, sinφ_ll) pair: at fp32 it is unit only to
+    # ~1e-7, which makes Px²+Py² ≠ ptll² and shifts the dilepton off m² by
+    # ~ptll²·1e-7 (≈ 10 μeV on the mass); normalised, the reconstructed
+    # invariant mass equals the target to fp64 round-off.
+    nphi = np.sqrt(np.clip(cosPhill * cosPhill + sinPhill * sinPhill,
+                           1e-30, None))
+    cosPhill, sinPhill = cosPhill / nphi, sinPhill / nphi
+    mT = np.sqrt(m * m + ptll * ptll)
+    E = mT * np.cosh(yll)
+    Pz = mT * np.sinh(yll)
+    Px = ptll * cosPhill
+    Py = ptll * sinPhill
+
+    bx, by, bz = -Px / E, -Py / E, -Pz / E
+    b2 = np.clip(bx * bx + by * by + bz * bz, None, 1.0 - 1e-9)
+    gamma = 1.0 / np.sqrt(1.0 - b2)
+    b2s = np.clip(b2, 1e-30, None)
+
+    def _boost_unit(qx, qy, qz, qE):
+        bdotp = bx * qx + by * qy + bz * qz
+        fac = (gamma - 1.0) * bdotp / b2s + gamma * qE
+        rx, ry, rz = qx + fac * bx, qy + fac * by, qz + fac * bz
+        r = np.sqrt(np.clip(rx * rx + ry * ry + rz * rz, eps * eps, None))
+        return rx / r, ry / r, rz / r
+
+    zsign = np.where(Pz >= 0, 1.0, -1.0)
+    pbeam = np.sqrt(6500.0 * 6500.0 - 0.93827208816 * 0.93827208816)
+    zero = np.zeros_like(Pz)
+    p1 = _boost_unit(zero, zero, zsign * pbeam, 6500.0)
+    p2 = _boost_unit(zero, zero, -zsign * pbeam, 6500.0)
+
+    def _unit(v):
+        n = np.sqrt(np.clip(v[0] * v[0] + v[1] * v[1] + v[2] * v[2],
+                            eps * eps, None))
+        return v[0] / n, v[1] / n, v[2] / n
+
+    def _cross(a, b):
+        return (a[1] * b[2] - a[2] * b[1], a[2] * b[0] - a[0] * b[2],
+                a[0] * b[1] - a[1] * b[0])
+
+    f = _unit((p1[0] - p2[0], p1[1] - p2[1], p1[2] - p2[2]))
+    yax = _unit(_cross(p1, (-p2[0], -p2[1], -p2[2])))
+    xax = _unit(_cross(yax, f))
+
+    sinth = np.sqrt(np.clip(1.0 - costh * costh, 0.0, None))
+    ux = costh * f[0] + sinth * (cosphi * xax[0] + sinphi * yax[0])
+    uy = costh * f[1] + sinth * (cosphi * xax[1] + sinphi * yax[1])
+    uz = costh * f[2] + sinth * (cosphi * xax[2] + sinphi * yax[2])
+    # Normalise u*: an fp32-rounded (sinφ*, cosφ*) pair is unit only to ~1e-7,
+    # which would put the μ⁻ off-shell and shift the reconstructed mass at the
+    # ~μeV–10 μeV level; with |u*| = 1 the mass is exact to fp64 round-off.
+    un = np.sqrt(np.clip(ux * ux + uy * uy + uz * uz, eps * eps, None))
+    ux, uy, uz = ux / un, uy / un, uz / un
+
+    pstar = np.sqrt(np.clip(0.25 * m * m - _MUON_MASS_GEV * _MUON_MASS_GEV,
+                            0.0, None))
+    qx, qy, qz, qE = pstar * ux, pstar * uy, pstar * uz, 0.5 * m
+    # Boost REST → LAB: the inverse boost vector is −b = +P/E.
+    bdotp = -(bx * qx + by * qy + bz * qz)
+    fac = (gamma - 1.0) * bdotp / b2s + gamma * qE
+    mx = qx + fac * (-bx)
+    my = qy + fac * (-by)
+    mz = qz + fac * (-bz)
+    px_p, py_p, pz_p = Px - mx, Py - my, Pz - mz       # μ⁺ = dilepton − μ⁻
+
+    def _to_ptetaphi(x, y, z):
+        pt = np.sqrt(np.clip(x * x + y * y, eps * eps, None))
+        return pt, np.arcsinh(z / pt), np.arctan2(y, x)
+
+    pt_m, eta_m, phi_m = _to_ptetaphi(mx, my, mz)
+    pt_p, eta_p, phi_p = _to_ptetaphi(px_p, py_p, pz_p)
+    return (np.stack([pt_p, pt_m], axis=1), np.stack([eta_p, eta_m], axis=1),
+            np.stack([phi_p, phi_m], axis=1))
+
+
 # ── Non-uniform injection modulation (validation closure) ──────────────────
 # A quadratic-in-η × sinusoidal-in-φ factor multiplying the (otherwise constant)
 # injected θ, so the injected calibration varies across the detector — a test of
@@ -510,7 +617,8 @@ def _inject_pt_np(pt_pm, eta_pm, q_pm, b_pm, scale_inj, smear_inj, rng,
     return pt_new.astype(np.float32)
 
 
-def _inject_bkg_np(pt_pm, eta_pm, phi_pm, f0, f1, rng, m_lo, m_hi):
+def _inject_bkg_np(pt_pm, eta_pm, phi_pm, f0, f1, rng, m_lo, m_hi,
+                   cond_basis="muon_kin", eta_max=None):
     """Validation-closure BACKGROUND injection. Each event is independently
     re-labelled as degree-1 Bernstein background of component 0 (falling,
     p ∝ 1−t) with probability ``f0``, component 1 (rising, p ∝ t) with
@@ -528,9 +636,25 @@ def _inject_bkg_np(pt_pm, eta_pm, phi_pm, f0, f1, rng, m_lo, m_hi):
     point (the muon-mass term makes m(s·pt) ≠ s·m(pt) at the ~MeV level;
     3 iterations → sub-keV).
 
-    Returns ``(pt_new [N,2] float32, label [N] int8)`` with label 0 = signal,
-    1 = component 0, 2 = component 1. Draws exactly N + N_bkg variates from
-    ``rng`` (its own dedicated stream — see the loader)."""
+    The kinematic adjustment dispatches on ``cond_basis``:
+
+    * ``muon_kin`` — COMMON pt rescale along the mass direction (short fixed
+      point through the muon-mass term): η, φ untouched, ρ exactly invariant
+      → the muon_kin conditioning is bit-identical; ln pt_ll moves.
+    * ``event_level`` — INVERSE Collins–Soper reconstruction
+      (``_inverse_cs_np``) at fixed (y_ll, pt_ll, φ_ll, cosθ*, φ*): those are
+      a complete mass-complement coordinate set, so ALL 7 event-level
+      conditioning components are fixed (to fp32 round-off of the stored
+      conditioning) and the mass is exact, closed form. The per-muon
+      (pt, η, φ) all move at O(δm/m); muons drifting past ``eta_max`` are
+      flagged in the fiducial mask (caller zero-weights them, ~2e-3 of
+      adjusted muons at J/ψ kinematics).
+
+    Returns ``(pt_new [N,2], eta_new [N,2], phi_new [N,2] — all float32,
+    label [N] int8, fid_ok [N] bool)`` with label 0 = signal, 1 = component 0,
+    2 = component 1; η/φ equal the inputs for ``muon_kin``. Draws exactly
+    N + N_bkg variates from ``rng`` (its own dedicated stream — see the
+    loader), independent of ``cond_basis``."""
     N = pt_pm.shape[0]
     u = rng.random(N)
     label = np.zeros(N, dtype=np.int8)
@@ -538,8 +662,11 @@ def _inject_bkg_np(pt_pm, eta_pm, phi_pm, f0, f1, rng, m_lo, m_hi):
     label[(u >= f0) & (u < f0 + f1)] = 2
     sel = label > 0
     pt_out = pt_pm.astype(np.float32, copy=True)
+    eta_out = eta_pm.astype(np.float32, copy=True)
+    phi_out = phi_pm.astype(np.float32, copy=True)
+    fid_ok = np.ones(N, dtype=bool)
     if not bool(sel.any()):
-        return pt_out, label
+        return pt_out, eta_out, phi_out, label, fid_ok
     v = rng.random(int(sel.sum()))
     t = np.where(label[sel] == 1, 1.0 - np.sqrt(1.0 - v), np.sqrt(v))
     # Keep strictly inside the window with a margin safely above the fp32
@@ -548,6 +675,18 @@ def _inject_bkg_np(pt_pm, eta_pm, phi_pm, f0, f1, rng, m_lo, m_hi):
     # in-window cut. 1e-4 of the t range = 36 μ-units of CDF — negligible.
     t = np.clip(t, 1e-4, 1.0 - 1e-4)
     m_t = m_lo + (m_hi - m_lo) * t
+    if cond_basis == "event_level":
+        cond = _event_cond_raw_np(pt_pm[sel], eta_pm[sel],
+                                  phi_pm[sel]).astype(np.float64)
+        pt_n, eta_n, phi_n = _inverse_cs_np(
+            m_t, cond[:, 0], np.exp(cond[:, 1]), cond[:, 2], cond[:, 3],
+            cond[:, 4], cond[:, 5], cond[:, 6])
+        pt_out[sel] = pt_n.astype(np.float32)
+        eta_out[sel] = eta_n.astype(np.float32)
+        phi_out[sel] = phi_n.astype(np.float32)
+        if eta_max is not None:
+            fid_ok[sel] = (np.abs(eta_n) <= float(eta_max)).all(axis=1)
+        return pt_out, eta_out, phi_out, label, fid_ok
     pts = pt_pm[sel].astype(np.float64)
     etas = eta_pm[sel].astype(np.float64)
     phis = phi_pm[sel].astype(np.float64)
@@ -556,7 +695,7 @@ def _inject_bkg_np(pt_pm, eta_pm, phi_pm, f0, f1, rng, m_lo, m_hi):
         cur = _event_mll_np(pts * s[:, None], etas, phis)
         s = s * (m_t / cur)
     pt_out[sel] = (pts * s[:, None]).astype(np.float32)
-    return pt_out, label
+    return pt_out, eta_out, phi_out, label, fid_ok
 
 
 def _smear_inject_dmll_np(mll, pt_pm, eta_pm, phi_pm, q_pm, b_pm, smear_inj, rng,
@@ -636,15 +775,23 @@ def _batch_tensors(
     mll = cols["mll"].astype(np.float32)
     mc = ~is_data_mask
     bkg_label = np.zeros(mll.shape[0], dtype=np.int8)
+    bkg_fid = np.ones(mll.shape[0], dtype=bool)
     if inject_bkg is not None and rng_bkg is not None:
         # Background re-labelling FIRST (its own rng stream; label draws cover
         # the full batch for determinism, then masked to MC rows). Background
         # events are excluded from the θ kick below — the model's background
-        # is defined θ-independent in observed mass space.
-        pt_bkg, lab = _inject_bkg_np(
+        # is defined θ-independent in observed mass space. The kinematic
+        # adjustment dispatches on cond_basis (see _inject_bkg_np): muon_kin →
+        # common pt rescale (conditioning bit-identical); event_level →
+        # inverse Collins–Soper at fixed (y_ll, pt_ll, φ_ll, cosθ*, φ*)
+        # (all 7 conditioning components fixed; per-muon kinematics move).
+        pt_bkg, eta_bkg, phi_bkg, lab, fid = _inject_bkg_np(
             pt_pm, eta_pm, phi_pm, float(inject_bkg[0]), float(inject_bkg[1]),
-            rng_bkg, float(stats.m_lo), float(stats.m_hi))
+            rng_bkg, float(stats.m_lo), float(stats.m_hi),
+            cond_basis=cond_basis,
+            eta_max=float(np.max(np.abs(stats.eta_edges))))
         bkg_label = np.where(mc, lab, 0).astype(np.int8)
+        bkg_fid = fid | ~mc
     if inject_theta_scale is not None or inject_theta_smear is not None:
         # Validation closure: apply the injected scale + smear to the per-muon pt
         # in qop space (MC SIGNAL rows only) and propagate FULLY CONSISTENT
@@ -677,9 +824,28 @@ def _batch_tensors(
         # the clip margin and outside the window; the in-window weight cut
         # then zero-weights it, exactly as intended (O(1e-4) of the injected
         # background at most).
-        mll_b = _event_mll_np(pt_bkg, eta_pm, phi_pm).astype(np.float32)
+        mll_b = _event_mll_np(pt_bkg, eta_bkg, phi_bkg).astype(np.float32)
         mll = np.where(is_b, mll_b, mll).astype(np.float32)
         pt_pm = np.where(is_b[:, None], pt_bkg, pt_pm).astype(np.float32)
+        if cond_basis == "event_level":
+            # The inverse-CS adjustment moves the per-muon (η, φ) too:
+            # propagate them, re-bucketise the η-bin index, and recompute the
+            # muon_kin block for the background rows (its η/φ/ρ all change;
+            # the EVENT-LEVEL conditioning — recomputed below from the final
+            # momenta — is the thing held fixed in this basis).
+            eta_pm = np.where(is_b[:, None], eta_bkg, eta_pm).astype(np.float32)
+            phi_pm = np.where(is_b[:, None], phi_bkg, phi_pm).astype(np.float32)
+            b_new = np.stack([_bucketize_eta(eta_pm[:, 0], stats.eta_edges),
+                              _bucketize_eta(eta_pm[:, 1], stats.eta_edges)],
+                             axis=1)
+            b_pm = np.where(is_b[:, None], b_new, b_pm)
+            rho_b = ((pt_pm[:, 0] - pt_pm[:, 1]) /
+                     (pt_pm[:, 0] + pt_pm[:, 1])).astype(np.float32)
+            mk_b = np.stack([eta_pm[:, 0], eta_pm[:, 1],
+                             np.cos(phi_pm[:, 0]), np.sin(phi_pm[:, 0]),
+                             np.cos(phi_pm[:, 1]), np.sin(phi_pm[:, 1]),
+                             rho_b], axis=1).astype(np.float32)
+            muon_kin = np.where(is_b[:, None], mk_b, muon_kin)
     mll_std = ((mll - stats.mll_mean) / stats.mll_std).astype(np.float32)
 
     y_event_std = _standardise(y_event, stats.y_event_mean, stats.y_event_std)
@@ -710,7 +876,11 @@ def _batch_tensors(
     # weighted numerator AND denominator drop them, so the mean NLL is
     # computed correctly over the in-window subset.
     in_window = ((mll >= float(stats.m_lo)) & (mll <= float(stats.m_hi)))
-    w = w * in_window.astype(np.float32)
+    # ... and the η-fiducial guard for inverse-CS-adjusted background rows
+    # whose muons drifted past the outermost η edge (~2e-3 of adjusted
+    # muons): zero-weight them like the window cut (b_pm would be clipped to
+    # the edge bin and the event sits outside the modelled acceptance).
+    w = w * (in_window & bkg_fid).astype(np.float32)
 
     return {
         "mll": torch.from_numpy(mll),
