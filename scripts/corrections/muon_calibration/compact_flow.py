@@ -17,7 +17,7 @@ Construction
 ------------
 In-window:  a COMPOSITION of ``n_transforms`` monotone bijections [0,1]→[0,1]
             (same depth idea as the Gaussianization flow, but on a BOUNDED domain
-            with a uniform base, so it is intrinsically compact). Two layer types:
+            with a uniform base, so it is intrinsically compact). Three layer types:
 
             ``logistic`` (default): a logistic-mixture CDF renormalised to [0,1]:
                 S_l(u) = (G_l(u) − G_l(0)) / (G_l(1) − G_l(0)),
@@ -39,18 +39,38 @@ In-window:  a COMPOSITION of ``n_transforms`` monotone bijections [0,1]→[0,1]
             (log w')' = −x, (log w')'' = −1), so the matched tails need NO
             autograd — cheaper, and vmap/compile-friendly.
 
+            ``rqs``: a monotone rational-quadratic spline [0,1]→[0,1] (Durkan
+            et al. 2019) with K bins — floored-softmax widths/heights (Σ = 1,
+            so S(0)=0, S(1)=1 algebraically) and K+1 softplus-floored knot
+            derivatives — on the same fixed truncated-N(0,1) prewarp as
+            bernstein (identity init → init density = the truncated normal).
+            More expressive PER LAYER than the global-basis mixtures (locally
+            controlled knots), so it can trade composed depth (and the
+            per-layer conditioner MLPs that dominate the gh_qop hot-loop cost)
+            for bins. The price: C¹ at the interior knots instead of C∞ —
+            acceptable for the production gh_qop likelihood (no explicit
+            ∂_m log p₀ / ∂²_m log p₀ in the density value; scores enter only
+            through autograd in the optimizer gradient and the Fisher/HVP
+            machinery), but the score-based diagnostics and the legacy
+            mass-space operators (pf_ode / gh_convolution, which put s and s′
+            INTO the density) inherit the knot kinks — prefer logistic /
+            bernstein there. Edge derivatives are CLOSED FORM (endpoint
+            S', S'', S''' of the rational quadratic).
+
             With the uniform base the composition F = S_L∘…∘S₁∘u₀ : [a,b]→[0,1]
             IS the in-window CDF (F(a)=0, F(b)=1) and the density q = F'
-            integrates to 1 over [a,b] EXACTLY. C∞ interior, expressive via
-            depth (few components / moderate degree per layer, like gf).
+            integrates to 1 over [a,b] EXACTLY. C∞ interior (logistic /
+            bernstein; rqs is C¹ at its knots), expressive via depth (few
+            components / moderate degree per layer, like gf) or — for rqs —
+            via bins at shallow depth.
 
 Tails:      beyond each edge the log-density is continued by its 2nd-order Taylor
             in log q — a Gaussian (downward log-parabola) matched to log q,
-            (log q)', (log q)'' at the edge (AUTOGRAD through the composition for
-            logistic; ANALYTIC for bernstein). C² across the boundary, monotone-
-            decaying, closed-form CDF (erf, via erfcx for overflow safety). A
-            FIXED controlled extension of the data-constrained edge — no humps,
-            no near-boundary bias.
+            (log q)', (log q)'' at the edge (ANALYTIC for all three layer types;
+            autograd kept as the selftest reference). C² across the boundary,
+            monotone-decaying, closed-form CDF (erf, via erfcx for overflow
+            safety). A FIXED controlled extension of the data-constrained edge —
+            no humps, no near-boundary bias.
 
 Exposes the interface the mass-fit model needs:
     forward(x_std, c) -> log p₀(x_std | c)      (standardised-mass log-density)
@@ -123,9 +143,9 @@ class CompactMatchedFlow(nn.Module):
         super().__init__()
         if not (b > a):
             raise ValueError(f"need b>a; got a={a}, b={b}")
-        if layer_type not in ("logistic", "bernstein"):
-            raise ValueError(f"layer_type must be 'logistic' or 'bernstein'; "
-                             f"got {layer_type!r}")
+        if layer_type not in ("logistic", "bernstein", "rqs"):
+            raise ValueError(f"layer_type must be 'logistic', 'bernstein', or "
+                             f"'rqs'; got {layer_type!r}")
         self.layer_type = str(layer_type)
         self.K = int(n_components)
         self.M = int(bernstein_degree)
@@ -135,12 +155,14 @@ class CompactMatchedFlow(nn.Module):
         # equal-weight Gaussianization layers. True adds learnable per-component
         # weights (3K outputs, the original behaviour). Logistic-only.
         self.learn_weights = bool(learn_weights)
+        if self.layer_type != "logistic" and self.learn_weights:
+            raise ValueError("learn_weights applies to logistic layers only")
         if self.layer_type == "bernstein":
-            if self.learn_weights:
-                raise ValueError("learn_weights applies to logistic layers only")
             if self.M < 3:
                 raise ValueError(f"bernstein_degree must be ≥ 3 (need S''' at "
                                  f"the edges for the matched tails); got {self.M}")
+        if self.layer_type == "rqs" and self.K < 1:
+            raise ValueError(f"rqs needs n_components ≥ 1 bins; got {self.K}")
         # Buffers kept ONLY for checkpoint compatibility (they are persistent
         # and present in existing state_dicts). All maths/comparisons use the
         # EXACT python-float scalars below: the buffers were created at the
@@ -171,12 +193,15 @@ class CompactMatchedFlow(nn.Module):
             self.register_buffer("_binM1", torch.tensor(
                 [math.comb(self.M - 1, k) for k in range(self.M)],
                 dtype=torch.float64), persistent=False)
+        if self.layer_type in ("bernstein", "rqs"):
             # Fixed truncated-N(0,1) prewarp constants (python floats — dtype-
             # independent). The truncation range is the window itself (forced:
             # the prewarp must be a [a,b]→[0,1] bijection with pinned endpoints
             # or Z≡1 breaks); μ=0, σ=1 because the standardisation stats come
             # from the same windowed sample, so the standardised mass is
-            # moment-matched to N(0,1) for free.
+            # moment-matched to N(0,1) for free. Shared by bernstein and rqs
+            # (both start from a peaked init so the layers only fit the smooth
+            # residual warp).
             phi_a = 0.5 * (1.0 + math.erf(float(a) / _SQRT2))
             phi_b = 0.5 * (1.0 + math.erf(float(b) / _SQRT2))
             self._phi_a = float(phi_a)
@@ -189,9 +214,16 @@ class CompactMatchedFlow(nn.Module):
         # logistic: [raw_mu|raw_s] (2K, equal weights — default) or
         # [logit_w|raw_mu|raw_s] (3K, learnable weights);
         # bernstein: M raw increment logits (δ = softmax → θ = cumsum; zero bias
-        # → δ uniform → S = identity → init density = the truncated N(0,1)).
+        # → δ uniform → S = identity → init density = the truncated N(0,1));
+        # rqs: [raw_w|raw_h|raw_d] (3K+1: K width logits, K height logits, K+1
+        # raw knot derivatives — zero w/h bias → uniform bins, derivative bias
+        # softplus⁻¹(1−s_min) → d=1 → S = identity → init density = the
+        # truncated N(0,1), exactly like bernstein).
         if self.layer_type == "bernstein":
             out_dim = self.M
+        elif self.layer_type == "rqs":
+            out_dim = 3 * self.K + 1
+            d_b = math.log(math.expm1(max(1.0 - self.s_min, 1e-4)))  # softplus⁻¹
         else:
             nblk = 3 if self.learn_weights else 2
             out_dim = nblk * self.K
@@ -214,6 +246,8 @@ class CompactMatchedFlow(nn.Module):
                     b = final.bias.view(nblk, self.K)
                     b[-2, :] = mu_b                                  # spread means in (0,1)
                     b[-1, :] = s_b                                   # moderate scales
+                elif self.layer_type == "rqs":
+                    final.bias[2 * self.K:] = d_b                    # knot slopes → 1
             seq.append(final)
             self.conditioners.append(nn.Sequential(*seq))
 
@@ -223,7 +257,22 @@ class CompactMatchedFlow(nn.Module):
         consumed by _compose/_edges. logistic: (log_pi, mu, s) each [B,L,K];
         bernstein: (delta,) [B,L,M] — positive increments with Σ_k δ_k = 1 and
         δ_k ≥ s_min/M, so θ = cumsum(δ) is increasing with θ_M = 1 and every
-        layer slope S' = M·Σ δ_{k+1} b_{k,M−1} ≥ s_min."""
+        layer slope S' = M·Σ δ_{k+1} b_{k,M−1} ≥ s_min;
+        rqs: (w, h, d) — bin widths/heights [B,L,K] (floored softmax, Σ = 1
+        exactly, each ≥ s_min/K) and knot derivatives [B,L,K+1] (softplus
+        ≥ s_min), so every bin slope s = h/w ∈ [s_min/K·(1/1), K/s_min] is
+        bounded and the spline derivative is strictly positive."""
+        if self.layer_type == "rqs":
+            h = torch.stack([cond(c) for cond in self.conditioners], dim=1)
+            K = self.K
+            w = ((1.0 - self.s_min) * torch.softmax(h[..., :K], dim=-1)
+                 + self.s_min / K)
+            w = w / w.sum(-1, keepdim=True)                          # Σw = 1 (ulp)
+            hh = ((1.0 - self.s_min) * torch.softmax(h[..., K:2 * K], dim=-1)
+                  + self.s_min / K)
+            hh = hh / hh.sum(-1, keepdim=True)                       # Σh = 1 (ulp)
+            d = self.s_min + F.softplus(h[..., 2 * K:])              # [B,L,K+1]
+            return w, hh, d
         if self.layer_type == "bernstein":
             if self._binM.dtype != torch.float64:
                 # Self-heal after a model-wide fp32 cast (cf. nce GL buffers):
@@ -294,11 +343,55 @@ class CompactMatchedFlow(nn.Module):
         Sp = float(self.M) * (delta_l * bM1).sum(-1)
         return S, Sp.clamp_min(1e-30).log()
 
+    def _rqs_S_logSp(self, u, w_l, h_l, d_l):
+        """One monotone rational-quadratic-spline layer [0,1]→[0,1] (Durkan et
+        al. 2019, monotone RQS on the unit square): K bins with widths ``w_l``
+        [B,K], heights ``h_l`` [B,K] (each summing to 1 → S(0)=0, S(1)=1
+        algebraically) and K+1 positive knot derivatives ``d_l`` [B,K+1]. With
+        ξ the in-bin fraction, s = h/w the bin slope and c = d_k + d_{k+1} − 2s:
+
+            S  = y_k + h·[s ξ² + d_k ξ(1−ξ)] / [s + c ξ(1−ξ)]
+            S' = s²·[d_{k+1} ξ² + 2s ξ(1−ξ) + d_k (1−ξ)²] / [s + c ξ(1−ξ)]²
+
+        The denominator is ≥ s/2 + (d_k+d_{k+1})/4 > 0 (ξ(1−ξ) ≤ ¼), so the
+        layer is strictly monotone with no clamps in the transform itself.
+        Returns S(u), log S'(u). C¹ at the interior knots (the known RQS
+        smoothness class — acceptable for the gh_qop likelihood, which needs
+        no explicit ∂_m log p₀; see the production-operator notes)."""
+        K = self.K
+        z = w_l.new_zeros(w_l.shape[0], 1)
+        cw = torch.cat([z, torch.cumsum(w_l, -1)], dim=-1)           # [B,K+1]
+        ch = torch.cat([z, torch.cumsum(h_l, -1)], dim=-1)
+        idx = (torch.searchsorted(cw, u.unsqueeze(-1), right=True) - 1
+               ).clamp_(0, K - 1)                                    # [B,1]
+        wk = w_l.gather(-1, idx).squeeze(-1)
+        hk = h_l.gather(-1, idx).squeeze(-1)
+        uk = cw.gather(-1, idx).squeeze(-1)
+        yk = ch.gather(-1, idx).squeeze(-1)
+        d0 = d_l.gather(-1, idx).squeeze(-1)
+        d1 = d_l.gather(-1, idx + 1).squeeze(-1)
+        s = hk / wk
+        xi = ((u - uk) / wk).clamp(0.0, 1.0)
+        om = 1.0 - xi
+        Q = s + (d0 + d1 - 2.0 * s) * xi * om
+        S = (yk + hk * (s * xi * xi + d0 * xi * om) / Q).clamp(0.0, 1.0)
+        Sp = s * s * (d1 * xi * xi + 2.0 * s * xi * om + d0 * om * om) / (Q * Q)
+        return S, Sp.clamp_min(1e-30).log()
+
     def _compose(self, x, params):
         """Map x∈[a,b]→u₀∈[0,1] (affine for logistic; the fixed truncated-N(0,1)
-        CDF prewarp for bernstein), compose the L layers. Returns (u_L, log
-        p_std), where log p_std = log u₀'(x) + Σ_l log S_l' is the standardised-
-        mass log density and u_L is the in-window CDF (∈[0,1])."""
+        CDF prewarp for bernstein and rqs), compose the L layers. Returns (u_L,
+        log p_std), where log p_std = log u₀'(x) + Σ_l log S_l' is the
+        standardised-mass log density and u_L is the in-window CDF (∈[0,1])."""
+        if self.layer_type == "rqs":
+            w, hh, d = params
+            u = ((_phi(x) - self._phi_a) / self._D).clamp(0.0, 1.0)
+            logp = -0.5 * x * x - self._log_norm
+            for l in range(self.L):
+                S, logSp = self._rqs_S_logSp(u, w[:, l], hh[:, l], d[:, l])
+                logp = logp + logSp
+                u = S
+            return u, logp
         if self.layer_type == "bernstein":
             (delta,) = params
             u = ((_phi(x) - self._phi_a) / self._D).clamp(0.0, 1.0)
@@ -335,8 +428,12 @@ class CompactMatchedFlow(nn.Module):
         dt = params[0].dtype
         if dt != torch.float64:
             params = tuple(p.double() for p in params)
-        out = (self._edges_bernstein(params) if self.layer_type == "bernstein"
-               else self._edges_logistic(params))
+        if self.layer_type == "bernstein":
+            out = self._edges_bernstein(params)
+        elif self.layer_type == "rqs":
+            out = self._edges_rqs(params)
+        else:
+            out = self._edges_logistic(params)
         if dt != torch.float64:
             fmax = float(torch.finfo(dt).max) / 16.0
             out = {k: (v if k.startswith("logq") else v.clamp(-fmax, fmax)).to(dt)
@@ -480,6 +577,69 @@ class CompactMatchedFlow(nn.Module):
             out[f"logq_{tag}"] = lq
             out[f"d1_{tag}"] = d1
             out[f"d2_{tag}"] = d2
+        return out
+
+    def _edges_rqs(self, params):
+        """ANALYTIC (log q, (log q)', (log q)'') at the window edges for the
+        rqs layers — closed-form endpoint derivatives of the rational
+        quadratic, no autograd (cheap; compile-friendly; differentiable in the
+        conditioning). At the edges every layer input is exactly 0 (x=a, bin
+        0, ξ=0) or 1 (x=b, bin K−1, ξ=1), where with s = h/w and
+        c = d_lo + d_hi − 2s (per edge bin):
+
+            S'(0)   = d_lo                         S'(1)   = d_hi
+            S''(0)  = (2/(w·s))·(s² − d_lo(d_lo + d_hi − s))
+            S''(1)  = (2/(w·s))·(d_hi(d_lo + d_hi − s) − s²)
+            S'''(0) = (6c/(w²s²))·(d_lo(d_lo + d_hi) − s²)
+            S'''(1) = (6c/(w²s²))·(d_hi(d_lo + d_hi) − s²)
+
+        (derived from S' = s²·N(ξ)/Q(ξ)² with N''=2c, Q''=−2c; identity layer
+        d=1, s=1 → S''=S'''=0 as required; verified against _edges_autograd in
+        the selftest). The truncated-normal prewarp and the chain recursion are
+        identical to `_edges_bernstein`."""
+        w, hh, d = params                                            # [B,L,K],[B,L,K],[B,L,K+1]
+        B = w.shape[0]
+        out = {}
+        for tag in ("a", "b"):
+            at_b = tag == "b"
+            xe = self._bf if at_b else self._af
+            if at_b:
+                wk, hk = w[..., -1], hh[..., -1]                     # [B,L]
+                dlo, dhi = d[..., -2], d[..., -1]
+            else:
+                wk, hk = w[..., 0], hh[..., 0]
+                dlo, dhi = d[..., 0], d[..., 1]
+            s = hk / wk
+            cc = dlo + dhi - 2.0 * s
+            if at_b:
+                s1 = dhi
+                s2 = (2.0 / (wk * s)) * (dhi * (dlo + dhi - s) - s * s)
+                s3 = (6.0 * cc / (wk * wk * s * s)) * (dhi * (dlo + dhi) - s * s)
+            else:
+                s1 = dlo
+                s2 = (2.0 / (wk * s)) * (s * s - dlo * (dlo + dhi - s))
+                s3 = (6.0 * cc / (wk * wk * s * s)) * (dlo * (dlo + dhi) - s * s)
+            # Truncated-normal prewarp contributions (as _edges_bernstein):
+            # log w'(x) = −x²/2 − log_norm, (log w')' = −x, (log w')'' = −1.
+            lw = -0.5 * xe * xe - self._log_norm
+            lq = w.new_full((B,), lw)
+            d1_ = w.new_full((B,), -xe)
+            d2_ = w.new_full((B,), -1.0)
+            tp = w.new_full((B,), math.exp(lw))                      # t' = w'(xe)
+            tpp = tp * (-xe)                                         # t'' = −xe·w'
+            for l in range(self.L):
+                r1 = s2[:, l] / s1[:, l]                             # s1 = d ≥ s_min > 0
+                r2 = s3[:, l] / s1[:, l]
+                lq = lq + s1[:, l].log()
+                d2_ = d2_ + (r2 - r1 * r1) * tp * tp + r1 * tpp
+                d1_ = d1_ + r1 * tp
+                tpp = s2[:, l] * tp * tp + s1[:, l] * tpp            # before tp update
+                tp = s1[:, l] * tp
+            # Shared log-concavity clamp (see _edges_autograd).
+            d2_ = d2_.clamp(max=-self.curv_floor)
+            out[f"logq_{tag}"] = lq
+            out[f"d1_{tag}"] = d1_
+            out[f"d2_{tag}"] = d2_
         return out
 
     # ---- matched-Gaussian tail (erfcx-stable) ------------------------------
@@ -720,9 +880,15 @@ def _selftest():
     # 3b) EXACT-EDGE shift gradient: dZ/ds at s=0 with Z = F(b+s) − F(a+s)
     #     must equal p(b) − p(a) (the decompose g_norm path; the bernstein
     #     pow-safety clamp used to zero it through the in-window branch).
-    for lt in ("bernstein", "logistic"):
-        fz = (fb if lt == "bernstein" else
-              CompactMatchedFlow(n_cond=7, a=a, b=b, n_transforms=5).double())
+    for lt in ("bernstein", "logistic", "rqs"):
+        if lt == "bernstein":
+            fz = fb
+        else:
+            fz = CompactMatchedFlow(n_cond=7, a=a, b=b, n_transforms=5,
+                                    layer_type=lt).double()
+            with torch.no_grad():
+                for p_ in fz.parameters():
+                    p_.add_(0.3 * torch.randn_like(p_))
         cz = c[:3]
         s0 = torch.zeros((), dtype=torch.float64, requires_grad=True)
         Z = (fz.log_cdf(torch.full((3,), b, dtype=torch.float64) + s0, cz).exp()
@@ -761,6 +927,97 @@ def _selftest():
     _ = f3(xs, cc[:1].expand(200, -1))
     assert f3._binM.dtype == torch.float64
     print("bernstein binomial buffers self-heal after fp32 round-trip")
+
+    # ---- rqs layers ---------------------------------------------------------
+    fr = CompactMatchedFlow(n_cond=7, a=a, b=b, n_transforms=3,
+                            layer_type="rqs", n_components=8).double()
+    c = torch.randn(4, 7, dtype=torch.float64)
+    # 1) zero weights (ctor bias is already the identity init: uniform bins,
+    #    knot slopes = 1) → identity layers → density == truncated N(0,1).
+    #    Re-pin the derivative bias at fp64: the ctor wrote it into the fp32
+    #    nn.Linear (≈3e-8 rounding) and .double() upcasts the rounded value —
+    #    harmless for training, but this is an EXACTNESS check.
+    with torch.no_grad():
+        for cond in fr.conditioners:
+            cond[-1].weight.zero_()
+            cond[-1].bias[2 * fr.K:] = math.log(math.expm1(1.0 - fr.s_min))
+    xg = torch.linspace(a + 1e-9, b - 1e-9, 20001, dtype=torch.float64)
+    ce = c[:1].expand(xg.shape[0], -1)
+    lp = fr(xg, ce)
+    D = 0.5 * (math.erf(b / _SQRT2) - math.erf(a / _SQRT2))
+    lp_tn = -0.5 * xg**2 - 0.5 * math.log(2 * math.pi) - math.log(D)
+    err_tn = float((lp - lp_tn).abs().max())
+    print(f"rqs identity-init: max |logp − logTN(0,1)| = {err_tn:.2e}")
+    assert err_tn < 1e-9
+    # 2) perturbed: normalisation, CDF exactness, dF/dx ≡ p incl. tails.
+    #    Milder perturbation than bernstein/logistic (0.2σ vs 0.5σ): composed
+    #    spiky RQS layers can produce density features at the compounded scale
+    #    (s_min/K)·Π(slopes) — far below the 20001-point grid and the FD step —
+    #    where trapz/FD are resolution-limited, NOT wrong (verified: trapz → 1
+    #    under grid refinement at 0.5σ while F(b)−F(a) = 1 stays algebraic).
+    with torch.no_grad():
+        for p_ in fr.parameters():
+            p_.add_(0.2 * torch.randn_like(p_))
+    xgr = torch.linspace(a + 1e-9, b - 1e-9, 160001, dtype=torch.float64)
+    for e in range(c.shape[0]):
+        ci = c[e:e + 1]
+        lp = fr(xgr, ci.expand(xgr.shape[0], -1))
+        I = torch.trapz(lp.exp(), xgr).item()
+        Fa = fr.log_cdf(torch.tensor([a], dtype=torch.float64), ci).exp().item()
+        Fb = fr.log_cdf(torch.tensor([b], dtype=torch.float64), ci).exp().item()
+        print(f"rqs event {e}: ∫_window p={I:.6f}  F(b)-F(a)={Fb-Fa:.6f}")
+        assert abs(I - 1.0) < 5e-4 and abs(Fb - Fa - 1.0) < 1e-12
+    xt = torch.tensor([a - 0.3, a - 0.01, a + 0.01, 0.0, b - 0.01, b + 0.01, b + 0.3],
+                      dtype=torch.float64)
+    ce = c[:1].expand(xt.shape[0], -1)
+    h = 1e-5
+    dF = (fr.log_cdf(xt + h, ce).exp() - fr.log_cdf(xt - h, ce).exp()) / (2 * h)
+    p = fr(xt, ce).exp()
+    rel = [abs(d - pp) / max(pp, 1e-12) for d, pp in zip(dF.tolist(), p.tolist())]
+    print("rqs rel.diff dF/dx vs p:", [f"{r:.1e}" for r in rel])
+    assert max(rel) < 1e-6
+    # 3) ANALYTIC edges == autograd-chain reference. As for bernstein,
+    #    _edges_autograd at exactly x=a/b is NOT a valid reference here: the
+    #    truncated-N(0,1) prewarp's clamp(0,1) sits exactly at its boundary
+    #    there and zeroes the gradient flow. Autograd the LAYER CHAIN at
+    #    u₀ = ε inside instead and add the prewarp chain rule analytically.
+    #    (The per-bin endpoint S'/S''/S''' closed forms were verified
+    #    autograd-exact to machine precision separately.)
+    prm_r = fr._cond_params(c)
+    w_r, h_r, d_r = prm_r
+    ana_r = fr._edges_rqs(prm_r)
+    for tag, xe, u0val in (("a", a, 1e-12), ("b", b, 1.0 - 1e-12)):
+        u0 = torch.full((c.shape[0],), u0val, dtype=torch.float64,
+                        requires_grad=True)
+        u, lam = u0, torch.zeros_like(u0)
+        for l in range(fr.L):
+            S, logSp = fr._rqs_S_logSp(u, w_r[:, l], h_r[:, l], d_r[:, l])
+            lam = lam + logSp
+            u = S
+        l1 = torch.autograd.grad(lam.sum(), u0, create_graph=True)[0]
+        l2 = torch.autograd.grad(l1.sum(), u0)[0]
+        wp = math.exp(-0.5 * xe * xe - fr._log_norm)
+        wpp = -xe * wp
+        lq_ref = (-0.5 * xe * xe - fr._log_norm) + lam.detach()
+        d1_ref = -xe + l1.detach() * wp
+        d2_ref = (-1.0 + l2.detach() * wp * wp
+                  + l1.detach() * wpp).clamp(max=-fr.curv_floor)
+        for k, ref in (("logq", lq_ref), ("d1", d1_ref), ("d2", d2_ref)):
+            dd = float(((ana_r[f"{k}_{tag}"] - ref).abs()
+                        / ref.abs().clamp_min(1.0)).max())
+            assert dd < 1e-4, (k, tag, dd)
+    print("rqs analytic edges == autograd-chain reference "
+          "(logq, d1, d2 at both edges; rel <1e-4, reference-limited)")
+    # 4) forward_inwindow ≡ forward in-window; tail grads finite
+    xin = a + (b - a) * torch.rand(257, dtype=torch.float64)
+    cin = c[:1].expand(257, -1)
+    assert torch.equal(fr.forward_inwindow(xin, cin), fr(xin, cin))
+    cg = torch.randn(8, 7, dtype=torch.float64, requires_grad=True)
+    out = fr(torch.full((8,), b + 0.05, dtype=torch.float64), cg).sum()
+    out = out + fr.log_cdf(torch.full((8,), a - 0.05, dtype=torch.float64), cg).sum()
+    g = torch.autograd.grad(out, cg)[0]
+    assert torch.isfinite(g).all()
+    print("rqs forward_inwindow ≡ forward; analytic-tail grads finite")
     flow = CompactMatchedFlow(n_cond=7, a=a, b=b, n_components=8, n_transforms=5).double()
     c = torch.randn(4, 7, dtype=torch.float64)
     # overflow stress: extreme conditioners
@@ -787,7 +1044,7 @@ def _selftest():
     #        _edges now computes in fp64.
     #    (b) erfcx overflow in _outward for outward-RISING trained edge slopes
     #        (erfcx(−y) ≈ 2e^{y²} overflows fp32 at y ≳ 9.4); now log-space.
-    for lt in ("logistic", "bernstein"):
+    for lt in ("logistic", "bernstein", "rqs"):
         f32 = CompactMatchedFlow(7, a, b, n_components=8, n_transforms=4,
                                  learn_weights=(lt == "logistic"),
                                  layer_type=lt, bernstein_degree=16)

@@ -4576,7 +4576,7 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    help="Number of hidden layers in each flow conditioner MLP.")
     p.add_argument("--gf-components", type=int, default=8,
                    help="(--flow-arch gf/compact) mixture components per layer.")
-    p.add_argument("--compact-layer", choices=("logistic", "bernstein"),
+    p.add_argument("--compact-layer", choices=("logistic", "bernstein", "rqs"),
                    default="logistic",
                    help="(--flow-arch compact) Per-layer monotone [0,1]→[0,1] "
                    "transform. 'logistic' (default): renormalised logistic-"
@@ -4589,10 +4589,20 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "standardised mass is moment-matched by construction, so "
                    "the init density is already the peaked truncated normal "
                    "and the fixed-position polynomial basis only fits the "
-                   "smooth residual). Edge derivatives for the matched tails "
-                   "are CLOSED FORM (no autograd) — cheaper tails and fully "
-                   "vmap/compile-friendly. Z≡1 and the exact window CDF hold "
-                   "for both layer types.")
+                   "smooth residual). 'rqs': monotone rational-quadratic "
+                   "spline (Durkan et al.) with --gf-components bins on the "
+                   "same truncated-N(0,1) prewarp — more expressive PER LAYER "
+                   "(locally controlled knots), so try shallow depth + more "
+                   "bins (e.g. --flow-n-transforms 1-2 --gf-components 16-32) "
+                   "to cut the per-node conditioner cost in the gh_qop hot "
+                   "loop. C¹ at the knots (vs C∞): fine for the gh_qop "
+                   "likelihood (no explicit ∂_m log p₀ in the density); "
+                   "prefer logistic/bernstein with the pf_ode/gh_convolution "
+                   "operators, which put s and s' INTO the density. Edge "
+                   "derivatives for the matched tails are CLOSED FORM for "
+                   "bernstein and rqs — cheaper tails and fully vmap/compile-"
+                   "friendly. Z≡1 and the exact window CDF hold for all "
+                   "layer types.")
     p.add_argument("--bernstein-degree", type=int, default=16,
                    help="(--compact-layer bernstein) Polynomial degree M per "
                    "layer (M conditioner outputs/layer; basis resolution "
