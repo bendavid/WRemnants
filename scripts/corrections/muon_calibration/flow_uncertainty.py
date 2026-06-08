@@ -997,13 +997,18 @@ def main(argv=None) -> int:
                              else float(targs.get("holdout_fraction", 0.05)))})
 
     print("materialising event samples...")
-    fit_ev, _, _ = _materialise(
+    fit_ev, wf_seen, wf_total = _materialise(
         fit_loader, dev, dtype, take_data_branch=True, mc_as_data=validation,
         cap=args.max_events_fit, label="stage-2 (fit)")
     flow_ev, w1_seen, w1_total = _materialise(
         flow_loader, dev, dtype, take_data_branch=False, mc_as_data=True,
         cap=args.max_events_flow, label="stage-1 (flow)")
     alpha1 = w1_total / max(w1_seen, 1e-300)
+    # The DATA-stat covariance = θ-block of (J_ww+λ)⁻¹ scales as 1/N_data, so a
+    # CAPPED fit sample must be rescaled to the full data by w_seen/w_total
+    # (= 1/α_fit). The FLOW covariance is fit-cap-invariant (the stage-2 factors
+    # cancel) → no α_fit there.
+    alpha_fit = wf_total / max(wf_seen, 1e-300)
     if dev.startswith("cuda"):
         torch.cuda.empty_cache()   # release the loader's transient buffers
 
@@ -1190,8 +1195,20 @@ def main(argv=None) -> int:
     else:
         B_rhs = torch.zeros((n_w, n_theta), dtype=torch.float64, device=dev)
         B_rhs[torch.arange(n_theta), torch.arange(n_theta)] = 1.0
+    cov_data = None      # DATA-stat θ/output covariance (only the fisher path)
     if args.w_solver == "fisher":
         X_fisher = torch.cholesky_solve(B_rhs, L_chol)     # all columns at once
+        # DATA-stat covariance comes FREE from the same factorisation: it is the
+        # θ-block of (J_ww+λ)⁻¹ (background profiled by the full inverse / Schur
+        # complement). binned → the θ-rows of X_fisher; mlp → Gᵀ(J+λ)⁻¹G = G·X.
+        # Rescaled to the full data by 1/α_fit (J_ww ∝ N_data).
+        if is_mlp:
+            cov_data = (G @ X_fisher) / alpha_fit
+        else:
+            cov_data = X_fisher[:n_theta, :].clone() / alpha_fit
+        cov_data = 0.5 * (cov_data + cov_data.T)
+        print(f"  data-stat θ covariance from J_ww (α_fit={alpha_fit:.4f}); "
+              f"flow added on top → total")
 
     # ---- robust damped solve: on a non-PD CG abort, escalate the ridge
     # (×escalate, up to escalate_max times) and retry, so an indefinite
@@ -1348,6 +1365,14 @@ def main(argv=None) -> int:
         print("    Use this only as a rough/bounding figure; for the quoted "
               "number, rerun with no escalation needed.\n")
 
+    # DATA-stat θ/output covariance (computed FREE from J_ww in the fisher
+    # w-solver path) → the TOTAL = data + flow is written here, so no separate
+    # empirical_fisher.pt + --fisher combination is needed for --w-solver fisher.
+    cov_total = None
+    if cov_data is not None:
+        cov_data = cov_data.double().cpu()
+        cov_total = cov_data + cov_flow
+
     out = {
         "covariance_flow": cov_flow,
         "labels": labels if is_mlp else labels[:n_theta],
@@ -1375,7 +1400,7 @@ def main(argv=None) -> int:
         # matching output-fisher file, also write the blockwise totals.
         aw, cell_w = _grid_phi_weights(fit_ev, n_eta_g, n_phi_g)
         ef = None
-        if args.fisher and os.path.exists(args.fisher):
+        if cov_data is None and args.fisher and os.path.exists(args.fisher):
             ef = torch.load(args.fisher, map_location="cpu",
                             weights_only=False)
             if (ef.get("theta_mode") != "mlp"
@@ -1406,7 +1431,35 @@ def main(argv=None) -> int:
         out.update(_mlp_grid_keys(cov_flow.numpy(), n_eta_g, n_phi_g,
                                   scale_cols, smear_cols, aw,
                                   suffix="_flow"))
-        if ef is not None:
+        if cov_data is not None:
+            # Internal data-stat (Gᵀ(J_ww+λ)⁻¹G) → total grid keys, no --fisher.
+            out["covariance_data"] = cov_data
+            out["covariance_total"] = cov_total
+            out.update(_mlp_grid_keys(cov_data.numpy(), n_eta_g, n_phi_g,
+                                      scale_cols, smear_cols, aw, suffix="_data"))
+            out.update(_mlp_grid_keys(cov_total.numpy(), n_eta_g, n_phi_g,
+                                      scale_cols, smear_cols, aw, suffix="_total"))
+            comp_s, comp_c = ("A", "e", "M"), ("a", "c")
+            print("\nσ budget (per-η φ-mean, median over η; data-stat from "
+                  "J_ww): data | flow | total (inflation)")
+            if "sigma_scale_24_3_total" in out:
+                for c in scale_cols:
+                    dm = float(np.median(out["sigma_scale_24_3_data"].numpy()[:, c]))
+                    fm = float(np.median(out["sigma_scale_24_3_flow"].numpy()[:, c]))
+                    tm = float(np.median(out["sigma_scale_24_3_total"].numpy()[:, c]))
+                    print(f"  {comp_s[c]:3s} {dm:.3e} | {fm:.3e} | {tm:.3e}  "
+                          f"(x{tm / max(dm, 1e-300):.2f})")
+            if "sigma_smear_eff_24_2_total" in out:
+                for c in smear_cols:
+                    dm = float(np.median(out["sigma_smear_eff_24_2_data"].numpy()[:, c]))
+                    fm = float(np.median(out["sigma_smear_eff_24_2_flow"].numpy()[:, c]))
+                    tm = float(np.median(out["sigma_smear_eff_24_2_total"].numpy()[:, c]))
+                    print(f"  {comp_c[c]:3s} {dm:.3e} | {fm:.3e} | {tm:.3e}  "
+                          f"(x{tm / max(dm, 1e-300):.2f})")
+            if args.fisher and os.path.exists(args.fisher):
+                print("  (note: --fisher ignored — data-stat computed "
+                      "internally from J_ww)")
+        elif ef is not None:
             for k in ("covariance_24_3_24_3", "covariance_scale_2d",
                       "covariance_smear_24_2_24_2", "covariance_smear_2d"):
                 kf = f"{k}_flow"
@@ -1451,26 +1504,38 @@ def main(argv=None) -> int:
         for k, v in extras.items():
             out[f"{k}_flow"] = v
 
-        if args.fisher and os.path.exists(args.fisher):
+        def _write_budget(cov_d, cov_tot, source):
+            """Write covariance_data/_total + the *_data/_total extras and print
+            the data | flow | total σ budget. cov_d / cov_tot are [n_θ, n_θ]."""
+            out["covariance_data"] = cov_d
+            out["covariance_total"] = cov_tot
+            for k, v in T._theta_cov_extras(cov_d, model, smear_cols, n_scale).items():
+                out[f"{k}_data"] = v
+            for k, v in T._theta_cov_extras(cov_tot, model, smear_cols, n_scale).items():
+                out[f"{k}_total"] = v
+            sd = cov_d.diagonal().clamp_min(0).sqrt()
+            sf = cov_flow.diagonal().clamp_min(0).sqrt()
+            st = cov_tot.diagonal().clamp_min(0).sqrt()
+            print(f"\nσ budget (raw θ units; data-stat from {source}): "
+                  "data | flow | total (inflation)")
+            for j in range(n_theta):
+                infl = float(st[j] / sd[j].clamp_min(1e-300))
+                print(f"  {labels[j]:14s} {float(sd[j]):.3e} | "
+                      f"{float(sf[j]):.3e} | {float(st[j]):.3e}  (x{infl:.2f})")
+
+        if cov_data is not None:
+            # Internal data-stat (the θ-block of (J_ww+λ)⁻¹) → total, no --fisher.
+            _write_budget(cov_data, cov_total, "J_ww (this run)")
+            if args.fisher and os.path.exists(args.fisher):
+                print("  (note: --fisher ignored — data-stat computed "
+                      "internally from J_ww)")
+        elif args.fisher and os.path.exists(args.fisher):
             ef = torch.load(args.fisher, map_location="cpu",
                             weights_only=False)
             cov_d = ef["covariance"].double()
             if cov_d.shape == cov_flow.shape:
-                cov_tot = cov_d + cov_flow
-                out["covariance_total"] = cov_tot
-                ex_t = T._theta_cov_extras(cov_tot, model, smear_cols, n_scale)
-                for k, v in ex_t.items():
-                    out[f"{k}_total"] = v
-                sd = cov_d.diagonal().clamp_min(0).sqrt()
-                sf = cov_flow.diagonal().clamp_min(0).sqrt()
-                st = cov_tot.diagonal().clamp_min(0).sqrt()
-                print("\nσ budget (raw θ units): data-stat | flow | total "
-                      "(inflation)")
-                for j in range(n_theta):
-                    infl = float(st[j] / sd[j].clamp_min(1e-300))
-                    print(f"  {labels[j]:14s} {float(sd[j]):.3e} | "
-                          f"{float(sf[j]):.3e} | {float(st[j]):.3e}  "
-                          f"(x{infl:.2f})")
+                _write_budget(cov_d, cov_d + cov_flow,
+                              os.path.basename(args.fisher))
             else:
                 print(f"warning: --fisher covariance shape "
                       f"{tuple(cov_d.shape)} does not match the θ-active "

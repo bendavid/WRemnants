@@ -2465,7 +2465,6 @@ def main() -> int:
     # correlation matrices, and the whitened bands. If --fisher was not given,
     # the "total" is the flow contribution alone. (Per-block keys add exactly:
     # cov_total = cov_data + cov_flow.) sigma_*_total = √diag(cov_total).
-    sigma_scale = sigma_scale if sigma_scale is not None else None
     sigma_scale_data = sigma_scale          # data-stat σ (inner error bar)
     sigma_smear_data = sigma_smear
     sigma_scale_total = sigma_smear_total = None
@@ -2478,36 +2477,56 @@ def main() -> int:
         print(f"flow uncertainty from {os.path.basename(fu_path)} "
               f"(w-solver={fu.get('w_solver')}, flow-solver={fu.get('flow_solver')}):")
 
-        def _add_block(cov_data, key):
-            """cov_total = cov_data + cov_flow (flat [n,n]); flow-only if no data."""
-            t = fu.get(key)
-            if t is None:
-                return cov_data, None
-            cf = t.cpu().numpy()
-            ne = cf.shape[0]
-            ncol = cf.shape[1]
-            cf = cf.reshape(ne * ncol, ne * ncol)
-            tot = (cov_data + cf) if (cov_data is not None
-                                      and cov_data.shape == cf.shape) else cf
-            return tot, tot
+        def _block(cov_data_ext, key, ncol):
+            """Resolve (cov_data, cov_total) [flat n,n] for a block. Prefer the
+            file's OWN <key>_data / <key>_total (the --w-solver fisher run stores
+            them); else combine the file's <key>_flow with the --fisher data."""
+            def _flat(t):
+                if t is None:
+                    return None
+                a = t.cpu().numpy()
+                ne = a.shape[0]
+                return a.reshape(ne * ncol, ne * ncol)
+            f_tot, f_dat = _flat(fu.get(f"{key}_total")), _flat(fu.get(f"{key}_data"))
+            if f_tot is not None:                     # self-sufficient file
+                return (f_dat if f_dat is not None else cov_data_ext), f_tot
+            f_flow = _flat(fu.get(f"{key}_flow"))
+            if f_flow is None:
+                return cov_data_ext, None
+            tot = (cov_data_ext + f_flow) if (cov_data_ext is not None
+                   and cov_data_ext.shape == f_flow.shape) else f_flow
+            return cov_data_ext, tot
 
-        cov_scale_total, cs = _add_block(cov_scale_flat, "covariance_24_3_24_3_flow")
-        if cs is not None:
-            ne = cs.shape[0] // 3
-            sigma_scale_total = np.sqrt(np.maximum(np.diag(cs), 0.0)).reshape(ne, 3)
-        cov_smear_total, csm = _add_block(cov_smear_flat, "covariance_smear_24_2_24_2_flow")
-        if csm is not None:
-            ne = csm.shape[0] // 2
-            sigma_smear_total = np.sqrt(np.maximum(np.diag(csm), 0.0)).reshape(ne, 2)
-        # Full joint covariance (raw active-θ layout — same as the data file's).
-        fcf = fu.get("covariance_flow")
-        if fcf is not None:
-            if full_cov is not None and tuple(full_cov.shape) == tuple(fcf.shape):
-                full_cov_total = (full_cov.double() + fcf.double())
-            else:
-                full_cov_total = fcf
-                full_cov_labels = full_cov_labels or fu.get("labels")
-                full_cov_nscale = int(fu.get("n_scale", full_cov_nscale))
+        d_s, cov_scale_total = _block(cov_scale_flat, "covariance_24_3_24_3", 3)
+        if cov_scale_total is not None:
+            ne = cov_scale_total.shape[0] // 3
+            sigma_scale_total = np.sqrt(np.maximum(np.diag(cov_scale_total), 0.0)).reshape(ne, 3)
+            if d_s is not None:                       # data-stat from the file
+                sigma_scale_data = np.sqrt(np.maximum(np.diag(d_s), 0.0)).reshape(ne, 3)
+                cov_scale_flat = d_s
+        d_c, cov_smear_total = _block(cov_smear_flat, "covariance_smear_24_2_24_2", 2)
+        if cov_smear_total is not None:
+            ne = cov_smear_total.shape[0] // 2
+            sigma_smear_total = np.sqrt(np.maximum(np.diag(cov_smear_total), 0.0)).reshape(ne, 2)
+            if d_c is not None:
+                sigma_smear_data = np.sqrt(np.maximum(np.diag(d_c), 0.0)).reshape(ne, 2)
+                cov_smear_flat = d_c
+        # Full joint covariance (raw active-θ layout): file's own total/data, or
+        # data(--fisher) + flow.
+        ftot = fu.get("covariance_total")
+        if ftot is not None:
+            full_cov_total = ftot.double()
+            full_cov_labels = full_cov_labels or fu.get("labels")
+            full_cov_nscale = int(fu.get("n_scale", full_cov_nscale))
+        else:
+            fcf = fu.get("covariance_flow")
+            if fcf is not None:
+                if full_cov is not None and tuple(full_cov.shape) == tuple(fcf.shape):
+                    full_cov_total = (full_cov.double() + fcf.double())
+                else:
+                    full_cov_total = fcf
+                    full_cov_labels = full_cov_labels or fu.get("labels")
+                    full_cov_nscale = int(fu.get("n_scale", full_cov_nscale))
 
         def _budget(tag, sig_data, total):
             d = (float(np.median(sig_data)) if sig_data is not None else float("nan"))
