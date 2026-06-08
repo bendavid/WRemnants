@@ -448,10 +448,19 @@ def parse_args(argv=None):
                    "allocator assert; the result is identical (pure "
                    "accumulation), only peak memory changes.")
     p.add_argument("--max-events-fit", type=int, default=0,
-                   help="Cap the materialised stage-2 (fit) events; 0 = all.")
+                   help="Cap the materialised stage-2 (fit) events; 0 = all. "
+                   "VALID speedup: the stage-2 normalisation CANCELS exactly in "
+                   "the chain (net power 0), so a subset gives an UNBIASED "
+                   "full-fit covariance with NO rescale — only extra estimation "
+                   "noise on H_ww/H_wφ. Keep N ≫ n_w and enough to condition "
+                   "the profiled background block (else raise --ridge-w).")
     p.add_argument("--max-events-flow", type=int, default=0,
                    help="Cap the materialised stage-1 (flow) events; 0 = all. "
-                   "The covariance is rescaled by the full/seen Σw ratio.")
+                   "VALID speedup (the biggest CG_φ one): the covariance is "
+                   "rescaled by the full/seen Σw ratio (α₁) to the FULL flow "
+                   "sample — unbiased, with extra noise (the ridge regularises "
+                   "the under-determined flow Hessian; the chain only probes its "
+                   "≤n_θ-dim subspace, so N need not exceed n_φ).")
     p.add_argument("--ridge-w", type=float, default=1e-6,
                    help="RELATIVE damping for H_ww: λ_w = ridge·tr(H_ww)/n_w "
                    "(trace from Hutchinson probes at startup), so the value "
@@ -468,7 +477,11 @@ def parse_args(argv=None):
                    "covariance combines with the --output-fisher file. The "
                    "columns are EXACT — cost is linear in n_η·n_φ·n_comp.")
     p.add_argument("--cg-tol", type=float, default=1e-4,
-                   help="CG relative-residual tolerance.")
+                   help="CG relative-residual tolerance. VALID speedup: loosen "
+                   "to ~1e-3 to roughly halve the iterations (covariance error "
+                   "~O(tol) — fine for an uncertainty); the printed asymmetry "
+                   "is the convergence check. (Unlike raising --ridge-*, which "
+                   "biases the covariance, loosening tol does not.)")
     p.add_argument("--cg-max-iter-w", type=int, default=200,
                    help="Max CG iterations for the H_ww (stage-2) solve.")
     p.add_argument("--cg-max-iter-flow", type=int, default=200,
