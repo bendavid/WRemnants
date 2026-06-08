@@ -244,15 +244,19 @@ class ChunkedLoss:
         return acc
 
 
-def _cg(apply_A, b, tol, max_iter, label="", progress=True):
+def _cg(apply_A, b, tol, max_iter, label="", progress=True, report_dt=20.0):
     """Standard CG on the (damped) SPD system; returns (x, iters, rel_res).
-    Aborts with a clear message on negative curvature (raise the ridge)."""
+    Aborts with a clear message on negative curvature (raise the ridge).
+    With ``progress`` prints a throttled per-iteration line (every
+    ``report_dt`` seconds) — each CG iteration is one full HVP over all the
+    chunked events, so a column can take minutes; this shows it is alive."""
     x = torch.zeros_like(b)
     r = b.clone()
     p = r.clone()
     rs = float(r @ r)
     b_norm = max(float(b.norm()), 1e-300)
     it = 0
+    t_last = time.time()
     while it < max_iter and (rs ** 0.5) / b_norm > tol:
         Ap = apply_A(p)
         pAp = float(p @ Ap)
@@ -268,6 +272,10 @@ def _cg(apply_A, b, tol, max_iter, label="", progress=True):
         p = r + (rs_new / rs) * p
         rs = rs_new
         it += 1
+        if progress and (time.time() - t_last) > report_dt:
+            print(f"        CG[{label}] it {it}/{max_iter}  "
+                  f"rel {(rs ** 0.5) / b_norm:.2e} (tol {tol:g})", flush=True)
+            t_last = time.time()
     return x, it, (rs ** 0.5) / b_norm
 
 
@@ -666,18 +674,21 @@ def main(argv=None) -> int:
     # ridge inputs are RELATIVE — independent of sample size and units.
     gen = torch.Generator(device="cpu").manual_seed(7)
 
-    def _trace_scale(raw_hvp, n):
+    def _trace_scale(raw_hvp, n, label):
         acc = 0.0
-        for _ in range(2):
+        for k in range(2):
+            t = time.time()
             v = (torch.randint(0, 2, (n,), generator=gen,
                                dtype=torch.int64).double() * 2.0 - 1.0).to(dev)
             acc += float(v @ raw_hvp(v)) / n
+            print(f"  trace[{label}] probe {k + 1}/2 done "
+                  f"({time.time() - t:.0f}s)", flush=True)
         return acc / 2.0
 
-    print(f"estimating Hessian trace scales (Hutchinson; "
+    print(f"estimating Hessian trace scales (Hutchinson, 2 probes each; "
           f"--eval-chunk={args.eval_chunk})...")
-    sc_w = _trace_scale(_raw_hvp_w, n_w)
-    sc_phi = _trace_scale(_raw_hvp_phi, n_phi)
+    sc_w = _trace_scale(_raw_hvp_w, n_w, "H_ww")
+    sc_phi = _trace_scale(_raw_hvp_phi, n_phi, "H₁")
     if dev.startswith("cuda"):
         torch.cuda.empty_cache()
     lam_w = args.ridge_w * abs(sc_w)
@@ -710,11 +721,13 @@ def main(argv=None) -> int:
         else:
             e = torch.zeros(n_w, dtype=torch.float64, device=dev)
             e[j] = 1.0
+        print(f"  [{j + 1:3d}/{n_theta}] {labels[j]:14s} solving CG_w "
+              f"(≤{args.cg_max_iter_w} it)...", flush=True)
         x, it_w, res_w = _cg(hvp_w, e, args.cg_tol, args.cg_max_iter_w,
-                             label=f"w:{labels[j]}")
+                             label=f"w:{labels[j]}", progress=args.progress)
         u = mixed_u(x)
         z, it_f, res_f = _cg(hvp_phi, u, args.cg_tol, args.cg_max_iter_flow,
-                             label=f"φ:{labels[j]}")
+                             label=f"φ:{labels[j]}", progress=args.progress)
         U[j] = u.cpu()
         Z[j] = z.cpu()
         cg_stats.append((it_w, res_w, it_f, res_f))
