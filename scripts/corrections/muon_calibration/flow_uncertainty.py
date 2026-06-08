@@ -431,8 +431,14 @@ def parse_args(argv=None):
                    help="Compute device (default tracks CUDA availability).")
     p.add_argument("--batch-size", type=int, default=262144,
                    help="Loader batch size for streaming the event samples.")
-    p.add_argument("--eval-chunk", type=int, default=16384,
-                   help="Events per HVP autograd chunk.")
+    p.add_argument("--eval-chunk", type=int, default=4096,
+                   help="Events per HVP autograd chunk — the PEAK-MEMORY knob. "
+                   "Each chunk holds a full double-backward graph (the gh_qop "
+                   "quadrature × the flow forward, retained for the 2nd "
+                   "derivative), so memory scales with this. LOWER it (e.g. "
+                   "2048/1024) if you hit a CUDA OOM or the NVML_SUCCESS "
+                   "allocator assert; the result is identical (pure "
+                   "accumulation), only peak memory changes.")
     p.add_argument("--max-events-fit", type=int, default=0,
                    help="Cap the materialised stage-2 (fit) events; 0 = all.")
     p.add_argument("--max-events-flow", type=int, default=0,
@@ -604,6 +610,8 @@ def main(argv=None) -> int:
         flow_loader, dev, dtype, take_data_branch=False, mc_as_data=True,
         cap=args.max_events_flow, label="stage-1 (flow)")
     alpha1 = w1_total / max(w1_seen, 1e-300)
+    if dev.startswith("cuda"):
+        torch.cuda.empty_cache()   # release the loader's transient buffers
 
     n_iter = int(targs.get("continuity_n_iter", 2))
 
@@ -666,9 +674,12 @@ def main(argv=None) -> int:
             acc += float(v @ raw_hvp(v)) / n
         return acc / 2.0
 
-    print("estimating Hessian trace scales (Hutchinson)...")
+    print(f"estimating Hessian trace scales (Hutchinson; "
+          f"--eval-chunk={args.eval_chunk})...")
     sc_w = _trace_scale(_raw_hvp_w, n_w)
     sc_phi = _trace_scale(_raw_hvp_phi, n_phi)
+    if dev.startswith("cuda"):
+        torch.cuda.empty_cache()
     lam_w = args.ridge_w * abs(sc_w)
     lam_phi = args.ridge_flow * abs(sc_phi)
     print(f"  tr(H_ww)/n = {sc_w:.4e} → λ_w = {lam_w:.4e}; "
@@ -707,6 +718,8 @@ def main(argv=None) -> int:
         U[j] = u.cpu()
         Z[j] = z.cpu()
         cg_stats.append((it_w, res_w, it_f, res_f))
+        if dev.startswith("cuda"):
+            torch.cuda.empty_cache()   # limit fragmentation over the long loop
         el = time.time() - t0
         print(f"  [{j + 1:3d}/{n_theta}] {labels[j]:14s} "
               f"CG_w {it_w:3d} it (res {res_w:.1e})  "
