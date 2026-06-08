@@ -1123,9 +1123,11 @@ def plot_theta_vs_eta(
         axes = [axes]
     slice_colors = ["C0", "C1", "C2", "C4", "C5"]   # skip C3 (reserved for ref)
     for i, ax in enumerate(axes):
-        # Total (data⊕flow) ±1σ band — drawn FIRST (behind), so the data-stat
-        # error bars / band sit on top and the gap = the flow contribution.
-        if sigma_total is not None:
+        # Total (data⊕flow) ±1σ: a SHADED BAND for the continuous MLP curve,
+        # but ERROR BARS for binned θ (the data-stat inner bar + marker is
+        # drawn below; here we draw the wider OUTER total bar). Band drawn first
+        # (behind) for MLP.
+        if sigma_total is not None and sigma_band:
             ax.fill_between(
                 eta_centers, theta[:, i] - sigma_total[:, i],
                 theta[:, i] + sigma_total[:, i],
@@ -1157,10 +1159,23 @@ def plot_theta_vs_eta(
             ax.plot(eta_centers, theta[:, i], "-", color="k", lw=1.6,
                     label=main_label)
         elif sigma is not None:
+            # binned: wider OUTER total (data⊕flow) error bar first, then the
+            # data-stat error bar + marker on top — the gap is the flow.
+            if sigma_total is not None:
+                ax.errorbar(
+                    eta_centers, theta[:, i], yerr=sigma_total[:, i], fmt="none",
+                    ecolor="0.55", elinewidth=1.2, capsize=5,
+                    label="±1σ (data⊕flow)")
             ax.errorbar(
                 eta_centers, theta[:, i], yerr=sigma[:, i],
                 fmt="o", color="k", markersize=4, capsize=2, label=main_label,
             )
+        elif sigma_total is not None:
+            # binned, flow-only (no --fisher): the total IS the error bar.
+            ax.errorbar(
+                eta_centers, theta[:, i], yerr=sigma_total[:, i],
+                fmt="o", color="k", markersize=4, capsize=3,
+                label="±1σ (data⊕flow)")
         else:
             ax.plot(eta_centers, theta[:, i], "o-", color="k", markersize=4,
                     label=main_label)
@@ -2434,59 +2449,92 @@ def main() -> int:
                         if f.get("covariance_smear_2d") is not None else None)
         fisher_cell_w = (f["cell_w"].cpu().numpy()
                          if f.get("cell_w") is not None else None)
-        # Covariance + correlation matrix over the FULL joint parameter set
-        # (θ_scale + active θ_smear); fall back to the θ_scale-only correlation
-        # for legacy files that store only the 24×3×24×3 scale block.
+        # Full joint covariance (θ_scale + active θ_smear); the matrix plot is
+        # drawn later from the TOTAL (data⊕flow) when --flow-uncertainty is set.
         full_cov = f.get("covariance")
-        if full_cov is not None:
-            print("plotting covariance / correlation matrix...")
-            plot_cov_corr(full_cov.detach().cpu().numpy(), f.get("labels"),
-                          int(f.get("n_scale", 72)), out_dir, edm=edm)
-        elif cov_scale_flat is not None:
-            print("plotting correlation matrix (θ_scale block)...")
-            plot_fisher_correlation(cov_scale_flat, out_dir)
-        else:
-            print("  warning: no covariance in the file; skipping matrix plot.")
+        full_cov_labels = f.get("labels")
+        full_cov_nscale = int(f.get("n_scale", 72))
     else:
+        full_cov = full_cov_labels = None
+        full_cov_nscale = 72
         print("no fisher_info.pt → skipping θ_scale ±σ bands + correlation plot.")
 
-    # Flow (stage-1 template) uncertainty → the data⊕flow TOTAL band on the
-    # θ-vs-η plots. Combined in quadrature per component with the data-stat σ
-    # (σ_total = √(σ_data² + σ_flow²)); if --fisher was not given, the band is
-    # the flow contribution alone.
+    # Flow (stage-1 template) uncertainty: ADD it to the data-stat covariance to
+    # get the TOTAL (data⊕flow), used everywhere downstream — the θ-vs-η error
+    # bars (binned) / band (mlp), the χ² compatibility test, the covariance /
+    # correlation matrices, and the whitened bands. If --fisher was not given,
+    # the "total" is the flow contribution alone. (Per-block keys add exactly:
+    # cov_total = cov_data + cov_flow.) sigma_*_total = √diag(cov_total).
+    sigma_scale = sigma_scale if sigma_scale is not None else None
+    sigma_scale_data = sigma_scale          # data-stat σ (inner error bar)
+    sigma_smear_data = sigma_smear
     sigma_scale_total = sigma_smear_total = None
+    cov_scale_total = cov_scale_flat        # default = data-stat (no flow)
+    cov_smear_total = cov_smear_flat
+    full_cov_total = full_cov
     fu_path = getattr(args, "flow_uncertainty", None)
     if fu_path and os.path.exists(fu_path):
         fu = torch.load(fu_path, weights_only=False)
-
-        def _combine(sig_data, key):
-            sf = fu.get(key)
-            if sf is None:
-                return None
-            sf = sf.cpu().numpy()
-            if sig_data is not None and sig_data.shape == sf.shape:
-                return np.sqrt(sig_data ** 2 + sf ** 2)
-            return sf                               # flow only (no --fisher)
-
-        sigma_scale_total = _combine(sigma_scale, "sigma_scale_24_3_flow")
-        sigma_smear_total = _combine(sigma_smear, "sigma_smear_eff_24_2_flow")
         print(f"flow uncertainty from {os.path.basename(fu_path)} "
               f"(w-solver={fu.get('w_solver')}, flow-solver={fu.get('flow_solver')}):")
 
-        def _budget(tag, sig_data, key, total):
-            sf = fu.get(key)
-            if sf is None:
-                return
-            sf = sf.cpu().numpy()
+        def _add_block(cov_data, key):
+            """cov_total = cov_data + cov_flow (flat [n,n]); flow-only if no data."""
+            t = fu.get(key)
+            if t is None:
+                return cov_data, None
+            cf = t.cpu().numpy()
+            ne = cf.shape[0]
+            ncol = cf.shape[1]
+            cf = cf.reshape(ne * ncol, ne * ncol)
+            tot = (cov_data + cf) if (cov_data is not None
+                                      and cov_data.shape == cf.shape) else cf
+            return tot, tot
+
+        cov_scale_total, cs = _add_block(cov_scale_flat, "covariance_24_3_24_3_flow")
+        if cs is not None:
+            ne = cs.shape[0] // 3
+            sigma_scale_total = np.sqrt(np.maximum(np.diag(cs), 0.0)).reshape(ne, 3)
+        cov_smear_total, csm = _add_block(cov_smear_flat, "covariance_smear_24_2_24_2_flow")
+        if csm is not None:
+            ne = csm.shape[0] // 2
+            sigma_smear_total = np.sqrt(np.maximum(np.diag(csm), 0.0)).reshape(ne, 2)
+        # Full joint covariance (raw active-θ layout — same as the data file's).
+        fcf = fu.get("covariance_flow")
+        if fcf is not None:
+            if full_cov is not None and tuple(full_cov.shape) == tuple(fcf.shape):
+                full_cov_total = (full_cov.double() + fcf.double())
+            else:
+                full_cov_total = fcf
+                full_cov_labels = full_cov_labels or fu.get("labels")
+                full_cov_nscale = int(fu.get("n_scale", full_cov_nscale))
+
+        def _budget(tag, sig_data, total):
             d = (float(np.median(sig_data)) if sig_data is not None else float("nan"))
-            print(f"  {tag}: median σ — data {d:.3e} | flow "
-                  f"{float(np.median(sf)):.3e} | total "
-                  f"{float(np.median(total)) if total is not None else float('nan'):.3e}")
-        _budget("scale(A,e,M)", sigma_scale, "sigma_scale_24_3_flow", sigma_scale_total)
-        _budget("smear(a,c)", sigma_smear, "sigma_smear_eff_24_2_flow", sigma_smear_total)
+            t = (float(np.median(total)) if total is not None else float("nan"))
+            fl = (float(np.median(np.sqrt(np.maximum(total ** 2 - (sig_data ** 2
+                  if sig_data is not None else 0.0), 0.0))))
+                  if total is not None else float("nan"))
+            print(f"  {tag}: median σ — data {d:.3e} | flow {fl:.3e} | total {t:.3e}")
+        _budget("scale(A,e,M)", sigma_scale_data, sigma_scale_total)
+        _budget("smear(a,c)", sigma_smear_data, sigma_smear_total)
     elif fu_path:
         print(f"  warning: --flow-uncertainty {fu_path} not found; skipping the "
               f"total band.")
+
+    # Covariance / correlation matrices (from the TOTAL when --flow-uncertainty
+    # is set, else the data-stat Fisher).
+    _cov_tag = "total (data⊕flow)" if (fu_path and sigma_scale_total is not None
+                                       ) else "data-stat"
+    if full_cov_total is not None:
+        print(f"plotting covariance / correlation matrix ({_cov_tag})...")
+        plot_cov_corr(full_cov_total.detach().cpu().numpy(), full_cov_labels,
+                      full_cov_nscale, out_dir, edm=edm)
+    elif cov_scale_total is not None:
+        print(f"plotting correlation matrix (θ_scale block, {_cov_tag})...")
+        plot_fisher_correlation(cov_scale_total, out_dir)
+    else:
+        print("  no covariance available; skipping matrix plot.")
 
     # Plots 2, 3: θ vs η — only for the *enabled* nuisances (a disabled one
     # is an inert, fixed parameter; plotting it would be misleading).
@@ -2613,14 +2661,18 @@ def main() -> int:
         # the full θ_scale covariance block (correlations included).
         ref = inject_ref_np if inject_ref_np is not None else None
         chi2_info = None
-        if cov_scale_flat is not None:
+        # Use the TOTAL (data⊕flow) covariance when --flow-uncertainty is set,
+        # so the compatibility test accounts for the flow uncertainty too.
+        if cov_scale_total is not None:
             resid = theta_scale.reshape(-1)
             if ref is not None:
                 resid = resid - ref.reshape(-1)
-            chi2, dof, pval = _chi2_compat_zero(resid, cov_scale_flat)
+            chi2, dof, pval = _chi2_compat_zero(resid, cov_scale_total)
             chi2_info = (chi2, dof, pval)
             tgt = "injected" if ref is not None else "0"
-            print(f"  θ_scale compatibility with {tgt}: χ²/dof = {chi2:.1f}/{dof} = "
+            ctag = ("total" if sigma_scale_total is not None else "data-stat")
+            print(f"  θ_scale compatibility with {tgt} ({ctag} cov): "
+                  f"χ²/dof = {chi2:.1f}/{dof} = "
                   f"{chi2 / max(dof, 1):.2f}, p = {pval:.3g}")
         plot_theta_vs_eta(
             theta_scale, sigma_scale, ["A", "e [GeV]", "M"],
@@ -2808,12 +2860,12 @@ def main() -> int:
             ss = None if mlp_scale_avg_samples is None else mlp_scale_avg_samples[:, :, :2]
             sl = None if mlp_scale_slices is None else mlp_scale_slices[:, :, :2]
             ij = None if inject_ref_np is None else inject_ref_np[:, :2]
-            # Per-bin (A,e) physical covariance for the Fisher band (diagonal
-            # blocks of the 72×72 θ_scale covariance).
+            # Per-bin (A,e) physical covariance for the band (diagonal blocks of
+            # the θ_scale covariance — TOTAL data⊕flow when --flow-uncertainty).
             cov_ae = None
-            if cov_scale_flat is not None:
-                ne = cov_scale_flat.shape[0] // 3
-                c4 = cov_scale_flat.reshape(ne, 3, ne, 3)
+            if cov_scale_total is not None:
+                ne = cov_scale_total.shape[0] // 3
+                c4 = cov_scale_total.reshape(ne, 3, ne, 3)
                 cov_ae = np.stack([c4[b, :2, b, :2] for b in range(c4.shape[0])])
             _whitened_plot(sg, ss, sl, THETA_SCALE_REF[:2], ij, E_s, l_s,
                            "theta_scale_whitened_vs_eta", ("A", "e"), cov_phys=cov_ae)
@@ -2824,9 +2876,9 @@ def main() -> int:
             csl = mlp_smear_slices
             ij = inject_smear_ref_np
             cov_ac = None
-            if cov_smear_flat is not None:
-                ne = cov_smear_flat.shape[0] // 2
-                c4 = cov_smear_flat.reshape(ne, 2, ne, 2)
+            if cov_smear_total is not None:
+                ne = cov_smear_total.shape[0] // 2
+                c4 = cov_smear_total.reshape(ne, 2, ne, 2)
                 cov_ac = np.stack([c4[b, :, b, :] for b in range(c4.shape[0])])
             _whitened_plot(cg, cs, csl, [SMEAR_VAR_SCALE_A, SMEAR_VAR_SCALE_C],
                            ij, E_c, l_c, "theta_smear_whitened_vs_eta", ("a", "c"),
