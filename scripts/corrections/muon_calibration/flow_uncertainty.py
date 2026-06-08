@@ -26,6 +26,14 @@ are treated differently (``--w-solver``):
 
   • H₁ (the central PSD factor / Cov(φ̂)) MUST be PD — its negative
     eigenvalues would make the covariance non-PSD — so it is ridged (CG).
+    For the empirical Fisher I_φ this PSD factor is hugely rank-deficient
+    (n_φ ≫ N_flow), so a small ``--ridge-flow`` gives its null space 1/λ_φ,
+    which LEAKS into θ and inflates the flow σ (flow-only χ²/dof ≪ 1).
+    ``--flow-solver fisher-trunc`` removes the leak at the source: the
+    TRUNCATED PSEUDOINVERSE keeps only the top-r eigendirections (Lanczos)
+    above a relative floor and zeroes the rest, so I_φ⁺ = Σ_{i≤r} v_iv_iᵀ/μ_i
+    — no ridge tuning, and the only error is genuine curvature dropped below
+    the floor (flagged by a captured-fraction diagnostic on range(U)).
   • H_ww enters only as the congruence bread M = H_ww⁻¹H_wφ; the θθ block
     Cov_θθ = Mᵀ H₁⁻¹ M is PSD for ANY invertible H_ww, so H_ww need NOT be
     PD. The OBSERVED H_ww is in fact genuinely indefinite (the nonlinear
@@ -724,6 +732,67 @@ def _pcg_batched(apply_A_batch, B, Minv, tol, max_iter, label="",
     return X, it, float(rel.max())
 
 
+def _lanczos_eigsh(apply_A, n, m, dev, label="I_φ", progress=True,
+                   report_dt=20.0):
+    """Top-eigenpair Lanczos for a symmetric-PSD matrix-free operator A.
+
+    Returns ``(evals desc [r], V [n, r])`` — the order-``m`` Krylov (Ritz)
+    approximation to the LARGEST eigenpairs of A. The largest Ritz values
+    converge first (and most accurately), which is exactly the well-determined
+    'signal' subspace the truncated pseudoinverse keeps; the bottom of A's
+    spectrum (the rank-deficient / sampling-noise null space of an empirical
+    Fisher with n_φ ≫ N_flow) is what we DISCARD, so it need not be resolved.
+
+    Full reorthogonalisation (Q is stored: ``m`` vectors of dim ``n`` — keep
+    ``m`` modest; ``m·n·8`` bytes). One ``apply_A`` per iteration (Lanczos is
+    inherently sequential), shared across ALL covariance columns downstream —
+    far cheaper than per-block CG when n_θ is large."""
+    Q = torch.zeros((n, m), dtype=torch.float64, device=dev)
+    alpha = torch.zeros(m, dtype=torch.float64)
+    beta = torch.zeros(m, dtype=torch.float64)
+    gen = torch.Generator(device="cpu").manual_seed(12345)
+    q = (torch.randint(0, 2, (n,), generator=gen, dtype=torch.int64).double()
+         * 2.0 - 1.0).to(dev)
+    q = q / q.norm()
+    q_prev = torch.zeros_like(q)
+    b_prev = 0.0
+    built = m
+    t0 = t_last = time.time()
+    for j in range(m):
+        Q[:, j] = q
+        w = apply_A(q)
+        a = float(q @ w)
+        alpha[j] = a
+        w = w - a * q - b_prev * q_prev
+        # full reorthogonalisation (twice — DGKS) against the stored basis: the
+        # empirical Fisher's huge dynamic range makes plain Lanczos lose
+        # orthogonality fast, spawning spurious/ghost eigenvalues.
+        Qj = Q[:, :j + 1]
+        w = w - Qj @ (Qj.t() @ w)
+        w = w - Qj @ (Qj.t() @ w)
+        b = float(w.norm())
+        beta[j] = b
+        if progress and ((time.time() - t_last) > report_dt or j == m - 1):
+            print(f"    Lanczos[{label}] it {j + 1}/{m}  β={b:.2e} "
+                  f"({time.time() - t0:.0f}s)", flush=True)
+            t_last = time.time()
+        if b < 1e-12:                      # invariant subspace reached
+            built = j + 1
+            break
+        q_prev = q
+        q = w / b
+        b_prev = b
+    # eigendecompose the (built × built) tridiagonal T = tri(alpha; beta).
+    Tm = torch.diag(alpha[:built])
+    if built > 1:
+        off = beta[:built - 1]
+        Tm = Tm + torch.diag(off, 1) + torch.diag(off, -1)
+    evals, evecs = torch.linalg.eigh(Tm)                    # ascending
+    V = Q[:, :built] @ evecs.to(dev)                        # Ritz vectors [n, b]
+    idx = torch.argsort(evals, descending=True)
+    return evals[idx].to(dev), V[:, idx].contiguous()
+
+
 # ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
@@ -806,18 +875,49 @@ def parse_args(argv=None):
     p.add_argument("--score-chunk", type=int, default=64,
                    help="(--w-solver fisher) Per-event-score batch size for the "
                    "empirical-Fisher build (batched vjp). Smaller = less memory.")
-    p.add_argument("--flow-solver", choices=["fisher", "observed"],
+    p.add_argument("--flow-solver",
+                   choices=["fisher", "fisher-trunc", "observed"],
                    default="fisher",
-                   help="How to form the flow meat H₁ (the CENTRAL PSD factor "
-                   "Cov(φ̂), which MUST be PD). 'fisher' (default): the "
+                   help="How to form/invert the flow meat H₁ (the CENTRAL PSD "
+                   "factor Cov(φ̂), which MUST be PD). 'fisher' (default): the "
                    "empirical Fisher I_φ = Σ wᵢsᵢsᵢᵀ via a MATRIX-FREE "
-                   "Fisher-vector product (58208-dim, can't densify) — PSD by "
-                   "construction (the standard inverse-Fisher parameter "
-                   "covariance), so CG_φ never hits negative curvature and only "
-                   "a small null-space --ridge-flow is needed. 'observed': the "
-                   "double-backward flow Hessian, which is genuinely indefinite "
-                   "at the early-stopping point (not a minimum) → needs a large "
+                   "Fisher-vector product (can't densify), inverted by ridged "
+                   "PCG_φ — PSD by construction, so CG_φ never hits negative "
+                   "curvature and only a small null-space --ridge-flow is "
+                   "needed. 'fisher-trunc': the TRUNCATED PSEUDOINVERSE of the "
+                   "SAME I_φ — top-r eigenpairs by Lanczos (--flow-lanczos-iters"
+                   "), then I_φ⁺ = Σ_{i≤r} v_iv_iᵀ/μ_i with the rank-deficient / "
+                   "sampling-noise null space (μ below --flow-trunc-tol·μ_max or "
+                   "rank past --flow-trunc-rank) contributing ZERO instead of "
+                   "1/λ_φ. This removes the null-space LEAK that inflates the "
+                   "flow σ (χ²/dof ≪ 1) by construction — no --ridge-flow tuning "
+                   "— at the cost of dropping any genuine curvature below the "
+                   "floor (a captured-fraction diagnostic flags that). "
+                   "'observed': the double-backward flow Hessian, genuinely "
+                   "indefinite at the early-stopping point → needs a large "
                    "--ridge-flow / escalation.")
+    p.add_argument("--flow-lanczos-iters", type=int, default=0,
+                   help="(--flow-solver fisher-trunc) Lanczos iterations m for "
+                   "the top-eigenpair sweep; 0 = auto = max(--flow-trunc-rank, "
+                   "120) + 40 oversample. m sets BOTH the max attainable rank "
+                   "and the accuracy of the SMALLEST retained eigenpairs (which "
+                   "dominate the covariance via 1/μ), so oversample past the "
+                   "intended rank. Memory ≈ m·n_φ·8 bytes (stored basis). Scan "
+                   "it up until the retained rank / σ stabilise.")
+    p.add_argument("--flow-trunc-rank", type=int, default=0,
+                   help="(--flow-solver fisher-trunc) Hard cap on the retained "
+                   "eigenpair count r; 0 = no cap (keep all above "
+                   "--flow-trunc-tol). The covariance is dominated by the "
+                   "SMALLEST retained μ, so raising r ADDS lower eigendirections "
+                   "and INCREASES σ — scan r (or the tol) for the plateau where "
+                   "flow-only χ²/dof ≈ 1.")
+    p.add_argument("--flow-trunc-tol", type=float, default=1e-3,
+                   help="(--flow-solver fisher-trunc) Relative eigenvalue floor: "
+                   "keep eigendirections with μ_i > tol·μ_max, discard the rest "
+                   "(the noise floor of the rank-deficient empirical Fisher). "
+                   "The principled knob — scan it (with the printed spectrum, "
+                   "look for the gap between signal and noise) instead of "
+                   "--ridge-flow.")
     p.add_argument("--check-stationarity", action="store_true",
                    help="Before solving, report ‖∂L₂/∂w‖ (total, θ-block, "
                    "background-block) at the checkpoint. A non-PSD/indefinite "
@@ -1085,8 +1185,10 @@ def main(argv=None) -> int:
                   _unpack_phi(v))
         return torch.cat([x.reshape(-1) for x in h]).double()
 
-    # The flow meat operator: empirical Fisher (PSD, default) or observed H₁.
-    raw_phi = _raw_efvp_phi if args.flow_solver == "fisher" else _raw_hvp_phi
+    # The flow meat operator: empirical Fisher (PSD; default 'fisher' PCG +
+    # 'fisher-trunc' Lanczos pseudoinverse share I_φ) or observed H₁.
+    fisher_flow = args.flow_solver in ("fisher", "fisher-trunc")
+    raw_phi = _raw_efvp_phi if fisher_flow else _raw_hvp_phi
 
     offs_phi, _o = [], 0
     for p in flow_params:
@@ -1159,7 +1261,7 @@ def main(argv=None) -> int:
 
     # H₁ (flow) ridge always via Hutchinson; it stays a CG solve (on the
     # empirical Fisher I_φ for --flow-solver fisher, the observed H₁ otherwise).
-    _phi_tag = "I_φ" if args.flow_solver == "fisher" else "H₁(obs)"
+    _phi_tag = "I_φ" if fisher_flow else "H₁(obs)"
     print(f"estimating {_phi_tag} trace scale (Hutchinson; --eval-chunk="
           f"{args.eval_chunk})...")
     sc_phi = _trace_scale(raw_phi, n_phi, _phi_tag)
@@ -1285,9 +1387,60 @@ def main(argv=None) -> int:
     elif args.flow_solver == "fisher":
         Minv_phi = torch.ones(n_phi, dtype=torch.float64, device=dev)
 
+    # ---- TRUNCATED PSEUDOINVERSE of I_φ (--flow-solver fisher-trunc) --------
+    # Top-r eigenpairs by Lanczos; the rank-deficient / sampling-noise null
+    # space (μ below the floor) contributes ZERO to z = I_φ⁺u instead of the
+    # ridge's 1/λ_φ → no null-space leak, no --ridge-flow tuning. The eval-grid
+    # quantities (Z below) become z = Σ_{i≤r} v_i (v_iᵀu)/μ_i. Eigenvalues are
+    # of the SUBSET I_φ; the final /α₁ rescales to the full flow sample, exactly
+    # as the PCG path (I_φ_full ≈ α₁·I_φ_subset ⇒ inverse carries 1/α₁).
+    trunc = args.flow_solver == "fisher-trunc"
+    Vk = inv_mu = None
+    trunc_info = {}
+    if trunc:
+        m_lanczos = (args.flow_lanczos_iters if args.flow_lanczos_iters > 0
+                     else max(args.flow_trunc_rank, 120) + 40)
+        m_lanczos = min(m_lanczos, n_phi)
+        print(f"truncated pseudoinverse: Lanczos top-eigenpairs of I_φ "
+              f"(m={m_lanczos} iters, n_φ={n_phi}; basis ≈ "
+              f"{m_lanczos * n_phi * 8 / 2**30:.2f} GiB)...")
+        evals, V = _lanczos_eigsh(raw_phi, n_phi, m_lanczos, dev,
+                                  label="I_φ", progress=args.progress)
+        mu_max = float(evals[0].clamp_min(0.0))
+        floor = args.flow_trunc_tol * mu_max
+        keep = (evals > floor) & (evals > 0.0)
+        if args.flow_trunc_rank > 0 and int(keep.sum()) > args.flow_trunc_rank:
+            ksel = torch.zeros_like(keep)
+            ksel[:args.flow_trunc_rank] = True          # evals are sorted desc
+            keep = keep & ksel
+        r = int(keep.sum())
+        Vk = V[:, keep].contiguous()                    # [n_φ, r]
+        muk = evals[keep]
+        inv_mu = (1.0 / muk).double()
+        del V
+        if dev.startswith("cuda"):
+            torch.cuda.empty_cache()
+        ev = evals.detach().cpu()
+        top = ", ".join(f"{float(ev[i]):.3e}" for i in range(min(6, ev.numel())))
+        tail = (f"{float(ev[r - 1]):.3e}" if r > 0 else "—")
+        print(f"  spectrum (desc): {top}{' ...' if ev.numel() > 6 else ''}")
+        print(f"  μ_max={mu_max:.3e}, floor={floor:.3e} "
+              f"(tol={args.flow_trunc_tol:g}); RETAINED rank r={r}/{ev.numel()} "
+              f"(smallest kept μ={tail})")
+        if r >= m_lanczos:
+            print("  WARNING: retained rank hit the Lanczos budget — the floor "
+                  "did not cut; RAISE --flow-lanczos-iters (the smallest kept "
+                  "eigenpairs may be under-converged → σ unreliable).",
+                  file=sys.stderr)
+        trunc_info = {"rank": r, "m_lanczos": m_lanczos,
+                      "mu_max": mu_max, "floor": floor,
+                      "eigvals_kept": muk.detach().cpu(),
+                      "eigvals_top": ev[:min(64, ev.numel())].clone()}
+
     # ---- the column loop (BLOCKED over --col-block columns) ----------------
     bsz = max(1, int(args.col_block))
-    batched = args.flow_solver == "fisher"     # batched mixed + PCG_φ path
+    batched = fisher_flow                       # batched mixed; PCG/trunc for Z
+    cap_min = 1.0                               # min captured fraction (trunc)
     print(f"running {n_theta} θ-columns in blocks of {bsz} "
           f"(w-solver={args.w_solver}, flow-solver={args.flow_solver}, "
           f"λ_w={lam_w:.3e}, λ_φ={lam_phi:.3e}, tol={args.cg_tol:g}, "
@@ -1314,11 +1467,26 @@ def main(argv=None) -> int:
         # mixed: U = H_φw X  (batched when fisher-flow, else per column).
         if batched:
             Ub = mixed_u_batch(Xb)                      # [n_φ, K]
-            Zb, it_f, res_f = _pcg_batched(
-                lambda P: efvp_phi_batch(P) + lam_phi * P, Ub, Minv_phi,
-                args.cg_tol, args.cg_max_iter_flow,
-                label=f"φ:{labels[cols[0]]}..", progress=args.progress)
-            lf_used = lam_phi
+            if trunc:
+                # z = I_φ⁺ u = V_r diag(1/μ) V_rᵀ u — exact, no iteration.
+                proj = Vk.t() @ Ub                      # [r, K]
+                Zb = Vk @ (inv_mu.unsqueeze(1) * proj)  # [n_φ, K]
+                # captured fraction ‖P_r u‖/‖u‖ per column: how much of the
+                # θ-relevant direction u survives the truncation. ≈1 ⇒ the
+                # discarded subspace is noise (faithful); ≪1 ⇒ truncation is
+                # dropping genuine curvature θ depends on → σ UNDERestimated,
+                # raise --flow-trunc-rank / lower --flow-trunc-tol / raise
+                # --flow-lanczos-iters.
+                un = Ub.norm(dim=0).clamp_min(1e-300)
+                cap = float((proj.norm(dim=0) / un).min())
+                cap_min = min(cap_min, cap)
+                it_f, res_f, lf_used = 0, 0.0, 0.0
+            else:
+                Zb, it_f, res_f = _pcg_batched(
+                    lambda P: efvp_phi_batch(P) + lam_phi * P, Ub, Minv_phi,
+                    args.cg_tol, args.cg_max_iter_flow,
+                    label=f"φ:{labels[cols[0]]}..", progress=args.progress)
+                lf_used = lam_phi
         else:
             Ucols, Zcols, it_f, res_f, lf_used = [], [], 0, 0.0, lam_phi
             for k, j in enumerate(cols):
@@ -1338,8 +1506,12 @@ def main(argv=None) -> int:
         el = time.time() - t0
         w_tag = ("Fisher" if args.w_solver == "fisher"
                  else f"{args.w_solver}_w {it_w:3d} it")
-        phi_tag = (f"PCG_φ {it_f:3d} it (max res {res_f:.1e})" if batched
-                   else f"CG_φ {it_f:3d} it (res {res_f:.1e})")
+        if trunc:
+            phi_tag = f"I_φ⁺ r={trunc_info['rank']} (cap≥{cap_min:.3f})"
+        elif batched:
+            phi_tag = f"PCG_φ {it_f:3d} it (max res {res_f:.1e})"
+        else:
+            phi_tag = f"CG_φ {it_f:3d} it (res {res_f:.1e})"
         print(f"  [{cols[0] + 1:3d}-{cols[-1] + 1:3d}/{n_theta}] {w_tag}  "
               f"{phi_tag}  elapsed {el / 60:.1f} min", flush=True)
 
@@ -1348,6 +1520,15 @@ def main(argv=None) -> int:
     asym = float((U @ Z.T - Z @ U.T).abs().max()
                  / cov_flow.abs().max().clamp_min(1e-300))
     print(f"covariance asymmetry (CG-residual scale check): {asym:.2e}")
+    if trunc:
+        print(f"truncated pseudoinverse: retained rank {trunc_info['rank']}, "
+              f"min captured fraction of range(U) = {cap_min:.4f}")
+        if cap_min < 0.99:
+            print("  WARNING: truncation drops a non-negligible part of the "
+                  "θ-relevant subspace (captured < 0.99) → flow σ may be "
+                  "UNDERestimated. Raise --flow-trunc-rank / --flow-lanczos-iters"
+                  " or lower --flow-trunc-tol until the captured fraction → 1 "
+                  "and σ stabilises.", file=sys.stderr)
     if escal["w"]["n_cols"] or escal["phi"]["n_cols"]:
         print("\n*** WARNING: ridge auto-escalation was triggered — the result "
               "is OVER-REGULARISED and UNDERESTIMATES the flow uncertainty in "
@@ -1391,6 +1572,14 @@ def main(argv=None) -> int:
         "flow_precond": args.flow_precond,
         "col_block": int(args.col_block),
     }
+    if trunc:
+        out["flow_trunc"] = {
+            "rank": trunc_info["rank"], "m_lanczos": trunc_info["m_lanczos"],
+            "tol": args.flow_trunc_tol, "max_rank": int(args.flow_trunc_rank),
+            "mu_max": trunc_info["mu_max"], "floor": trunc_info["floor"],
+            "captured_min": cap_min,
+            "eigvals_top": trunc_info["eigvals_top"],
+        }
 
     if is_mlp:
         # ``covariance_flow`` is the active-table grid covariance (physical
