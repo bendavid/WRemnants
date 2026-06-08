@@ -1113,6 +1113,7 @@ def plot_theta_vs_eta(
     slices: "np.ndarray | None" = None,    # [n_eta, n_slices, n_comp] φ-slices
     slice_labels: "list | None" = None,    # length n_slices, e.g. ['φ=0', ...]
     sigma_band: bool = False,    # draw `sigma` as a continuous shaded band (MLP)
+    sigma_total: "np.ndarray | None" = None,  # [n_eta, n_comp] data⊕flow ±1σ
 ):
     n_eta, n_comp = theta.shape
     eta_centers = 0.5 * (eta_edges[:-1] + eta_edges[1:])
@@ -1122,6 +1123,14 @@ def plot_theta_vs_eta(
         axes = [axes]
     slice_colors = ["C0", "C1", "C2", "C4", "C5"]   # skip C3 (reserved for ref)
     for i, ax in enumerate(axes):
+        # Total (data⊕flow) ±1σ band — drawn FIRST (behind), so the data-stat
+        # error bars / band sit on top and the gap = the flow contribution.
+        if sigma_total is not None:
+            ax.fill_between(
+                eta_centers, theta[:, i] - sigma_total[:, i],
+                theta[:, i] + sigma_total[:, i],
+                color="C7", alpha=0.30, linewidth=0,
+                label="±1σ (data⊕flow)")
         # φ-spread band (MLP mode only — `band` carries the std over φ at each η).
         if band is not None:
             ax.fill_between(
@@ -1161,9 +1170,11 @@ def plot_theta_vs_eta(
                     label="injected")
         ax.set_ylabel(component_names[i])
         ax.grid(True, alpha=0.3)
-    if ref is not None or slices is not None or band is not None:
+    if (ref is not None or slices is not None or band is not None
+            or sigma_total is not None):
         axes[0].legend(loc="best", fontsize=7, ncol=max(1,
             (1 + int(ref is not None) + int(band is not None)
+             + int(sigma_total is not None)
              + (slices.shape[1] if slices is not None else 0)) // 4 + 1))
     axes[-1].set_xlabel("η-bin center")
     title = name
@@ -1646,6 +1657,13 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     p.add_argument("--fisher", default=None,
                    help="Path to fisher_info.pt (optional; enables θ_scale ±σ "
                    "bands and the correlation heatmap).")
+    p.add_argument("--flow-uncertainty", default=None,
+                   help="Path to flow_uncertainty.pt (optional). Adds the "
+                   "FLOW (stage-1 template) uncertainty to the θ-vs-η plots: "
+                   "the data-stat ±1σ (from --fisher) stays as the error bars / "
+                   "inner band, and a wider ±1σ (data⊕flow) total band is "
+                   "drawn behind it (combined in quadrature per component). The "
+                   "per-component data/flow/total σ budget is also printed.")
     p.add_argument("--output", default=None,
                    help="Output directory (default: <checkpoint_dir>/diagnostics/).")
     p.add_argument("--device", default=("cuda:0" if torch.cuda.is_available() else "cpu"))
@@ -2432,6 +2450,44 @@ def main() -> int:
     else:
         print("no fisher_info.pt → skipping θ_scale ±σ bands + correlation plot.")
 
+    # Flow (stage-1 template) uncertainty → the data⊕flow TOTAL band on the
+    # θ-vs-η plots. Combined in quadrature per component with the data-stat σ
+    # (σ_total = √(σ_data² + σ_flow²)); if --fisher was not given, the band is
+    # the flow contribution alone.
+    sigma_scale_total = sigma_smear_total = None
+    fu_path = getattr(args, "flow_uncertainty", None)
+    if fu_path and os.path.exists(fu_path):
+        fu = torch.load(fu_path, weights_only=False)
+
+        def _combine(sig_data, key):
+            sf = fu.get(key)
+            if sf is None:
+                return None
+            sf = sf.cpu().numpy()
+            if sig_data is not None and sig_data.shape == sf.shape:
+                return np.sqrt(sig_data ** 2 + sf ** 2)
+            return sf                               # flow only (no --fisher)
+
+        sigma_scale_total = _combine(sigma_scale, "sigma_scale_24_3_flow")
+        sigma_smear_total = _combine(sigma_smear, "sigma_smear_eff_24_2_flow")
+        print(f"flow uncertainty from {os.path.basename(fu_path)} "
+              f"(w-solver={fu.get('w_solver')}, flow-solver={fu.get('flow_solver')}):")
+
+        def _budget(tag, sig_data, key, total):
+            sf = fu.get(key)
+            if sf is None:
+                return
+            sf = sf.cpu().numpy()
+            d = (float(np.median(sig_data)) if sig_data is not None else float("nan"))
+            print(f"  {tag}: median σ — data {d:.3e} | flow "
+                  f"{float(np.median(sf)):.3e} | total "
+                  f"{float(np.median(total)) if total is not None else float('nan'):.3e}")
+        _budget("scale(A,e,M)", sigma_scale, "sigma_scale_24_3_flow", sigma_scale_total)
+        _budget("smear(a,c)", sigma_smear, "sigma_smear_eff_24_2_flow", sigma_smear_total)
+    elif fu_path:
+        print(f"  warning: --flow-uncertainty {fu_path} not found; skipping the "
+              f"total band.")
+
     # Plots 2, 3: θ vs η — only for the *enabled* nuisances (a disabled one
     # is an inert, fixed parameter; plotting it would be misleading).
     print("plotting θ vs η...")
@@ -2573,6 +2629,7 @@ def main() -> int:
             band=mlp_scale_band, slices=mlp_scale_slices,
             slice_labels=mlp_slice_labels,
             sigma_band=(model.theta_mode == "mlp"),
+            sigma_total=sigma_scale_total,
         )
         # Single-η-bin binned θ: the global (A, e, M) scale params are cheap to
         # scan directly, so add a 1-D NLL likelihood scan (the most transparent
@@ -2622,6 +2679,7 @@ def main() -> int:
             band=mlp_smear_band, slices=mlp_smear_slices,
             slice_labels=mlp_slice_labels,
             sigma_band=(model.theta_mode == "mlp"),
+            sigma_total=sigma_smear_total,
         )
     else:
         print("  --disable-smearing: skipping theta_smear_vs_eta")
