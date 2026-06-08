@@ -417,13 +417,20 @@ def _grid_phi_weights(fit_ev, n_eta, n_phi_g):
 
 
 def parse_args(argv=None):
-    p = argparse.ArgumentParser(description=__doc__.split("\n")[0])
+    # ArgumentDefaultsHelpFormatter appends "(default: …)" to every option's
+    # help line, so -h prints the default for each argument.
+    p = argparse.ArgumentParser(
+        description=__doc__.split("\n")[0],
+        formatter_class=argparse.ArgumentDefaultsHelpFormatter)
     p.add_argument("--checkpoint", required=True,
-                   help="Stage-2 fit checkpoint (fit_best.pt).")
-    p.add_argument("--shards", required=True, help="Arrow shard dir/file(s).")
-    p.add_argument("--device", default="cuda:0" if torch.cuda.is_available()
-                   else "cpu")
-    p.add_argument("--batch-size", type=int, default=262144)
+                   help="Stage-2 fit checkpoint (fit_best.pt). REQUIRED.")
+    p.add_argument("--shards", required=True,
+                   help="Arrow shard dir/file(s). REQUIRED.")
+    p.add_argument("--device",
+                   default="cuda:0" if torch.cuda.is_available() else "cpu",
+                   help="Compute device (default tracks CUDA availability).")
+    p.add_argument("--batch-size", type=int, default=262144,
+                   help="Loader batch size for streaming the event samples.")
     p.add_argument("--eval-chunk", type=int, default=16384,
                    help="Events per HVP autograd chunk.")
     p.add_argument("--max-events-fit", type=int, default=0,
@@ -443,22 +450,25 @@ def parse_args(argv=None):
     p.add_argument("--grid-nphi", type=int, default=0,
                    help="θ-mlp only: uniform φ bins of the fixed (η,φ) output "
                    "grid (η = the stats η-bin centres); 0 = match the "
-                   "checkpoint's output_fisher_nphi (default 4) so the "
+                   "checkpoint's output_fisher_nphi (itself default 4) so the "
                    "covariance combines with the --output-fisher file. The "
                    "columns are EXACT — cost is linear in n_η·n_φ·n_comp.")
     p.add_argument("--cg-tol", type=float, default=1e-4,
                    help="CG relative-residual tolerance.")
-    p.add_argument("--cg-max-iter-w", type=int, default=200)
-    p.add_argument("--cg-max-iter-flow", type=int, default=200)
+    p.add_argument("--cg-max-iter-w", type=int, default=200,
+                   help="Max CG iterations for the H_ww (stage-2) solve.")
+    p.add_argument("--cg-max-iter-flow", type=int, default=200,
+                   help="Max CG iterations for the H₁ (stage-1 flow) solve.")
     p.add_argument("--precision", choices=["fp32", "fp64"], default="fp64",
                    help="Compute precision (fp64 strongly recommended: CG "
                    "residuals live below fp32 HVP noise).")
     p.add_argument("--fisher", default=None,
                    help="Optional empirical_fisher.pt to combine with "
-                   "(data-stat + flow totals written and printed).")
+                   "(data-stat + flow totals written and printed); None = skip.")
     p.add_argument("--output", default=None,
-                   help="Output .pt (default: <ckpt dir>/flow_uncertainty.pt)")
-    p.add_argument("--progress", action="store_true", default=True)
+                   help="Output .pt; None → <ckpt dir>/flow_uncertainty.pt.")
+    p.add_argument("--progress", action="store_true", default=True,
+                   help="Print per-column CG progress (on by default).")
     return p.parse_args(argv)
 
 
