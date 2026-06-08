@@ -4059,9 +4059,13 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "production-mismodelling systematic; expect δA ~ Δn·(σ_L/m)² "
                    "~ few×10⁻⁶.)")
     p.add_argument("--inject-prod-yll-slope", type=float, default=0.0,
-                   help="(--validation) Production-bias reweight exp[s·yll] "
-                   "(gen-level rapidity tilt). Mostly absorbed by the "
-                   "conditioning → probes the small π(c) residual.")
+                   help="(--validation) Production-bias reweight "
+                   "exp[s·(yll²−1)] — a rapidity WIDTH/centrality change that "
+                   "is EVEN in yll, so the ±η symmetry of pp production is "
+                   "preserved (an odd ∝yll tilt would inject an unphysical "
+                   "forward-backward asymmetry and bias the per-η-bin θ). "
+                   "Mostly absorbed by the conditioning → probes the small "
+                   "π(c) residual; ~0.05-0.1 gives ~10%%.")
     p.add_argument("--inject-prod-costheta-slope", type=float, default=0.0,
                    help="(--validation) Decay-bias reweight exp[s·cosθ*] "
                    "(charge-odd, A_FB-like, in the CS frame). The channel that "

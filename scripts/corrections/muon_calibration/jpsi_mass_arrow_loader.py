@@ -742,9 +742,10 @@ def _smear_inject_dmll_np(mll, pt_pm, eta_pm, phi_pm, q_pm, b_pm, smear_inj, rng
     return dm.astype(np.float32)
 
 
-# Reference centring for the production-reweight ln(ptll) tilt (fixed → the
-# overall weight scale, which cancels in the conditional fit, stays O(1)).
-_PROD_LNPTLL_REF = float(np.log(15.0))
+# Fixed reference centrings for the production-reweight tilts (so the overall
+# weight scale — which cancels in the conditional fit — stays O(1)).
+_PROD_LNPTLL_REF = float(np.log(15.0))   # ln ptll [GeV]
+_PROD_YLL2_REF = 1.0                      # ⟨yll²⟩-scale for the even rapidity tilt
 
 
 def _prod_reweight_np(cols, inject_prod):
@@ -753,16 +754,22 @@ def _prod_reweight_np(cols, inject_prod):
     variables, to introduce a controlled data/MC discrepancy and probe the
     residual θ bias (fiber tilt / π(c)). ``inject_prod`` = (s_pt, s_y, s_c):
 
-        r(event) = exp[ s_pt·(ln ptll − ln 15) + s_y·yll + s_c·cosθ* ]
+        r(event) = exp[ s_pt·(ln ptll − ln 15)
+                        + s_y·(yll² − 1)        # EVEN in yll (η-symmetric)
+                        + s_c·cosθ* ]           # ODD in cosθ* (charge-odd)
 
     using the RAW snapshot columns (computed pre-θ-injection → the produced
-    event's kinematics). Each slope is an independent log-linear tilt:
+    event's kinematics). The three slopes:
       • s_pt  — the ptll spectral-index shift Δn (couples to the fiber tilt →
-                A/e; ~0.2 gives ~10% over the spectrum);
-      • s_y   — a rapidity tilt (mostly absorbed by the conditioning → tests
-                the π(c) residual);
-      • s_c   — a cosθ* (charge-odd, A_FB-like) tilt — the channel that probes
-                M, which the charge-blind ptll/yll cannot reach.
+                A/e; ~0.2 gives ~10% over the spectrum). ptll is a magnitude →
+                no symmetry concern.
+      • s_y   — a rapidity WIDTH/centrality change, EVEN in yll (∝ yll²) so the
+                ±η symmetry of pp production is preserved — an odd ∝yll tilt
+                would inject an unphysical forward-backward asymmetry and bias
+                the per-η-bin θ asymmetrically. Mostly absorbed by the
+                conditioning → probes the small π(c) residual.
+      • s_c   — a cosθ* (charge-odd, A_FB-like) tilt: DELIBERATELY odd, the one
+                channel that probes M (the charge-blind ptll/yll cannot bias M).
     Returns the per-event float32 reweight (≥ 0), or None if all slopes are 0."""
     if inject_prod is None:
         return None
@@ -772,7 +779,9 @@ def _prod_reweight_np(cols, inject_prod):
     ln_ptll = np.log(np.clip(cols["ptll"].astype(np.float64, copy=False), 1e-6, None))
     yll = cols["yll"].astype(np.float64, copy=False)
     costh = cols["cosThetaStarll"].astype(np.float64, copy=False)
-    logr = (s_pt * (ln_ptll - _PROD_LNPTLL_REF) + s_y * yll + s_c * costh)
+    logr = (s_pt * (ln_ptll - _PROD_LNPTLL_REF)
+            + s_y * (yll * yll - _PROD_YLL2_REF)
+            + s_c * costh)
     return np.exp(logr).astype(np.float32)
 
 
