@@ -556,6 +556,13 @@ def main(argv=None) -> int:
         bf1 = float(targs.get("inject_bkg_f1", 0.0) or 0.0)
         if bf0 > 0.0 or bf1 > 0.0:
             inj_bkg = (bf0, bf1)
+    inj_prod = None
+    if validation:
+        sp = (float(targs.get("inject_prod_ptll_slope", 0.0) or 0.0),
+              float(targs.get("inject_prod_yll_slope", 0.0) or 0.0),
+              float(targs.get("inject_prod_costheta_slope", 0.0) or 0.0))
+        if any(v != 0.0 for v in sp):
+            inj_prod = sp
     fl_lo = float(targs.get("flow_m_lo") or stats.m_lo)
     fl_hi = float(targs.get("flow_m_hi") or stats.m_hi)
     ft_lo = float(targs.get("fit_m_lo") or fl_lo)
@@ -569,7 +576,7 @@ def main(argv=None) -> int:
     fit_loader = JpsiMassArrowLoader(
         shard_files, stats, half=half_fit, inject_theta_scale=inj,
         inject_theta_smear=inj_sm, inject_bkg=inj_bkg,
-        m_window=(ft_lo, ft_hi), **common)
+        m_window=(ft_lo, ft_hi), inject_prod=inj_prod, **common)
     fm = targs.get("flow_monitor", "train")
     flow_loader = JpsiMassArrowLoader(
         shard_files, stats, half=half_flow,

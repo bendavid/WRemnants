@@ -829,7 +829,8 @@ def _setup_common(args, *, stats_override=None):
 
 def _make_loaders(args, shard_files, stats, *, half=None, inject_theta=None,
                   inject_smear=None, inject_bkg=None, val_fraction=None,
-                  holdout_fraction=None, batch_size=None, m_window=None):
+                  holdout_fraction=None, batch_size=None, m_window=None,
+                  inject_prod=None):
     """Build the ``(train, val)`` loaders for one stage. ``half`` selects a
     deterministic disjoint event half (0/1) — used by the MC-closure
     validation mode (stage 1 ← half 0, stage 2 ← half 1); ``None`` = all
@@ -853,7 +854,7 @@ def _make_loaders(args, shard_files, stats, *, half=None, inject_theta=None,
         inject_theta_smear=inject_smear, inject_seed=seed,
         cond_basis=getattr(args, "cond_basis", "muon_kin"),
         max_events=me, event_fraction=ef, inject_nonuniform=nu,
-        inject_bkg=inject_bkg, m_window=m_window)
+        inject_bkg=inject_bkg, m_window=m_window, inject_prod=inject_prod)
     val_loader = JpsiMassArrowLoader(
         shard_files, stats, batch_size=bs, split="val",
         val_fraction=vf, holdout_fraction=hf,
@@ -861,7 +862,7 @@ def _make_loaders(args, shard_files, stats, *, half=None, inject_theta=None,
         inject_theta_smear=inject_smear, inject_seed=seed,
         cond_basis=getattr(args, "cond_basis", "muon_kin"),
         max_events=me, event_fraction=ef, inject_nonuniform=nu,
-        inject_bkg=inject_bkg, m_window=m_window)
+        inject_bkg=inject_bkg, m_window=m_window, inject_prod=inject_prod)
     return train_loader, val_loader
 
 
@@ -904,6 +905,20 @@ def _inject_bkg_args(args):
     f0 = float(getattr(args, "inject_bkg_f0", 0.0) or 0.0)
     f1 = float(getattr(args, "inject_bkg_f1", 0.0) or 0.0)
     return (f0, f1) if (f0 > 0.0 or f1 > 0.0) else None
+
+
+def _inject_prod_args(args):
+    """``(s_pt, s_y, s_c)`` production/decay bias-injection slopes for the
+    validation closure, or ``None`` if all 0. The loader reweights the SIGNAL
+    MC pseudo-data by ``exp[s_pt·(ln ptll − ln15) + s_y·yll + s_c·cosθ*]`` (raw
+    pre-injection dilepton vars) — a controlled data/MC production/decay
+    discrepancy probing the residual θ bias (fiber tilt → A/e via s_pt; π(c)
+    residual via s_y; the charge-odd cosθ* → M channel via s_c). The flow
+    template trains on the un-reweighted half, so any θ shift is the bias."""
+    s = (float(getattr(args, "inject_prod_ptll_slope", 0.0) or 0.0),
+         float(getattr(args, "inject_prod_yll_slope", 0.0) or 0.0),
+         float(getattr(args, "inject_prod_costheta_slope", 0.0) or 0.0))
+    return s if any(v != 0.0 for v in s) else None
 
 
 # Args that fix the flow's parameter shapes OR conditioning semantics — these
@@ -2376,10 +2391,18 @@ def train_loop(args: argparse.Namespace) -> int:
                 print("    WARNING: --inject-bkg-* with --no-background — the "
                       "fit has no background component to absorb the injected "
                       "events.", file=sys.stderr)
+        inj_prod = _inject_prod_args(args)
+        if inj_prod is not None:
+            print(f"    injecting production/decay BIAS into the stage-2 "
+                  f"pseudo-data: slopes (ln ptll, yll, cosθ*) = "
+                  f"({inj_prod[0]:g}, {inj_prod[1]:g}, {inj_prod[2]:g}) — "
+                  f"signal-MC gen-level reweight; the flow template is NOT "
+                  f"reweighted, so the recovered θ shift is the residual bias")
         s2_train, s2_val = _make_loaders(args, shard_files, stats, half=h_fit,
                                          inject_theta=inj, inject_smear=inj_sm,
                                          inject_bkg=inj_bkg, m_window=fit_win,
                                          val_fraction=0.0, holdout_fraction=0.0,
+                                         inject_prod=inj_prod,
                                          batch_size=getattr(args, "fit_batch_size", 0) or None)
     else:
         if (_inject_theta_np(args, len(stats.eta_edges) - 1) is not None
@@ -2451,6 +2474,8 @@ def _run_fisher_continuity(args, model, shard_files, stats, device) -> None:
         event_fraction=float(getattr(args, "event_fraction", 1.0) or 1.0),
         inject_bkg=(_inject_bkg_args(args)
                     if getattr(args, "validation", False) else None),
+        inject_prod=(_inject_prod_args(args)
+                     if getattr(args, "validation", False) else None),
         m_window=_stage_windows(args, stats)[1])
     print(f"\ncomputing observed Fisher information (θ_scale + active θ_smear, "
           f"fixed flow + MLP) on split={args.fisher_split}"
@@ -2579,6 +2604,8 @@ def run_bootstrap_continuity(args, model, shard_files, stats, device, *,
         event_fraction=float(getattr(args, "event_fraction", 1.0) or 1.0),
         inject_bkg=(_inject_bkg_args(args)
                     if getattr(args, "validation", False) else None),
+        inject_prod=(_inject_prod_args(args)
+                     if getattr(args, "validation", False) else None),
         m_window=_stage_windows(args, stats)[1])
     nominal_sd = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
 
@@ -3143,6 +3170,8 @@ def _run_empirical_fisher_mlp(args, model, shard_files, stats, device) -> None:
         event_fraction=float(getattr(args, "event_fraction", 1.0) or 1.0),
         inject_bkg=(_inject_bkg_args(args)
                     if getattr(args, "validation", False) else None),
+        inject_prod=(_inject_prod_args(args)
+                     if getattr(args, "validation", False) else None),
         m_window=_stage_windows(args, stats)[1])
     ridge = float(args.empirical_fisher_ridge)
     print(f"\ncomputing θ-NET-weight empirical Fisher (per-event scores → ridge="
@@ -3560,6 +3589,8 @@ def _run_output_fisher_mlp(args, model, shard_files, stats, device) -> None:
         event_fraction=float(getattr(args, "event_fraction", 1.0) or 1.0),
         inject_bkg=(_inject_bkg_args(args)
                     if getattr(args, "validation", False) else None),
+        inject_prod=(_inject_prod_args(args)
+                     if getattr(args, "validation", False) else None),
         m_window=_stage_windows(args, stats)[1])
     print(f"\ncomputing OUTPUT-space Fisher (method={method}, project={project}"
           + (f", svd_rtol={svd_rtol:g}" if project == "net" else "")
@@ -3758,6 +3789,8 @@ def _run_empirical_fisher(args, model, shard_files, stats, device) -> None:
         event_fraction=float(getattr(args, "event_fraction", 1.0) or 1.0),
         inject_bkg=(_inject_bkg_args(args)
                     if getattr(args, "validation", False) else None),
+        inject_prod=(_inject_prod_args(args)
+                     if getattr(args, "validation", False) else None),
         m_window=_stage_windows(args, stats)[1])
     print(f"\ncomputing joint (θ,φ) empirical Fisher (per-event scores → pinv) on "
           f"split={args.fisher_split}"
@@ -4016,6 +4049,25 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     p.add_argument("--inject-bkg-f1", type=float, default=0.0,
                    help="(--validation) Same for Bernstein COMPONENT 1 "
                    "(rising, p ∝ t).")
+    p.add_argument("--inject-prod-ptll-slope", type=float, default=0.0,
+                   help="(--validation) Inject a production/decay BIAS into the "
+                   "stage-2 pseudo-data: reweight signal MC by exp[s·(ln ptll "
+                   "− ln15)] (gen-level ptll). This is the spectral-index shift "
+                   "Δn; the flow template is NOT reweighted, so any recovered θ "
+                   "shift is the residual bias. Couples to the fiber tilt → "
+                   "A/e; ~0.2 gives ~10%% over the spectrum. (Tests the "
+                   "production-mismodelling systematic; expect δA ~ Δn·(σ_L/m)² "
+                   "~ few×10⁻⁶.)")
+    p.add_argument("--inject-prod-yll-slope", type=float, default=0.0,
+                   help="(--validation) Production-bias reweight exp[s·yll] "
+                   "(gen-level rapidity tilt). Mostly absorbed by the "
+                   "conditioning → probes the small π(c) residual.")
+    p.add_argument("--inject-prod-costheta-slope", type=float, default=0.0,
+                   help="(--validation) Decay-bias reweight exp[s·cosθ*] "
+                   "(charge-odd, A_FB-like, in the CS frame). The channel that "
+                   "probes M — the charge-blind ptll/yll tilts cannot bias M; "
+                   "a cosθ* tilt can. (Use cosθ*-even/polarisation for an A/e "
+                   "decay test instead.)")
     p.add_argument("--inject-smear-seed", type=int, default=12345,
                    help="Seed for the injected-smear Gaussian qop kick, so the "
                    "pseudo-data realisation is reproducible across epochs/runs.")

@@ -742,6 +742,40 @@ def _smear_inject_dmll_np(mll, pt_pm, eta_pm, phi_pm, q_pm, b_pm, smear_inj, rng
     return dm.astype(np.float32)
 
 
+# Reference centring for the production-reweight ln(ptll) tilt (fixed → the
+# overall weight scale, which cancels in the conditional fit, stays O(1)).
+_PROD_LNPTLL_REF = float(np.log(15.0))
+
+
+def _prod_reweight_np(cols, inject_prod):
+    """Validation production/decay BIAS injection: a smooth multiplicative
+    gen-level reweight of the (signal) MC pseudo-data in the snapshot dilepton
+    variables, to introduce a controlled data/MC discrepancy and probe the
+    residual θ bias (fiber tilt / π(c)). ``inject_prod`` = (s_pt, s_y, s_c):
+
+        r(event) = exp[ s_pt·(ln ptll − ln 15) + s_y·yll + s_c·cosθ* ]
+
+    using the RAW snapshot columns (computed pre-θ-injection → the produced
+    event's kinematics). Each slope is an independent log-linear tilt:
+      • s_pt  — the ptll spectral-index shift Δn (couples to the fiber tilt →
+                A/e; ~0.2 gives ~10% over the spectrum);
+      • s_y   — a rapidity tilt (mostly absorbed by the conditioning → tests
+                the π(c) residual);
+      • s_c   — a cosθ* (charge-odd, A_FB-like) tilt — the channel that probes
+                M, which the charge-blind ptll/yll cannot reach.
+    Returns the per-event float32 reweight (≥ 0), or None if all slopes are 0."""
+    if inject_prod is None:
+        return None
+    s_pt, s_y, s_c = (float(x) for x in inject_prod)
+    if s_pt == 0.0 and s_y == 0.0 and s_c == 0.0:
+        return None
+    ln_ptll = np.log(np.clip(cols["ptll"].astype(np.float64, copy=False), 1e-6, None))
+    yll = cols["yll"].astype(np.float64, copy=False)
+    costh = cols["cosThetaStarll"].astype(np.float64, copy=False)
+    logr = (s_pt * (ln_ptll - _PROD_LNPTLL_REF) + s_y * yll + s_c * costh)
+    return np.exp(logr).astype(np.float32)
+
+
 def _batch_tensors(
     cols: dict,
     stats: JpsiMassPreprocStats,
@@ -753,6 +787,7 @@ def _batch_tensors(
     inject_bkg: "tuple[float, float] | None" = None,
     rng_bkg: "np.random.Generator | None" = None,
     m_window: "tuple[float, float] | None" = None,
+    inject_prod: "tuple[float, float, float] | None" = None,
 ) -> dict[str, torch.Tensor]:
     """Build the tensor batch from one Arrow record batch's columns.
 
@@ -892,6 +927,17 @@ def _batch_tensors(
         cond_std = muon_kin_std
 
     w = cols["nominal_weight"].astype(np.float32, copy=False)
+    # Validation production/decay BIAS injection: reweight SIGNAL MC events by a
+    # smooth gen-level tilt in (ptll, yll, cosθ*) so the pseudo-data carries a
+    # controlled data/MC production/decay discrepancy (the flow template is
+    # trained on the un-reweighted other half), exposing the residual θ bias.
+    # Signal-only (mc & not background) so the θ-independent injected background
+    # is untouched; uses the RAW (pre-injection) dilepton columns.
+    if inject_prod is not None:
+        r_prod = _prod_reweight_np(cols, inject_prod)
+        if r_prod is not None:
+            sig_mc = mc & (bkg_label == 0)
+            w = np.where(sig_mc, w * r_prod, w).astype(np.float32)
     # Enforce the m_ll window on the (possibly injection-perturbed) mass: zero
     # the weight for events pushed outside [m_lo, m_hi] by the injection so the
     # fit does not see them. Bernstein-d1 evaluates to NEGATIVE values outside
@@ -989,6 +1035,7 @@ class JpsiMassArrowLoader(IterableDataset):
         inject_nonuniform: bool = False,
         inject_bkg: "tuple[float, float] | None" = None,
         m_window: "tuple[float, float] | None" = None,
+        inject_prod: "tuple[float, float, float] | None" = None,
     ):
         if split not in self._SPLITS:
             raise ValueError(f"split must be one of {self._SPLITS}, got {split!r}")
@@ -1052,6 +1099,12 @@ class JpsiMassArrowLoader(IterableDataset):
         # Optional per-stage tighter mass window (lo, hi); None = shard window.
         self.m_window = (tuple(float(x) for x in m_window)
                          if m_window is not None else None)
+        # Validation production/decay bias injection (s_pt, s_y, s_c) reweighting
+        # the signal MC pseudo-data in (ptll, yll, cosθ*); None if all zero.
+        self.inject_prod = (tuple(float(x) for x in inject_prod)
+                            if inject_prod is not None
+                            and any(float(x) != 0.0 for x in inject_prod)
+                            else None)
 
     # -- helpers --------------------------------------------------------
 
@@ -1167,7 +1220,7 @@ class JpsiMassArrowLoader(IterableDataset):
                     emit, self.stats, self.inject_theta_scale,
                     self.inject_theta_smear, rng, self.cond_basis,
                     self.inject_nonuniform, self.inject_bkg, rng_bkg,
-                    self.m_window)
+                    self.m_window, self.inject_prod)
 
         # Final partial batch.
         if accum_n > 0 and not self.drop_last:
@@ -1176,7 +1229,7 @@ class JpsiMassArrowLoader(IterableDataset):
                 cols, self.stats, self.inject_theta_scale,
                 self.inject_theta_smear, rng, self.cond_basis,
                 self.inject_nonuniform, self.inject_bkg, rng_bkg,
-                self.m_window)
+                self.m_window, self.inject_prod)
 
 
 # ---------------------------------------------------------------------------

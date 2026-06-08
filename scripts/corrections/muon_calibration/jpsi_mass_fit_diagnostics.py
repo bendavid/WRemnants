@@ -2288,6 +2288,18 @@ def main() -> int:
                   f"{bf1:g}) — replaying into the pseudo-data; the fitted MLP "
                   f"f(c) should recover these (see bkg_fraction closure plots)")
 
+    inject_prod_np = None
+    if mc_as_data and not is_flow_ckpt:
+        sp = (float(train_args.get("inject_prod_ptll_slope", 0.0) or 0.0),
+              float(train_args.get("inject_prod_yll_slope", 0.0) or 0.0),
+              float(train_args.get("inject_prod_costheta_slope", 0.0) or 0.0))
+        if any(v != 0.0 for v in sp):
+            inject_prod_np = sp
+            print(f"checkpoint injected production/decay BIAS slopes "
+                  f"(ln ptll, yll, cosθ*)=({sp[0]:g},{sp[1]:g},{sp[2]:g}) — "
+                  f"replaying the signal-MC reweight into the pseudo-data so "
+                  f"the closure plots show the biased data")
+
     nonuniform = bool(train_args.get("inject_nonuniform", False))
     if nonuniform and (inject_np is not None or inject_smear_np is not None):
         print("  injection is NON-UNIFORM (quadratic-η × sinusoidal-φ); the "
@@ -2307,6 +2319,7 @@ def main() -> int:
         inject_nonuniform=nonuniform,
         inject_bkg=inject_bkg_np,
         m_window=(model._m_lo_f, model._m_hi_f),
+        inject_prod=inject_prod_np,
     )
     # φ-AVERAGED injected reference for the θ-vs-η plots + χ²: the φ sinusoid
     # averages to 1 over the plotted φ-mean, leaving base·f_η(η) per η-bin
@@ -2586,6 +2599,7 @@ def main() -> int:
                 inject_seed=int(train_args.get("inject_smear_seed", 12345)),
                 cond_basis=train_args.get("cond_basis", "muon_kin"),
                 inject_nonuniform=nonuniform,
+                inject_prod=inject_prod_np,
                 m_window=(model._m_lo_f, model._m_hi_f))
             plot_theta_scale_likelihood_scan(
                 model, scan_loader, device, out_dir,
