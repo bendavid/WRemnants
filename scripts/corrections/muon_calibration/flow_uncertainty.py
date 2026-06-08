@@ -476,6 +476,18 @@ def parse_args(argv=None):
                    "the regulariser of the near-null (early-stopping-flat) "
                    "flow directions. SCAN this (e.g. ×10 up/down) and quote "
                    "the plateau.")
+    p.add_argument("--ridge-escalate", type=float, default=10.0,
+                   help="On a non-PD CG abort, multiply that solve's ridge by "
+                   "this factor and retry (the escalated ridge persists across "
+                   "columns). Keeps an indefinite/under-sampled Hessian from "
+                   "crashing the run.")
+    p.add_argument("--ridge-escalate-max", type=int, default=4,
+                   help="Max ridge escalations per solve before giving up "
+                   "(0 = disable → hard-fail on non-PD, the strict behaviour). "
+                   "NOTE: escalation OVER-regularises and UNDERESTIMATES the "
+                   "flow σ in affected columns — it is a keep-alive/rough-"
+                   "bound, not a faithful covariance; a trustworthy run needs "
+                   "ZERO escalations (add events / scan --ridge-flow).")
     p.add_argument("--grid-nphi", type=int, default=0,
                    help="θ-mlp only: uniform φ bins of the fixed (η,φ) output "
                    "grid (η = the stats η-bin centres); 0 = match the "
@@ -715,16 +727,59 @@ def main(argv=None) -> int:
     print(f"  tr(H_ww)/n = {sc_w:.4e} → λ_w = {lam_w:.4e}; "
           f"tr(H₁)/n = {sc_phi:.4e} → λ_φ = {lam_phi:.4e}")
 
-    def hvp_w(v):
-        return _raw_hvp_w(v) + lam_w * v
-
-    def hvp_phi(v):
-        return _raw_hvp_phi(v) + lam_phi * v
-
     def mixed_u(x):
         xl = _unpack(x, params, segs)
         h = L2.mixed(xl, params, flow_params)
         return torch.cat([t.reshape(-1) for t in h]).double()
+
+    # ---- robust damped solve: on a non-PD CG abort, escalate the ridge
+    # (×escalate, up to escalate_max times) and retry, so an indefinite
+    # (e.g. under-sampled) Hessian yields a PSD result instead of crashing.
+    # The escalated ridge PERSISTS across columns (ridge_state) so only the
+    # first affected column pays the search. WARNING: a larger ridge SHRINKS
+    # the covariance, so escalated columns UNDERESTIMATE the flow uncertainty
+    # — the result there is over-regularised, not faithful (add events for a
+    # 'w' solve / scan --ridge-flow for a 'φ' solve). All escalations are
+    # logged and recorded in the output.
+    ridge_state = {"w": lam_w, "phi": lam_phi}
+    escal = {"w": {"n_cols": 0, "max_ridge": lam_w},
+             "phi": {"n_cols": 0, "max_ridge": lam_phi}}
+
+    def _solve(raw_hvp, b, key, label, max_iter):
+        lam = ridge_state[key]
+        n_esc = 0
+        while True:
+            try:
+                x, it, res = _cg(lambda p, _l=lam: raw_hvp(p) + _l * p, b,
+                                 args.cg_tol, max_iter, label=label,
+                                 progress=args.progress)
+                ridge_state[key] = lam            # keep working ridge as floor
+                if n_esc:
+                    escal[key]["n_cols"] += 1
+                    escal[key]["max_ridge"] = max(escal[key]["max_ridge"], lam)
+                return x, it, res, lam
+            except RuntimeError as ex:
+                if ("non-positive curvature" not in str(ex)
+                        or args.ridge_escalate_max <= 0
+                        or n_esc >= args.ridge_escalate_max):
+                    if args.ridge_escalate_max > 0:
+                        raise RuntimeError(
+                            f"{label}: ridge escalation exhausted "
+                            f"({args.ridge_escalate_max} × "
+                            f"{args.ridge_escalate:g}); the (damped) Hessian "
+                            f"is still not PSD at λ={lam:.3e}. The matrix is "
+                            f"badly indefinite — add events ('w': "
+                            f"--max-events-fit) or pre-scan the ridge; no "
+                            f"regularisation recovers a faithful covariance "
+                            f"here.") from ex
+                    raise
+                lam *= args.ridge_escalate
+                n_esc += 1
+                print(f"    WARNING [{label}]: non-PD → escalating ridge to "
+                      f"{lam:.3e} (×{args.ridge_escalate:g}, "
+                      f"attempt {n_esc}/{args.ridge_escalate_max}) — this "
+                      f"column will be over-regularised (flow σ UNDERestimated)",
+                      flush=True)
 
     # ---- the column loop ---------------------------------------------------
     print(f"running {n_theta} θ-columns "
@@ -742,14 +797,14 @@ def main(argv=None) -> int:
             e[j] = 1.0
         print(f"  [{j + 1:3d}/{n_theta}] {labels[j]:14s} solving CG_w "
               f"(≤{args.cg_max_iter_w} it)...", flush=True)
-        x, it_w, res_w = _cg(hvp_w, e, args.cg_tol, args.cg_max_iter_w,
-                             label=f"w:{labels[j]}", progress=args.progress)
+        x, it_w, res_w, lw_used = _solve(
+            _raw_hvp_w, e, "w", f"w:{labels[j]}", args.cg_max_iter_w)
         u = mixed_u(x)
-        z, it_f, res_f = _cg(hvp_phi, u, args.cg_tol, args.cg_max_iter_flow,
-                             label=f"φ:{labels[j]}", progress=args.progress)
+        z, it_f, res_f, lf_used = _solve(
+            _raw_hvp_phi, u, "phi", f"φ:{labels[j]}", args.cg_max_iter_flow)
         U[j] = u.cpu()
         Z[j] = z.cpu()
-        cg_stats.append((it_w, res_w, it_f, res_f))
+        cg_stats.append((it_w, res_w, it_f, res_f, lw_used, lf_used))
         if dev.startswith("cuda"):
             torch.cuda.empty_cache()   # limit fragmentation over the long loop
         el = time.time() - t0
@@ -763,6 +818,22 @@ def main(argv=None) -> int:
     asym = float((U @ Z.T - Z @ U.T).abs().max()
                  / cov_flow.abs().max().clamp_min(1e-300))
     print(f"covariance asymmetry (CG-residual scale check): {asym:.2e}")
+    if escal["w"]["n_cols"] or escal["phi"]["n_cols"]:
+        print("\n*** WARNING: ridge auto-escalation was triggered — the result "
+              "is OVER-REGULARISED and UNDERESTIMATES the flow uncertainty in "
+              "the affected columns (NOT a faithful covariance):")
+        if escal["w"]["n_cols"]:
+            print(f"    H_ww: {escal['w']['n_cols']}/{n_theta} columns, "
+                  f"λ_w up to {escal['w']['max_ridge']:.3e} "
+                  f"(from {lam_w:.3e}) — H_ww is indefinite; "
+                  f"INCREASE --max-events-fit (≫ n_w={n_w}).")
+        if escal["phi"]["n_cols"]:
+            print(f"    H₁:   {escal['phi']['n_cols']}/{n_theta} columns, "
+                  f"λ_φ up to {escal['phi']['max_ridge']:.3e} "
+                  f"(from {lam_phi:.3e}) — SCAN --ridge-flow to a plateau "
+                  f"instead of relying on escalation.")
+        print("    Use this only as a rough/bounding figure; for the quoted "
+              "number, rerun with no escalation needed.\n")
 
     out = {
         "covariance_flow": cov_flow,
@@ -776,6 +847,7 @@ def main(argv=None) -> int:
         "cg_tol": args.cg_tol,
         "cg_stats": cg_stats,
         "asymmetry": asym,
+        "ridge_escalation": escal,   # {} entries non-zero ⇒ over-regularised
     }
 
     if is_mlp:
