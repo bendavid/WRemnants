@@ -21,6 +21,22 @@ matrix-free:
   • CG with ridge damping (H + λI) — λ is the regularisation of the
     near-null (early-stopping-flat) flow directions; scan it for a plateau.
 
+The stage-2 bread H_ww and the stage-1 meat H₁ play DIFFERENT roles, so they
+are treated differently (``--w-solver``):
+
+  • H₁ (the central PSD factor / Cov(φ̂)) MUST be PD — its negative
+    eigenvalues would make the covariance non-PSD — so it is ridged (CG).
+  • H_ww enters only as the congruence bread M = H_ww⁻¹H_wφ; the θθ block
+    Cov_θθ = Mᵀ H₁⁻¹ M is PSD for ANY invertible H_ww, so H_ww need NOT be
+    PD. The OBSERVED H_ww is in fact genuinely indefinite (the nonlinear
+    background MLP is non-convex even at a minimum), which a uniform ridge
+    cannot fix. Default ``--w-solver fisher`` uses the empirical Fisher
+    J_ww = Σ wᵢsᵢsᵢᵀ (PSD by construction, the SAME bread the data-stat
+    covariance uses → coherent addition) via one dense Cholesky solve for all
+    columns (no CG_w). ``observed`` keeps the double-backward Hessian (CG +
+    ridge escalation); ``minres`` inverts the indefinite observed H_ww
+    directly (valid by the congruence above) as a cross-check.
+
 Per column j (a unit vector in the θ-active block):
     x_j = (H_ww + λ_w)⁻¹ e_j          (CG, stage-2 HVPs)
     u_j = H_φw x_j                     (one mixed double-backward)
@@ -285,6 +301,70 @@ def _cg(apply_A, b, tol, max_iter, label="", progress=True, report_dt=20.0):
     return x, it, (rs ** 0.5) / b_norm
 
 
+def _minres(apply_A, b, tol, max_iter, label="", progress=True, report_dt=20.0):
+    """MINRES for a SYMMETRIC (possibly INDEFINITE) but invertible operator —
+    minimises ‖Ax−b‖ over the Krylov subspace, so it does NOT abort on
+    negative curvature (unlike CG). Used for the observed H_ww 'minres' solver,
+    where the bread is indefinite (nonlinear background block) but the
+    propagated θθ covariance M_θᵀ H₁⁻¹ M_θ is PSD by congruence regardless.
+    Canonical Paige–Saunders recurrence (matching scipy.sparse.linalg.minres,
+    no preconditioner); returns (x, iters, rel_res)."""
+    x = torch.zeros_like(b)
+    beta1 = float(b.norm())
+    b_norm = max(beta1, 1e-300)
+    if beta1 == 0.0:
+        return x, 0, 0.0
+    oldb = 0.0
+    beta = beta1
+    dbar = 0.0
+    epsln = 0.0
+    phibar = beta1
+    cs = -1.0
+    sn = 0.0
+    w = torch.zeros_like(b)
+    w2 = torch.zeros_like(b)
+    r1 = b.clone()
+    r2 = b.clone()
+    y = b.clone()
+    it = 0
+    t_last = time.time()
+    while it < max_iter and phibar / b_norm > tol:
+        it += 1
+        s = 1.0 / beta
+        v = s * y
+        y = apply_A(v)
+        if it >= 2:
+            y = y - (beta / oldb) * r1
+        alfa = float(v @ y)
+        y = y - (alfa / beta) * r2
+        r1 = r2
+        r2 = y
+        oldb = beta
+        beta = float(r2.norm())
+        # apply previous rotation and compute the new one
+        oldeps = epsln
+        delta = cs * dbar + sn * alfa
+        gbar = sn * dbar - cs * alfa
+        epsln = sn * beta
+        dbar = -cs * beta
+        gamma = max((gbar * gbar + beta * beta) ** 0.5, 1e-300)
+        cs = gbar / gamma
+        sn = beta / gamma
+        phi = cs * phibar
+        phibar = sn * phibar
+        denom = 1.0 / gamma
+        w1 = w2
+        w2 = w
+        w = (v - oldeps * w1 - delta * w2) * denom
+        x = x + phi * w
+        if progress and (time.time() - t_last) > report_dt:
+            print(f"        MINRES[{label}] it {it}/{max_iter}  "
+                  f"rel {phibar / b_norm:.2e} (tol {tol:g})", flush=True)
+            t_last = time.time()
+    res = float((apply_A(x) - b).norm()) / b_norm   # true residual
+    return x, it, res
+
+
 # ---------------------------------------------------------------------------
 # Event materialisation
 # ---------------------------------------------------------------------------
@@ -426,6 +506,94 @@ def _grid_phi_weights(fit_ev, n_eta, n_phi_g):
 
 
 # ---------------------------------------------------------------------------
+# Empirical Fisher (PSD bread) for H_ww
+# ---------------------------------------------------------------------------
+
+
+def _empirical_fisher_dense(per_event_fn, n_fit, score_chunk, params, segs,
+                            n_w, dev, progress=True):
+    """Dense empirical Fisher ``J_ww = Σ_i w_i s_i s_iᵀ`` over the active
+    w-space, with per-event scores ``s_i = ∂(per-event NLL)/∂w`` (batched vjp,
+    per-event-loop fallback). PSD by construction → a valid, well-conditioned
+    bread even where the OBSERVED H_ww is indefinite (nonlinear background).
+    Same J the data-stat covariance uses, so the two combine coherently.
+    Returns J [n_w, n_w] (fp64, on ``dev``)."""
+    J = torch.zeros((n_w, n_w), dtype=torch.float64, device=dev)
+    batched = True
+    t0 = time.time()
+    n_chunks = (n_fit + score_chunk - 1) // score_chunk
+    for ci, i0 in enumerate(range(0, n_fit, score_chunk)):
+        i1 = min(i0 + score_chunk, n_fit)
+        per, w = per_event_fn(i0, i1)            # per [c] (graph), w [c]
+        c = int(per.shape[0])
+        S = None
+        if batched:
+            try:
+                eye = torch.eye(c, device=dev, dtype=per.dtype)
+                g = torch.autograd.grad(per, params, grad_outputs=eye,
+                                        is_grads_batched=True,
+                                        retain_graph=False, allow_unused=True)
+                S = torch.zeros((c, n_w), dtype=torch.float64, device=dev)
+                for gi, p, (off, idx) in zip(g, params, segs):
+                    if gi is None:
+                        continue
+                    S[:, off:off + idx.numel()] = \
+                        gi.reshape(c, -1)[:, idx.to(gi.device)].double()
+            except (RuntimeError, NotImplementedError) as e:
+                batched = False
+                print(f"  note: batched per-event score unavailable "
+                      f"({type(e).__name__}: {str(e).splitlines()[0][:70]}); "
+                      f"per-event loop", flush=True)
+        if S is None:
+            rows = []
+            for jj in range(c):
+                gj = torch.autograd.grad(per[jj], params,
+                                         retain_graph=(jj < c - 1),
+                                         allow_unused=True)
+                rows.append(_pack(gj, params, segs, n_w, dev))
+            S = torch.stack(rows)
+        J += (S * w.double().unsqueeze(1)).t() @ S
+        if progress and (ci % 50 == 0 or i1 == n_fit):
+            print(f"  fisher build: {i1}/{n_fit} events "
+                  f"({time.time() - t0:.0f}s, chunk {ci + 1}/{n_chunks})",
+                  flush=True)
+    return 0.5 * (J + J.T)
+
+
+def _efvp(per_event_fn, model_params, n_events, chunk, v_list):
+    """MATRIX-FREE empirical-Fisher-vector product J·v = Σ_e w_e g_e (g_eᵀv),
+    g_e = ∂(per-event NLL)/∂θ, accumulated over event chunks — for the flow
+    meat H₁ (58208-dim, too large to densify). PSD by construction, so CG on it
+    never hits negative curvature (no escalation, only a small null-space ridge).
+
+    Computed REVERSE-mode only (no forward-mode AD rules needed for erf/erfcx),
+    via the double-VJP identity for the per-event directional derivative:
+      A(u) = ∂⟨per, u⟩/∂θ = Σ_e u_e g_e         (1st backward, create_graph)
+      s    = ∂⟨A(u), v⟩/∂u = (g_eᵀv)_e          (2nd backward, in event space)
+      J·v  = ∂⟨per, w⊙s⟩/∂θ = Σ_e w_e s_e g_e   (3rd backward)
+    One forward + three backwards per chunk (~1.5× an HVP). ``per_event_fn``
+    returns ``(per [c] with graph, w [c])``; returns the param-shaped grads."""
+    acc = [torch.zeros_like(p, dtype=torch.float64) for p in model_params]
+    for i0 in range(0, n_events, chunk):
+        per, w = per_event_fn(i0, min(i0 + chunk, n_events))
+        c = int(per.shape[0])
+        u = torch.zeros(c, device=per.device, dtype=per.dtype,
+                        requires_grad=True)
+        Au = torch.autograd.grad((per * u).sum(), model_params,
+                                 create_graph=True, allow_unused=True)
+        inner = sum((a * vi).sum() for a, vi in zip(Au, v_list)
+                    if a is not None)
+        s = torch.autograd.grad(inner, u, retain_graph=True)[0]      # [c]
+        ws = (w * s).detach()
+        g = torch.autograd.grad((ws * per).sum(), model_params,
+                                allow_unused=True)
+        for a, gi in zip(acc, g):
+            if gi is not None:
+                a += gi.detach().double()
+    return acc
+
+
+# ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
 
@@ -488,6 +656,43 @@ def parse_args(argv=None):
                    "flow σ in affected columns — it is a keep-alive/rough-"
                    "bound, not a faithful covariance; a trustworthy run needs "
                    "ZERO escalations (add events / scan --ridge-flow).")
+    p.add_argument("--w-solver", choices=["fisher", "observed", "minres"],
+                   default="fisher",
+                   help="How to invert the stage-2 bread H_ww. 'fisher' "
+                   "(default): the empirical Fisher J_ww = Σ wᵢsᵢsᵢᵀ from "
+                   "per-event scores — PSD by construction (the nonlinear "
+                   "background block's OBSERVED Hessian is genuinely "
+                   "indefinite), consistent with the --fisher data-stat "
+                   "covariance (same bread), and built once (dense Cholesky "
+                   "solve for all θ columns, no CG_w). 'observed': the "
+                   "double-backward Hessian via CG (+ ridge escalation) — the "
+                   "exact estimating-equation Jacobian, but indefinite for the "
+                   "background MLP. 'minres': observed H_ww via MINRES (handles "
+                   "the indefinite-but-invertible matrix; the θθ covariance is "
+                   "PSD by congruence regardless) with a small ridge for the "
+                   "near-null background directions — a cross-check of 'fisher' "
+                   "(they agree iff the negative directions decouple from θ).")
+    p.add_argument("--score-chunk", type=int, default=64,
+                   help="(--w-solver fisher) Per-event-score batch size for the "
+                   "empirical-Fisher build (batched vjp). Smaller = less memory.")
+    p.add_argument("--flow-solver", choices=["fisher", "observed"],
+                   default="fisher",
+                   help="How to form the flow meat H₁ (the CENTRAL PSD factor "
+                   "Cov(φ̂), which MUST be PD). 'fisher' (default): the "
+                   "empirical Fisher I_φ = Σ wᵢsᵢsᵢᵀ via a MATRIX-FREE "
+                   "Fisher-vector product (58208-dim, can't densify) — PSD by "
+                   "construction (the standard inverse-Fisher parameter "
+                   "covariance), so CG_φ never hits negative curvature and only "
+                   "a small null-space --ridge-flow is needed. 'observed': the "
+                   "double-backward flow Hessian, which is genuinely indefinite "
+                   "at the early-stopping point (not a minimum) → needs a large "
+                   "--ridge-flow / escalation.")
+    p.add_argument("--check-stationarity", action="store_true",
+                   help="Before solving, report ‖∂L₂/∂w‖ (total, θ-block, "
+                   "background-block) at the checkpoint. A non-PSD/indefinite "
+                   "H_ww is only a meaningful covariance if the fit is "
+                   "STATIONARY (gradient ≈ 0); a large θ-block gradient means "
+                   "the fit did not converge and NO solver gives a valid σ.")
     p.add_argument("--grid-nphi", type=int, default=0,
                    help="θ-mlp only: uniform φ bins of the fixed (η,φ) output "
                    "grid (η = the stats η-bin centres); 0 = match the "
@@ -548,6 +753,7 @@ def main(argv=None) -> int:
     n_phi = sum(p.numel() for p in flow_params)
     if is_mlp:
         params, segs, n_net = _w_layout_mlp(model)
+        n_w_qoi = n_net          # θ-net weights = QoI block (vs background)
         scale_cols = ([c for c in range(3)
                        if float(model.scale_param_mask[c]) != 0.0]
                       if model.scale_enabled else [])
@@ -555,6 +761,7 @@ def main(argv=None) -> int:
                       if model.smearing_enabled else [])
     else:
         params, segs, labels, n_theta, smear_cols = _w_layout(model)
+        n_w_qoi = n_theta        # active θ entries = QoI block (vs background)
     for p in params:
         p.requires_grad_(True)
     n_w = segs[-1][0] + segs[-1][1].numel()
@@ -692,17 +899,86 @@ def main(argv=None) -> int:
         vl = _unpack(v, params, segs)
         return _pack(L2.hvp(vl, params), params, segs, n_w, dev)
 
-    def _raw_hvp_phi(v):
-        vl = []
-        off = 0
+    def _unpack_phi(v):
+        vl, off = [], 0
         for p in flow_params:
             vl.append(v[off:off + p.numel()].view_as(p).to(p.dtype))
             off += p.numel()
-        h = L1.hvp(vl, flow_params)
+        return vl
+
+    def _raw_hvp_phi(v):
+        h = L1.hvp(_unpack_phi(v), flow_params)
         return torch.cat([x.reshape(-1) for x in h]).double()
 
-    # Trace-scale estimates (Hutchinson, 2 Rademacher probes each) so the
-    # ridge inputs are RELATIVE — independent of sample size and units.
+    n_flow = flow_ev["mll"].shape[0]
+
+    def flow_per_event(i0, i1):
+        # Per-event flow NLL (= the empirical-Fisher score source): −log p₀
+        # (+ the window-norm term for gf/nsf). The gauge penalty is a
+        # regulariser, NOT a per-event likelihood term, so it is excluded —
+        # the empirical Fisher I_φ = Σ wᵢsᵢsᵢᵀ is the LIKELIHOOD information.
+        sl = slice(i0, i1)
+        m = flow_ev["mll"][sl]
+        mk = flow_ev["cond_std"][sl]
+        per = -model.log_p_nominal(m, mk)
+        if window_norm:
+            per = per + model._flow_log_window_Z(
+                m.new_full(m.shape, model._flow_m_lo_f),
+                m.new_full(m.shape, model._flow_m_hi_f), mk)
+        return per, flow_ev["w"][sl]
+
+    def _raw_efvp_phi(v):
+        h = _efvp(flow_per_event, flow_params, n_flow, args.eval_chunk,
+                  _unpack_phi(v))
+        return torch.cat([x.reshape(-1) for x in h]).double()
+
+    # The flow meat operator: empirical Fisher (PSD, default) or observed H₁.
+    raw_phi = _raw_efvp_phi if args.flow_solver == "fisher" else _raw_hvp_phi
+
+    def mixed_u(x):
+        xl = _unpack(x, params, segs)
+        h = L2.mixed(xl, params, flow_params)
+        return torch.cat([t.reshape(-1) for t in h]).double()
+
+    n_fit = fit_ev["mll"].shape[0]
+
+    def fit_per_event(i0, i1):
+        sl = slice(i0, i1)
+        per = model.data_nll_continuity(
+            fit_ev["mll"][sl], fit_ev["pt_pm"][sl], fit_ev["eta_pm"][sl],
+            fit_ev["phi_pm"][sl], fit_ev["q_pm"][sl], fit_ev["b_pm"][sl],
+            fit_ev["cond_std"][sl],
+            torch.ones(i1 - i0, dtype=torch.bool, device=dev), n_iter=n_iter)
+        return per, fit_ev["w"][sl]
+
+    # ---- stationarity check: ‖∂L₂/∂w‖ at the checkpoint -------------------
+    # The covariance is only meaningful if the fit is at a stationary point
+    # (∂L₂/∂w ≈ 0); a large QoI-block gradient means the fit did not converge.
+    if args.check_stationarity:
+        print("checking stage-2 stationarity (‖∂L₂/∂w‖)...")
+        acc = [torch.zeros_like(p, dtype=torch.float64) for p in params]
+        for i0 in range(0, n_fit, args.eval_chunk):
+            L = fit_loss(i0, min(i0 + args.eval_chunk, n_fit))
+            g = torch.autograd.grad(L, params, allow_unused=True)
+            for a, gi in zip(acc, g):
+                if gi is not None:
+                    a += gi.double()
+        gvec = _pack(acc, params, segs, n_w, dev)
+        g_qoi = float(gvec[:n_w_qoi].norm())
+        g_bkg = float(gvec[n_w_qoi:].norm())
+        # per-event Σw to gauge a "small" gradient scale (grad ∝ Σw).
+        sw_fit = float(fit_ev["w"].sum())
+        print(f"  ‖∂L₂/∂w‖ total = {float(gvec.norm()):.3e}  "
+              f"(QoI {g_qoi:.3e}, background {g_bkg:.3e}); Σw = {sw_fit:.3e}; "
+              f"QoI rel = {g_qoi / max(sw_fit, 1e-300):.2e}")
+        if g_qoi / max(sw_fit, 1e-300) > 1e-3:
+            print("  WARNING: large QoI-block gradient — the fit may not be "
+                  "converged; NO solver gives a valid covariance at a "
+                  "non-stationary point.", file=sys.stderr)
+        if dev.startswith("cuda"):
+            torch.cuda.empty_cache()
+
+    # ---- ridge scales (Hutchinson for the directions still solved by CG) --
     gen = torch.Generator(device="cpu").manual_seed(7)
 
     def _trace_scale(raw_hvp, n, label):
@@ -716,21 +992,46 @@ def main(argv=None) -> int:
                   f"({time.time() - t:.0f}s)", flush=True)
         return acc / 2.0
 
-    print(f"estimating Hessian trace scales (Hutchinson, 2 probes each; "
-          f"--eval-chunk={args.eval_chunk})...")
-    sc_w = _trace_scale(_raw_hvp_w, n_w, "H_ww")
-    sc_phi = _trace_scale(_raw_hvp_phi, n_phi, "H₁")
+    # H₁ (flow) ridge always via Hutchinson; it stays a CG solve (on the
+    # empirical Fisher I_φ for --flow-solver fisher, the observed H₁ otherwise).
+    _phi_tag = "I_φ" if args.flow_solver == "fisher" else "H₁(obs)"
+    print(f"estimating {_phi_tag} trace scale (Hutchinson; --eval-chunk="
+          f"{args.eval_chunk})...")
+    sc_phi = _trace_scale(raw_phi, n_phi, _phi_tag)
+    lam_phi = args.ridge_flow * abs(sc_phi)
+
+    # ---- H_ww bread: build/ridge per --w-solver --------------------------
+    L_chol = X_fisher = None
+    if args.w_solver == "fisher":
+        print(f"building empirical Fisher J_ww (PSD; per-event scores, "
+              f"--score-chunk={args.score_chunk})...")
+        J_ww = _empirical_fisher_dense(
+            fit_per_event, n_fit, args.score_chunk, params, segs, n_w, dev,
+            progress=args.progress)
+        sc_w = float(torch.diagonal(J_ww).mean())          # tr(J_ww)/n
+        lam_w = args.ridge_w * abs(sc_w)
+        eye_w = torch.eye(n_w, dtype=torch.float64, device=dev)
+        L_chol = torch.linalg.cholesky(J_ww + lam_w * eye_w)
+        del J_ww
+        print(f"  tr(J_ww)/n = {sc_w:.4e} → λ_w = {lam_w:.4e}; "
+              f"tr({_phi_tag})/n = {sc_phi:.4e} → λ_φ = {lam_phi:.4e}")
+    else:
+        print(f"estimating H_ww trace scale (Hutchinson)...")
+        sc_w = _trace_scale(_raw_hvp_w, n_w, "H_ww")
+        lam_w = args.ridge_w * abs(sc_w)
+        print(f"  tr(H_ww)/n = {sc_w:.4e} → λ_w = {lam_w:.4e}; "
+              f"tr({_phi_tag})/n = {sc_phi:.4e} → λ_φ = {lam_phi:.4e}")
     if dev.startswith("cuda"):
         torch.cuda.empty_cache()
-    lam_w = args.ridge_w * abs(sc_w)
-    lam_phi = args.ridge_flow * abs(sc_phi)
-    print(f"  tr(H_ww)/n = {sc_w:.4e} → λ_w = {lam_w:.4e}; "
-          f"tr(H₁)/n = {sc_phi:.4e} → λ_φ = {lam_phi:.4e}")
 
-    def mixed_u(x):
-        xl = _unpack(x, params, segs)
-        h = L2.mixed(xl, params, flow_params)
-        return torch.cat([t.reshape(-1) for t in h]).double()
+    # RHS matrix B_rhs [n_w, n_theta]: e_j (binned) or g_j = ∂T_j/∂w (mlp).
+    if is_mlp:
+        B_rhs = G.t().contiguous()
+    else:
+        B_rhs = torch.zeros((n_w, n_theta), dtype=torch.float64, device=dev)
+        B_rhs[torch.arange(n_theta), torch.arange(n_theta)] = 1.0
+    if args.w_solver == "fisher":
+        X_fisher = torch.cholesky_solve(B_rhs, L_chol)     # all columns at once
 
     # ---- robust damped solve: on a non-PD CG abort, escalate the ridge
     # (×escalate, up to escalate_max times) and retry, so an indefinite
@@ -781,35 +1082,43 @@ def main(argv=None) -> int:
                       f"column will be over-regularised (flow σ UNDERestimated)",
                       flush=True)
 
+    def _solve_w(j):
+        """x_j = (H_ww + λ_w)⁻¹ B_rhs[:, j] via the chosen --w-solver."""
+        if args.w_solver == "fisher":
+            return X_fisher[:, j], 0, 0.0, lam_w        # direct (Cholesky) solve
+        b = B_rhs[:, j]
+        if args.w_solver == "minres":
+            x, it, res = _minres(lambda p: _raw_hvp_w(p) + lam_w * p, b,
+                                 args.cg_tol, args.cg_max_iter_w,
+                                 label=f"w:{labels[j]}", progress=args.progress)
+            return x, it, res, lam_w
+        return _solve(_raw_hvp_w, b, "w", f"w:{labels[j]}", args.cg_max_iter_w)
+
     # ---- the column loop ---------------------------------------------------
-    print(f"running {n_theta} θ-columns "
-          f"(λ_w={lam_w:.3e}, λ_φ={lam_phi:.3e}, "
+    print(f"running {n_theta} θ-columns (w-solver={args.w_solver}, "
+          f"λ_w={lam_w:.3e}, λ_φ={lam_phi:.3e}, "
           f"tol={args.cg_tol:g}, α₁={alpha1:.4f})...")
     U = torch.zeros((n_theta, n_phi), dtype=torch.float64)
     Z = torch.zeros((n_theta, n_phi), dtype=torch.float64)
     t0 = time.time()
     cg_stats = []
     for j in range(n_theta):
-        if is_mlp:
-            e = G[j]                    # delta-method RHS g_j = ∂T_j/∂w
-        else:
-            e = torch.zeros(n_w, dtype=torch.float64, device=dev)
-            e[j] = 1.0
-        print(f"  [{j + 1:3d}/{n_theta}] {labels[j]:14s} solving CG_w "
-              f"(≤{args.cg_max_iter_w} it)...", flush=True)
-        x, it_w, res_w, lw_used = _solve(
-            _raw_hvp_w, e, "w", f"w:{labels[j]}", args.cg_max_iter_w)
+        if args.w_solver != "fisher":
+            print(f"  [{j + 1:3d}/{n_theta}] {labels[j]:14s} solving "
+                  f"{args.w_solver}_w (≤{args.cg_max_iter_w} it)...", flush=True)
+        x, it_w, res_w, lw_used = _solve_w(j)
         u = mixed_u(x)
         z, it_f, res_f, lf_used = _solve(
-            _raw_hvp_phi, u, "phi", f"φ:{labels[j]}", args.cg_max_iter_flow)
+            raw_phi, u, "phi", f"φ:{labels[j]}", args.cg_max_iter_flow)
         U[j] = u.cpu()
         Z[j] = z.cpu()
         cg_stats.append((it_w, res_w, it_f, res_f, lw_used, lf_used))
         if dev.startswith("cuda"):
             torch.cuda.empty_cache()   # limit fragmentation over the long loop
         el = time.time() - t0
-        print(f"  [{j + 1:3d}/{n_theta}] {labels[j]:14s} "
-              f"CG_w {it_w:3d} it (res {res_w:.1e})  "
+        w_tag = ("Fisher" if args.w_solver == "fisher"
+                 else f"{args.w_solver}_w {it_w:3d} it (res {res_w:.1e})")
+        print(f"  [{j + 1:3d}/{n_theta}] {labels[j]:14s} {w_tag}  "
               f"CG_φ {it_f:3d} it (res {res_f:.1e})  "
               f"elapsed {el / 60:.1f} min", flush=True)
 
@@ -848,6 +1157,8 @@ def main(argv=None) -> int:
         "cg_stats": cg_stats,
         "asymmetry": asym,
         "ridge_escalation": escal,   # {} entries non-zero ⇒ over-regularised
+        "w_solver": args.w_solver,
+        "flow_solver": args.flow_solver,
     }
 
     if is_mlp:
