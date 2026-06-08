@@ -263,8 +263,14 @@ def _cg(apply_A, b, tol, max_iter, label="", progress=True, report_dt=20.0):
         if pAp <= 0.0:
             raise RuntimeError(
                 f"CG[{label}]: non-positive curvature (pᵀAp = {pAp:.3e}) at "
-                f"iteration {it} — the (damped) Hessian is not PSD here; "
-                f"raise the corresponding --ridge-*.")
+                f"iteration {it} — the (damped) Hessian is not PSD here. "
+                f"For a 'w:' solve the usual cause is too small "
+                f"--max-events-fit: the observed H_ww (incl. the nonlinear "
+                f"background block) is indefinite when estimated from few "
+                f"events at the full-fit optimum — raise --max-events-fit "
+                f"(≫ n_w) before reaching for --ridge-w. For a 'φ:' solve "
+                f"raise --ridge-flow (the flow's flat early-stopping "
+                f"directions need regularising).")
         alpha = rs / pAp
         x += alpha * p
         r -= alpha * Ap
