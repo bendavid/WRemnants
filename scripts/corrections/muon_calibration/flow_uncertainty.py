@@ -259,6 +259,35 @@ class ChunkedLoss:
                     a += hi.detach().double()
         return acc
 
+    def mixed_batch(self, X, params_in, segs_in, n_in, params_out, n_out, dev):
+        """BATCHED mixed block: U = H_{out,in} X for X [n_in (active), K] →
+        U [n_out, K], sharing the per-chunk forward + the single ∇_in L
+        backward across all K columns (only the ∇_out vjp is K-fold, via
+        is_grads_batched). Same result as K separate ``mixed`` calls."""
+        K = X.shape[1]
+        acc = torch.zeros(n_out, K, dtype=torch.float64, device=dev)
+        eyeK = torch.eye(K, device=dev)
+        for i0 in range(0, self.n, self.chunk):
+            L = self.loss_chunk_fn(i0, min(i0 + self.chunk, self.n))
+            g = torch.autograd.grad(L, params_in, create_graph=True,
+                                    allow_unused=True)
+            # inner_k = ⟨∇_in L, x_k⟩, assembled per active param block.
+            inner = X.new_zeros(K)
+            for gi, p, (off, idx) in zip(g, params_in, segs_in):
+                if gi is None:
+                    continue
+                inner = inner + (gi.reshape(-1)[idx.to(gi.device)]
+                                 @ X[off:off + idx.numel()])
+            h = torch.autograd.grad(inner, params_out,
+                                    grad_outputs=eyeK.to(inner.dtype),
+                                    is_grads_batched=True, allow_unused=True)
+            off = 0
+            for hi, p in zip(h, params_out):
+                if hi is not None:
+                    acc[off:off + p.numel()] += hi.reshape(K, -1).t().double()
+                off += p.numel()
+        return acc
+
 
 def _cg(apply_A, b, tol, max_iter, label="", progress=True, report_dt=20.0):
     """Standard CG on the (damped) SPD system; returns (x, iters, rel_res).
@@ -593,6 +622,108 @@ def _efvp(per_event_fn, model_params, n_events, chunk, v_list):
     return acc
 
 
+def _efvp_batch(per_event_fn, model_params, n_events, chunk, V, offs):
+    """BATCHED matrix-free empirical-Fisher-vector product: J·V for V
+    [n_φ, K] → [n_φ, K], sharing the per-chunk forward AND the
+    column-independent A(u) backward across all K columns (only the two
+    v-dependent vjps are K-fold, via is_grads_batched). Same as K separate
+    ``_efvp`` calls. ``offs`` = [(offset, numel)] per param (flat layout)."""
+    K = V.shape[1]
+    dev = V.device
+    acc = torch.zeros(V.shape[0], K, dtype=torch.float64, device=dev)
+    eyeK = torch.eye(K, device=dev)
+    for i0 in range(0, n_events, chunk):
+        per, w = per_event_fn(i0, min(i0 + chunk, n_events))
+        c = int(per.shape[0])
+        u = torch.zeros(c, device=per.device, dtype=per.dtype,
+                        requires_grad=True)
+        Au = torch.autograd.grad((per * u).sum(), model_params,
+                                 create_graph=True, allow_unused=True)
+        Au_flat = torch.cat([
+            (a.reshape(-1) if a is not None
+             else torch.zeros(num, device=dev, dtype=per.dtype))
+            for a, (o, num) in zip(Au, offs)])                      # [n_φ]
+        inner = Au_flat @ V.to(per.dtype)                           # [K]
+        s = torch.autograd.grad(inner, u, grad_outputs=eyeK.to(per.dtype),
+                                is_grads_batched=True, retain_graph=True)[0]  # [K,c]
+        obj = ((w.unsqueeze(0) * s).detach() * per.unsqueeze(0)).sum(1)   # [K]
+        g = torch.autograd.grad(obj, model_params,
+                                grad_outputs=eyeK.to(per.dtype),
+                                is_grads_batched=True, allow_unused=True)
+        for gi, (o, num) in zip(g, offs):
+            if gi is not None:
+                acc[o:o + num] += gi.reshape(K, -1).t().double()
+    return acc
+
+
+def _fisher_diag(per_event_fn, model_params, n_events, chunk, n_param, dev,
+                 progress=True):
+    """Exact diagonal of the empirical Fisher, diag_p = Σ_e w_e g_e[p]², via
+    batched per-event scores (one chunk of [c, n_param] at a time — never the
+    full [n_events, n_param]). The Jacobi preconditioner M⁻¹ = 1/(diag + λ)
+    for the (ill-conditioned) flow-Fisher CG."""
+    diag = torch.zeros(n_param, dtype=torch.float64, device=dev)
+    t0 = time.time()
+    for ci, i0 in enumerate(range(0, n_events, chunk)):
+        per, w = per_event_fn(i0, min(i0 + chunk, n_events))
+        c = int(per.shape[0])
+        eye = torch.eye(c, device=dev, dtype=per.dtype)
+        g = torch.autograd.grad(per, model_params, grad_outputs=eye,
+                                is_grads_batched=True, retain_graph=False,
+                                allow_unused=True)
+        off = 0
+        for gi, p in zip(g, model_params):
+            if gi is not None:
+                S = gi.reshape(c, -1).double()                      # [c, numel]
+                diag[off:off + p.numel()] += (w.double().unsqueeze(1) * S * S).sum(0)
+            off += p.numel()
+        if progress and ci % 50 == 0:
+            print(f"  preconditioner diag: chunk {ci + 1} "
+                  f"({time.time() - t0:.0f}s)", flush=True)
+    return diag
+
+
+def _pcg_batched(apply_A_batch, B, Minv, tol, max_iter, label="",
+                 progress=True, report_dt=20.0):
+    """Jacobi-PRECONDITIONED, BATCHED CG: solve A·Z = B for the K columns of
+    B [n, K] simultaneously (per-column scalars; a column freezes once its
+    relative residual < tol). ``apply_A_batch``: [n, K] → [n, K] (one shared
+    matvec per iteration). ``Minv`` [n] = the diagonal preconditioner. A is
+    SPD here (empirical Fisher + ridge), so no negative-curvature guard is
+    needed. Returns (Z [n, K], iters, max relative residual)."""
+    n, K = B.shape
+    X = torch.zeros_like(B)
+    R = B.clone()
+    Z = Minv.unsqueeze(1) * R
+    P = Z.clone()
+    rz = (R * Z).sum(0)                                  # [K]
+    bnorm = R.norm(dim=0).clamp_min(1e-300)              # [K]
+    rel = R.norm(dim=0) / bnorm
+    it = 0
+    t_last = time.time()
+    while it < max_iter and bool((rel > tol).any()):
+        active = (rel > tol).to(B.dtype)                 # [K] 1/0
+        AP = apply_A_batch(P)
+        pAp = (P * AP).sum(0).clamp_min(1e-300)          # [K] (SPD → >0)
+        alpha = active * rz / pAp
+        X = X + alpha.unsqueeze(0) * P
+        R = R - alpha.unsqueeze(0) * AP
+        Znew = Minv.unsqueeze(1) * R
+        rz_new = (R * Znew).sum(0)
+        beta = active * rz_new / rz.clamp_min(1e-300)
+        P = Znew + beta.unsqueeze(0) * P
+        rz = rz_new
+        rel = R.norm(dim=0) / bnorm
+        it += 1
+        if progress and (time.time() - t_last) > report_dt:
+            print(f"        PCG[{label}] it {it}/{max_iter}  "
+                  f"max rel {float(rel.max()):.2e} "
+                  f"({int((rel > tol).sum())}/{K} active, tol {tol:g})",
+                  flush=True)
+            t_last = time.time()
+    return X, it, float(rel.max())
+
+
 # ---------------------------------------------------------------------------
 # main
 # ---------------------------------------------------------------------------
@@ -699,6 +830,23 @@ def parse_args(argv=None):
                    "checkpoint's output_fisher_nphi (itself default 4) so the "
                    "covariance combines with the --output-fisher file. The "
                    "columns are EXACT — cost is linear in n_η·n_φ·n_comp.")
+    p.add_argument("--flow-precond", choices=["jacobi", "none"],
+                   default="jacobi",
+                   help="(--flow-solver fisher) Preconditioner for the "
+                   "ill-conditioned flow-Fisher CG_φ. 'jacobi': M⁻¹ = "
+                   "1/(diag(I_φ) + λ_φ), one extra pass to build the exact "
+                   "diagonal — helps when the Fisher's scale varies widely "
+                   "across the flow weights (the usual case), but can HURT a "
+                   "well-scaled/correlated Fisher, so the per-block iteration "
+                   "counts are printed: compare against 'none' on your problem.")
+    p.add_argument("--col-block", type=int, default=8,
+                   help="Solve the θ-columns in BLOCKS of this size — the "
+                   "mixed step and (for --flow-solver fisher) the "
+                   "preconditioned CG_φ apply their matvec to the whole block "
+                   "at once, sharing the per-chunk forward across columns (big "
+                   "speedup; collapses the per-column Python loop). Memory "
+                   "scales with the block (the batched backward holds a "
+                   "block-fold graph) — lower it on OOM, 1 = per-column.")
     p.add_argument("--cg-tol", type=float, default=1e-4,
                    help="CG relative-residual tolerance. VALID speedup: loosen "
                    "to ~1e-3 to roughly halve the iterations (covariance error "
@@ -935,10 +1083,22 @@ def main(argv=None) -> int:
     # The flow meat operator: empirical Fisher (PSD, default) or observed H₁.
     raw_phi = _raw_efvp_phi if args.flow_solver == "fisher" else _raw_hvp_phi
 
+    offs_phi, _o = [], 0
+    for p in flow_params:
+        offs_phi.append((_o, p.numel()))
+        _o += p.numel()
+
     def mixed_u(x):
         xl = _unpack(x, params, segs)
         h = L2.mixed(xl, params, flow_params)
         return torch.cat([t.reshape(-1) for t in h]).double()
+
+    def mixed_u_batch(X):                       # [n_w, K] → [n_φ, K]
+        return L2.mixed_batch(X, params, segs, n_w, flow_params, n_phi, dev)
+
+    def efvp_phi_batch(V):                       # [n_φ, K] → [n_φ, K]
+        return _efvp_batch(flow_per_event, flow_params, n_flow,
+                           args.eval_chunk, V, offs_phi)
 
     n_fit = fit_ev["mll"].shape[0]
 
@@ -1094,33 +1254,77 @@ def main(argv=None) -> int:
             return x, it, res, lam_w
         return _solve(_raw_hvp_w, b, "w", f"w:{labels[j]}", args.cg_max_iter_w)
 
-    # ---- the column loop ---------------------------------------------------
-    print(f"running {n_theta} θ-columns (w-solver={args.w_solver}, "
-          f"λ_w={lam_w:.3e}, λ_φ={lam_phi:.3e}, "
-          f"tol={args.cg_tol:g}, α₁={alpha1:.4f})...")
+    # ---- Jacobi preconditioner for the (ill-conditioned) flow-Fisher CG ----
+    Minv_phi = None
+    if args.flow_solver == "fisher" and args.flow_precond == "jacobi":
+        print(f"building Jacobi preconditioner diag(I_φ) "
+              f"(--score-chunk={args.score_chunk})...")
+        diag_phi = _fisher_diag(flow_per_event, flow_params, n_flow,
+                                args.score_chunk, n_phi, dev,
+                                progress=args.progress)
+        Minv_phi = 1.0 / (diag_phi + lam_phi)
+        if dev.startswith("cuda"):
+            torch.cuda.empty_cache()
+    elif args.flow_solver == "fisher":
+        Minv_phi = torch.ones(n_phi, dtype=torch.float64, device=dev)
+
+    # ---- the column loop (BLOCKED over --col-block columns) ----------------
+    bsz = max(1, int(args.col_block))
+    batched = args.flow_solver == "fisher"     # batched mixed + PCG_φ path
+    print(f"running {n_theta} θ-columns in blocks of {bsz} "
+          f"(w-solver={args.w_solver}, flow-solver={args.flow_solver}, "
+          f"λ_w={lam_w:.3e}, λ_φ={lam_phi:.3e}, tol={args.cg_tol:g}, "
+          f"α₁={alpha1:.4f})...")
     U = torch.zeros((n_theta, n_phi), dtype=torch.float64)
     Z = torch.zeros((n_theta, n_phi), dtype=torch.float64)
     t0 = time.time()
     cg_stats = []
-    for j in range(n_theta):
-        if args.w_solver != "fisher":
-            print(f"  [{j + 1:3d}/{n_theta}] {labels[j]:14s} solving "
-                  f"{args.w_solver}_w (≤{args.cg_max_iter_w} it)...", flush=True)
-        x, it_w, res_w, lw_used = _solve_w(j)
-        u = mixed_u(x)
-        z, it_f, res_f, lf_used = _solve(
-            raw_phi, u, "phi", f"φ:{labels[j]}", args.cg_max_iter_flow)
-        U[j] = u.cpu()
-        Z[j] = z.cpu()
-        cg_stats.append((it_w, res_w, it_f, res_f, lw_used, lf_used))
+    for bs in range(0, n_theta, bsz):
+        cols = list(range(bs, min(bs + bsz, n_theta)))
+        K = len(cols)
+        # w-solve for the block (fisher: slice the precomputed solve).
+        if args.w_solver == "fisher":
+            Xb = X_fisher[:, cols]                      # [n_w, K]
+            it_w, res_w, lw_used = 0, 0.0, lam_w
+        else:
+            xs, it_w, res_w, lw_used = [], 0, 0.0, lam_w
+            for j in cols:
+                print(f"  [{j + 1:3d}/{n_theta}] {labels[j]:14s} solving "
+                      f"{args.w_solver}_w...", flush=True)
+                xj, itj, resj, lw_used = _solve_w(j)
+                xs.append(xj); it_w = max(it_w, itj); res_w = max(res_w, resj)
+            Xb = torch.stack(xs, dim=1)
+        # mixed: U = H_φw X  (batched when fisher-flow, else per column).
+        if batched:
+            Ub = mixed_u_batch(Xb)                      # [n_φ, K]
+            Zb, it_f, res_f = _pcg_batched(
+                lambda P: efvp_phi_batch(P) + lam_phi * P, Ub, Minv_phi,
+                args.cg_tol, args.cg_max_iter_flow,
+                label=f"φ:{labels[cols[0]]}..", progress=args.progress)
+            lf_used = lam_phi
+        else:
+            Ucols, Zcols, it_f, res_f, lf_used = [], [], 0, 0.0, lam_phi
+            for k, j in enumerate(cols):
+                u = mixed_u(Xb[:, k])
+                z, itf, resf, lf_used = _solve(
+                    raw_phi, u, "phi", f"φ:{labels[j]}", args.cg_max_iter_flow)
+                Ucols.append(u); Zcols.append(z)
+                it_f = max(it_f, itf); res_f = max(res_f, resf)
+            Ub = torch.stack(Ucols, dim=1)
+            Zb = torch.stack(Zcols, dim=1)
+        for k, j in enumerate(cols):
+            U[j] = Ub[:, k].cpu()
+            Z[j] = Zb[:, k].cpu()
+            cg_stats.append((it_w, res_w, it_f, res_f, lw_used, lf_used))
         if dev.startswith("cuda"):
             torch.cuda.empty_cache()   # limit fragmentation over the long loop
         el = time.time() - t0
         w_tag = ("Fisher" if args.w_solver == "fisher"
-                 else f"{args.w_solver}_w {it_w:3d} it (res {res_w:.1e})")
-        print(f"  [{j + 1:3d}/{n_theta}] {labels[j]:14s} {w_tag}  "
-              f"CG_φ {it_f:3d} it (res {res_f:.1e})  "
-              f"elapsed {el / 60:.1f} min", flush=True)
+                 else f"{args.w_solver}_w {it_w:3d} it")
+        phi_tag = (f"PCG_φ {it_f:3d} it (max res {res_f:.1e})" if batched
+                   else f"CG_φ {it_f:3d} it (res {res_f:.1e})")
+        print(f"  [{cols[0] + 1:3d}-{cols[-1] + 1:3d}/{n_theta}] {w_tag}  "
+              f"{phi_tag}  elapsed {el / 60:.1f} min", flush=True)
 
     cov_flow = (U @ Z.T) / alpha1
     cov_flow = 0.5 * (cov_flow + cov_flow.T)          # numerical symmetrise
@@ -1159,6 +1363,8 @@ def main(argv=None) -> int:
         "ridge_escalation": escal,   # {} entries non-zero ⇒ over-regularised
         "w_solver": args.w_solver,
         "flow_solver": args.flow_solver,
+        "flow_precond": args.flow_precond,
+        "col_block": int(args.col_block),
     }
 
     if is_mlp:
