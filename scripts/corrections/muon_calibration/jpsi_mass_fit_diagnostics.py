@@ -116,7 +116,10 @@ def load_model_from_checkpoint(checkpoint_path: str, device: str):
         background_enabled=not bool(args.get("no_background", False)),
         bkg_model=args.get("bkg_model", "bernstein"),
         bkg_degree=int(args.get("bkg_degree", 1)),
-        theta_mode=("mlp" if args.get("theta_mlp", False) else "binned"),
+        theta_mode=("mlp" if args.get("theta_mlp", False)
+                    else ("binned2d" if args.get("theta_2d_binned", False)
+                          else "binned")),
+        n_phi_bins=int(args.get("n_phi_bins", 16)),
         n_eta_bins=len(stats.eta_edges) - 1,
         # compact flow: adopt the mixture-weight mode from the checkpoint;
         # older compact checkpoints (always learnable, 3K heads) lack the key —
@@ -576,7 +579,11 @@ def evaluate_predictions(
     _nbk = int(getattr(model, "n_bkg_comp", 2))
     _nac = _nbk + 4 + (1 if getattr(model, "bkg_model", "bernstein") == "exp"
                        else 0)   # exp: + Σw·s(c) column (LAST)
-    bkg_acc = {"eta": np.zeros((model.theta_scale.shape[0], _nac)),
+    # η accumulator is indexed by b_pm (the per-muon η-bin), so it must be sized
+    # by the true η-bin count — NOT theta_scale.shape[0], which is n_eta×n_phi
+    # cells in the 2-D binned mode.
+    bkg_acc = {"eta": np.zeros((getattr(model, "n_eta_bins",
+                                        model.theta_scale.shape[0]), _nac)),
                "phi": np.zeros((N_PHI_BKG_BINS, _nac))}
 
     total_events = 0
@@ -1199,6 +1206,64 @@ def plot_theta_vs_eta(
         title += (f"   (vs {cmp}: χ²/dof = {chi2:.1f}/{dof} = {chi2 / max(dof, 1):.2f}, "
                   f"p = {p:.3g})")
     axes[0].set_title(title)
+    if edm is not None:
+        fig.text(0.995, 0.005, f"EDM = {edm:.2e}", ha="right", va="bottom",
+                 fontsize=8, color="0.4")
+    fig.tight_layout()
+    for p in _save_fig(fig, output_dir, name):
+        print(f"  wrote {p}")
+
+
+def plot_theta_grid_etaphi(grid, sigma, component_names, name, eta_edges,
+                           n_phi, output_dir, chi2_info=None, ref=None,
+                           edm=None):
+    """θ as η×φ heatmaps for the 2-D binned (``--theta-2d-binned``) mode.
+
+    ``grid`` ``[n_eta, n_phi, n_comp]`` physical values; ``sigma`` same shape
+    (or None); ``ref`` ``[n_eta, n_phi, n_comp]`` / flat reference (injected
+    truth or 0). One COLUMN per component: top row the fitted value, bottom row
+    the pull ``(value − ref)/σ`` when both ``sigma`` and ``ref`` are available
+    (else σ if only σ is present). φ runs over [−π, π); η over the bin edges."""
+    import matplotlib.pyplot as plt
+    n_eta, n_phi_g, n_comp = grid.shape
+    eta_lo, eta_hi = float(eta_edges[0]), float(eta_edges[-1])
+    extent = [eta_lo, eta_hi, -np.pi, np.pi]
+    has_pull = sigma is not None and ref is not None
+    nrow = 2 if (has_pull or sigma is not None) else 1
+    fig, axes = plt.subplots(nrow, n_comp, figsize=(4.2 * n_comp, 3.4 * nrow),
+                             squeeze=False)
+    refg = None if ref is None else np.asarray(ref).reshape(n_eta, n_phi_g, n_comp)
+    # heatmaps show φ on y, η on x: transpose [n_eta,n_phi] → [n_phi,n_eta].
+    for c in range(n_comp):
+        v = grid[:, :, c].T
+        im = axes[0][c].imshow(v, origin="lower", aspect="auto", extent=extent,
+                               cmap="RdBu_r",
+                               vmax=np.abs(v).max() or 1.0,
+                               vmin=-(np.abs(v).max() or 1.0))
+        axes[0][c].set_title(component_names[c])
+        axes[0][c].set_xlabel("η"); axes[0][c].set_ylabel("φ")
+        fig.colorbar(im, ax=axes[0][c], fraction=0.046, pad=0.04)
+        if nrow == 2:
+            if has_pull:
+                pull = ((grid[:, :, c] - refg[:, :, c])
+                        / np.where(sigma[:, :, c] > 0, sigma[:, :, c], np.inf)).T
+                lab, cmap, lim = "pull (val−ref)/σ", "RdBu_r", 5.0
+                im2 = axes[1][c].imshow(pull, origin="lower", aspect="auto",
+                                        extent=extent, cmap=cmap,
+                                        vmin=-lim, vmax=lim)
+            else:
+                sg = sigma[:, :, c].T
+                im2 = axes[1][c].imshow(sg, origin="lower", aspect="auto",
+                                        extent=extent, cmap="viridis",
+                                        vmin=0.0)
+                lab = "σ"
+            axes[1][c].set_title(lab)
+            axes[1][c].set_xlabel("η"); axes[1][c].set_ylabel("φ")
+            fig.colorbar(im2, ax=axes[1][c], fraction=0.046, pad=0.04)
+    if chi2_info is not None:
+        chi2, dof, pval = chi2_info
+        fig.suptitle(f"{name}   χ²/dof = {chi2:.1f}/{dof} = "
+                     f"{chi2 / max(dof, 1):.2f},  p = {pval:.3g}")
     if edm is not None:
         fig.text(0.995, 0.005, f"EDM = {edm:.2e}", ha="right", va="bottom",
                  fontsize=8, color="0.4")
@@ -2679,6 +2744,12 @@ def main() -> int:
         # reference (the injected values if a shift was injected, else 0), using
         # the full θ_scale covariance block (correlations included).
         ref = inject_ref_np if inject_ref_np is not None else None
+        # 2-D binned: the injection is per-η (uniform in φ) → broadcast the
+        # [n_eta,3] reference across the n_phi φ-cells to a per-cell [n_cells,3]
+        # so it aligns with the per-cell θ table / covariance.
+        if ref is not None and model.theta_grid:
+            ref = np.repeat(ref[:, None, :], model.n_phi_bins, axis=1
+                            ).reshape(-1, 3)
         chi2_info = None
         # Use the TOTAL (data⊕flow) covariance when --flow-uncertainty is set,
         # so the compatibility test accounts for the flow uncertainty too.
@@ -2693,15 +2764,27 @@ def main() -> int:
             print(f"  θ_scale compatibility with {tgt} ({ctag} cov): "
                   f"χ²/dof = {chi2:.1f}/{dof} = "
                   f"{chi2 / max(dof, 1):.2f}, p = {pval:.3g}")
-        plot_theta_vs_eta(
-            theta_scale, sigma_scale, ["A", "e [GeV]", "M"],
-            "theta_scale_vs_eta", stats.eta_edges, out_dir, edm=edm,
-            chi2_info=chi2_info, ref=ref,
-            band=mlp_scale_band, slices=mlp_scale_slices,
-            slice_labels=mlp_slice_labels,
-            sigma_band=(model.theta_mode == "mlp"),
-            sigma_total=sigma_scale_total,
-        )
+        if model.theta_grid:
+            # 2-D binned: per-cell table → η×φ heatmaps (value + pull-vs-ref).
+            n_phi_g = model.n_phi_bins
+            n_eta_g = theta_scale.shape[0] // n_phi_g
+            g = theta_scale.reshape(n_eta_g, n_phi_g, 3)
+            sg = (sigma_scale.reshape(n_eta_g, n_phi_g, 3)
+                  if sigma_scale is not None else None)
+            plot_theta_grid_etaphi(
+                g, sg, ["A", "e [GeV]", "M"], "theta_scale_etaphi",
+                stats.eta_edges, n_phi_g, out_dir, chi2_info=chi2_info,
+                ref=ref, edm=edm)
+        else:
+            plot_theta_vs_eta(
+                theta_scale, sigma_scale, ["A", "e [GeV]", "M"],
+                "theta_scale_vs_eta", stats.eta_edges, out_dir, edm=edm,
+                chi2_info=chi2_info, ref=ref,
+                band=mlp_scale_band, slices=mlp_scale_slices,
+                slice_labels=mlp_slice_labels,
+                sigma_band=(model.theta_mode == "mlp"),
+                sigma_total=sigma_scale_total,
+            )
         # Single-η-bin binned θ: the global (A, e, M) scale params are cheap to
         # scan directly, so add a 1-D NLL likelihood scan (the most transparent
         # uncertainty diagnostic — exposes curvature + any non-parabolicity).
@@ -2743,15 +2826,27 @@ def main() -> int:
         # samples the net. effective_theta_smear() already applies SMEAR_VAR_SCALE.
         theta_smear_eff = (mlp_smear_grid if mlp_smear_grid is not None
                            else model.effective_theta_smear().detach().cpu().numpy())
-        plot_theta_vs_eta(
-            theta_smear_eff, sigma_smear, ["a [qop²]", "c [qop²·GeV²]"],
-            "theta_smear_vs_eta", stats.eta_edges, out_dir, edm=edm,
-            ref=(inject_smear_ref_np if inject_smear_ref_np is not None else None),
-            band=mlp_smear_band, slices=mlp_smear_slices,
-            slice_labels=mlp_slice_labels,
-            sigma_band=(model.theta_mode == "mlp"),
-            sigma_total=sigma_smear_total,
-        )
+        if model.theta_grid:
+            n_phi_g = model.n_phi_bins
+            n_eta_g = theta_smear_eff.shape[0] // n_phi_g
+            g = theta_smear_eff.reshape(n_eta_g, n_phi_g, 2)
+            sg = (sigma_smear.reshape(n_eta_g, n_phi_g, 2)
+                  if sigma_smear is not None else None)
+            sref = (np.repeat(inject_smear_ref_np[:, None, :], n_phi_g, axis=1)
+                    if inject_smear_ref_np is not None else None)
+            plot_theta_grid_etaphi(
+                g, sg, ["a [qop²]", "c [qop²·GeV²]"], "theta_smear_etaphi",
+                stats.eta_edges, n_phi_g, out_dir, edm=edm, ref=sref)
+        else:
+            plot_theta_vs_eta(
+                theta_smear_eff, sigma_smear, ["a [qop²]", "c [qop²·GeV²]"],
+                "theta_smear_vs_eta", stats.eta_edges, out_dir, edm=edm,
+                ref=(inject_smear_ref_np if inject_smear_ref_np is not None else None),
+                band=mlp_smear_band, slices=mlp_smear_slices,
+                slice_labels=mlp_slice_labels,
+                sigma_band=(model.theta_mode == "mlp"),
+                sigma_total=sigma_smear_total,
+            )
     else:
         print("  --disable-smearing: skipping theta_smear_vs_eta")
 
@@ -2816,6 +2911,9 @@ def main() -> int:
                 "theta_smear_vs_phi", mlp_phi["eta_sl"], out_dir, ref=cref,
                 eta_mean=mlp_phi["ac_mean"], eta_band=mlp_phi["ac_band"],
                 fisher_sigma=_fisher_sigma_phi(cov_smear_2d))
+    elif model.theta_grid:
+        print("  --theta-2d-binned: φ structure shown in the η×φ heatmaps; "
+              "skipping the continuous theta_*_vs_phi curves")
     elif model.theta_mode != "mlp":
         print("  binned θ (no φ dependence): skipping theta_*_vs_phi")
 
@@ -2827,8 +2925,15 @@ def main() -> int:
     # "what it cannot" (sloppy — large spread, may not close), which is exactly
     # the right way to read the closure when fitting both members of a pair.
     eigb = _degeneracy_eigbasis(getattr(stats, "k_moments", None))
+    if model.theta_grid:
+        # per-cell (η×φ) θ: the whitened η-curve plots assume a per-η table;
+        # skip them (the η×φ heatmaps above carry the 2-D closure instead).
+        eigb = None
+        print("  --theta-2d-binned: skipping whitened-basis η-curve plots "
+              "(see the η×φ heatmaps)")
     if eigb is None:
-        print("  no k_moments in stats → skipping whitened-basis closure plots")
+        if not model.theta_grid:
+            print("  no k_moments in stats → skipping whitened-basis closure plots")
     else:
         E_s, l_s, E_c, l_c = eigb
         print("  degeneracy eigenbasis (global, O(1) θ coords; info ratio stiff/sloppy):")

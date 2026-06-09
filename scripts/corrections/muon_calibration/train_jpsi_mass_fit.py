@@ -991,6 +991,8 @@ def _stage_windows(args, stats):
 
 
 def _build_model(args, stats, device):
+    if getattr(args, "theta_mlp", False) and getattr(args, "theta_2d_binned", False):
+        raise ValueError("--theta-mlp and --theta-2d-binned are mutually exclusive.")
     flow_win, fit_win = _stage_windows(args, stats)
     if not (flow_win == (float(stats.m_lo), float(stats.m_hi)) and flow_win == fit_win):
         print(f"  mass windows: shard [{stats.m_lo:g}, {stats.m_hi:g}]  "
@@ -1026,10 +1028,13 @@ def _build_model(args, stats, device):
         background_enabled=not getattr(args, "no_background", False),
         bkg_model=getattr(args, "bkg_model", "bernstein"),
         bkg_degree=int(getattr(args, "bkg_degree", 1)),
-        theta_mode=("mlp" if getattr(args, "theta_mlp", False) else "binned"),
+        theta_mode=("mlp" if getattr(args, "theta_mlp", False)
+                    else ("binned2d" if getattr(args, "theta_2d_binned", False)
+                          else "binned")),
         cond_basis=getattr(args, "cond_basis", "muon_kin"),
         theta_mlp_hidden=getattr(args, "theta_mlp_hidden", 32),
         theta_mlp_layers=getattr(args, "theta_mlp_layers", 2),
+        n_phi_bins=int(getattr(args, "n_phi_bins", 16)),
         theta_whiten=getattr(args, "theta_whiten", False),
         theta_whiten_max_rho=getattr(args, "theta_whiten_max_rho", 0.99),
         k_moments=stats.k_moments,
@@ -4546,6 +4551,17 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    help="(--theta-mlp) Hidden width of the θ ThetaNet.")
     p.add_argument("--theta-mlp-layers", type=int, default=2,
                    help="(--theta-mlp) Number of hidden layers of the θ ThetaNet.")
+    p.add_argument(
+        "--theta-2d-binned", action="store_true",
+        help="Bin the (A,e,M,a,c) θ tables in η×φ CELLS instead of η only: each "
+        "η-bin is split into --n-phi-bins uniform φ bins over [-π,π), so the "
+        "per-muon scale/smear is indexed by (η-bin, φ-bin). Captures φ-dependent "
+        "(e.g. detector-misalignment) biases the per-η table averages over. "
+        "Mutually exclusive with --theta-mlp. Uncertainties (empirical Fisher, "
+        "flow) work per-cell; diagnostics draw η×φ heatmaps.")
+    p.add_argument("--n-phi-bins", type=int, default=16,
+                   help="(--theta-2d-binned) Number of uniform φ bins per η-bin "
+                   "(default 16 → 24×16 cells with the default 24 η-bins).")
     p.add_argument(
         "--theta-whiten", action="store_true",
         help="Decorrelate the degenerate (A,e) and (a,c) parameter pairs with a "

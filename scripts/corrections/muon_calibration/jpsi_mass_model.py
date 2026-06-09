@@ -883,6 +883,10 @@ class JpsiMassMixtureModel(nn.Module):
         theta_mode: str = "binned",
         theta_mlp_hidden: int = 32,
         theta_mlp_layers: int = 2,
+        # 'binned2d' only: number of uniform φ bins over [-π, π). The θ tables
+        # then have n_eta_bins × n_phi_bins CELLS (η outer, φ inner), indexed
+        # per-muon by (η-bin, φ-bin). 1 ⇒ identical to plain 'binned'.
+        n_phi_bins: int = 16,
         # Flow + background-MLP conditioning basis. 'muon_kin' (default): the
         # leak-free per-muon (η±, cosφ±, sinφ±, ρ). 'event_level': the dilepton
         # vars (yll, ln(ptll/mll), cosPhill, sinPhill, cosθ*, sinφ*, cosφ*) —
@@ -933,9 +937,18 @@ class JpsiMassMixtureModel(nn.Module):
                 f"got {norm_correction!r}")
         self.norm_correction = str(norm_correction)
         self.background_enabled = bool(background_enabled)
-        if theta_mode not in ("binned", "mlp"):
-            raise ValueError(f"theta_mode must be 'binned' or 'mlp', got {theta_mode!r}")
+        if theta_mode not in ("binned", "mlp", "binned2d"):
+            raise ValueError(
+                f"theta_mode must be 'binned', 'binned2d', or 'mlp', "
+                f"got {theta_mode!r}")
         self.theta_mode = str(theta_mode)
+        # θ-table cell layout: plain 'binned'/'mlp' use the per-η table (n_phi=1
+        # conceptually); 'binned2d' tiles each η-bin into n_phi_bins φ-cells,
+        # ordered η-outer/φ-inner (matching the MLP grid-output convention).
+        self.theta_grid = (self.theta_mode == "binned2d")
+        self.n_eta_bins = int(n_eta_bins)
+        self.n_phi_bins = int(n_phi_bins) if self.theta_grid else 1
+        n_theta_cells = self.n_eta_bins * self.n_phi_bins
         if cond_basis not in ("muon_kin", "event_level"):
             raise ValueError(
                 f"cond_basis must be 'muon_kin' or 'event_level'; got {cond_basis!r}")
@@ -1089,7 +1102,7 @@ class JpsiMassMixtureModel(nn.Module):
 
         # Learnable nuisances.
         self.theta_scale = nn.Parameter(
-            torch.zeros(n_eta_bins, N_THETA_SCALE, dtype=torch.float32)
+            torch.zeros(n_theta_cells, N_THETA_SCALE, dtype=torch.float32)
         )
         # Default RAW θ_smear init. 'linear'/'softplus' start at 0 (the historical
         # identity init); 'square' starts at SMEAR_SQUARE_INIT_RAW because raw=0
@@ -1106,9 +1119,15 @@ class JpsiMassMixtureModel(nn.Module):
         # (square) → small nonzero, off the saddle. The binned --init-theta-{a,c}
         # CLI overrides this downstream when explicitly set.
         self.theta_smear = nn.Parameter(
-            torch.full((n_eta_bins, N_THETA_SMEAR), smear_init_raw,
+            torch.full((n_theta_cells, N_THETA_SMEAR), smear_init_raw,
                        dtype=torch.float32)
         )
+        # 'binned2d': uniform φ-bin edges over [-π, π) for the per-muon cell index.
+        self.register_buffer(
+            "_theta_phi_edges",
+            torch.linspace(-math.pi, math.pi, self.n_phi_bins + 1,
+                           dtype=torch.float32),
+            persistent=False)
         # 'mlp' θ: a small net maps each muon's (η, φ) → (A,e,M,a,c) continuously
         # (scale zero-init → 0; smear bias = smear_init_raw). Replaces the binned
         # tables above (which stay registered but inert). Trained in stage 2 like
@@ -1219,15 +1238,27 @@ class JpsiMassMixtureModel(nn.Module):
         self._whiten_scale_active = bool(have_moments and scale_pair_fit)
         self._whiten_smear_active = bool(have_moments and smear_pair_fit)
 
+    def _theta_cell_idx(self, b_pm, phi_pm):
+        """Flat θ-table index per muon: the η-bin ``b_pm`` ('binned'), or
+        ``b_pm·n_phi + φ-bin`` ('binned2d', η-outer/φ-inner). φ is binned
+        uniformly over [-π, π); out-of-range φ clamps to the edge cells."""
+        if not self.theta_grid:
+            return b_pm
+        pf = (phi_pm + math.pi) * (self.n_phi_bins / (2.0 * math.pi))
+        p = torch.clamp(pf.floor().to(torch.long), 0, self.n_phi_bins - 1)
+        return b_pm * self.n_phi_bins + p
+
     def _scale_AeM_pm(self, eta_pm, phi_pm, b_pm) -> torch.Tensor:
         """Per-muon PHYSICAL scale params ``[B, 2, 3] = (A, e, M)``, masked to the
         fitted terms (scale_param_mask, default A,M only — drops the A/e-
         degenerate e). 'binned': the η-bin table θ_scale[b] (O(1) fit param) ×
-        THETA_SCALE_REF; 'mlp': the ThetaNet(η, φ), which already applies REF."""
+        THETA_SCALE_REF; 'binned2d': the (η,φ)-cell table; 'mlp': the
+        ThetaNet(η, φ), which already applies REF."""
         if self.theta_mode == "mlp":
             aem = self.theta_net(eta_pm, phi_pm)[0]
         else:
-            aem = self.theta_scale[b_pm] * self.theta_scale.new_tensor(THETA_SCALE_REF)
+            idx = self._theta_cell_idx(b_pm, phi_pm)
+            aem = self.theta_scale[idx] * self.theta_scale.new_tensor(THETA_SCALE_REF)
         # Whiten the (A, e) gradient (backward-only; identity in eval/forward).
         if self.training and self._whiten_scale_active:
             L = (self._scale_W_global if self.theta_mode == "mlp"
@@ -1270,7 +1301,7 @@ class JpsiMassMixtureModel(nn.Module):
         if self.theta_mode == "mlp":
             ac = self.theta_net(eta_pm, phi_pm)[1]
         else:
-            ac = self.theta_smear[b_pm]
+            ac = self.theta_smear[self._theta_cell_idx(b_pm, phi_pm)]
         ac = self._smear_raw_to_effective(ac)
         # Whiten the (a, c) gradient (backward-only; identity in eval/forward).
         # Applied AFTER softplus — the forward pass is the identity so positivity
