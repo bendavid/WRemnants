@@ -1272,6 +1272,70 @@ def plot_theta_grid_etaphi(grid, sigma, component_names, name, eta_edges,
         print(f"  wrote {p}")
 
 
+def plot_theta_grid_projections(grid, sigma, component_names, prefix,
+                                eta_edges, output_dir, ref_eta=None, edm=None,
+                                n_phi_slices=4, n_eta_slices=5):
+    """1-D projections of the 2-D binned θ grid (``--theta-2d-binned``):
+    φ-averaged θ vs η and η-averaged θ vs φ, each with the spread band over the
+    averaged coordinate plus a few slices of it — easier to read/compare than
+    the η×φ heatmaps.
+
+    ``grid``/``sigma``: ``[n_eta, n_phi, n_comp]`` physical values (σ may be
+    None); ``ref_eta``: per-η ``[n_eta, n_comp]`` reference (injected truth,
+    uniform in φ). Averages are INVERSE-VARIANCE weighted when σ is available
+    (so empty/unconstrained cells don't dominate), else uniform; the σ on the
+    mean is the uncorrelated inverse-variance 1/√Σw (per-cell correlations
+    ignored — a readability diagnostic, not a fit-quality test)."""
+    n_eta, n_phi, n_comp = grid.shape
+    if sigma is not None:
+        w = 1.0 / np.clip(sigma, 1e-30, None) ** 2
+        w = np.where(np.isfinite(w), w, 0.0)
+    else:
+        w = np.ones_like(grid)
+
+    def _proj(axis):
+        wsum = w.sum(axis=axis)
+        ok = wsum > 0
+        wsafe = np.where(ok, wsum, 1.0)
+        mean = (w * grid).sum(axis=axis) / wsafe
+        spread = np.sqrt(np.clip(
+            (w * (grid - np.expand_dims(mean, axis)) ** 2).sum(axis=axis)
+            / wsafe, 0.0, None))
+        sig = (np.where(ok, 1.0 / np.sqrt(wsafe), np.nan)
+               if sigma is not None else None)
+        return mean, spread, sig
+
+    phi_ctr = (np.arange(n_phi) + 0.5) * (2.0 * np.pi / n_phi) - np.pi
+    eta_ctr = 0.5 * (np.asarray(eta_edges[:-1]) + np.asarray(eta_edges[1:]))
+
+    # φ-averaged θ(η): error bars = σ of the weighted φ-mean, grey band = the
+    # φ STRUCTURE spread, faint curves = individual φ slices. A φ-uniform
+    # per-η ref is its own weighted φ-mean, so ref_eta passes through directly.
+    mean_e, band_e, sig_e = _proj(1)
+    sl_p = np.unique(np.linspace(0, n_phi - 1, n_phi_slices).round().astype(int))
+    plot_theta_vs_eta(
+        mean_e, sig_e, component_names, f"{prefix}_vs_eta", eta_edges,
+        output_dir, edm=edm, ref=ref_eta, band=band_e,
+        slices=grid[:, sl_p, :],
+        slice_labels=[f"φ≈{phi_ctr[s]:+.2f}" for s in sl_p])
+
+    # η-averaged θ(φ): same construction transposed. The (φ-uniform) per-η ref
+    # is averaged over η with the SAME per-φ weights as the value mean, so the
+    # comparison is apples-to-apples.
+    mean_p, band_p, sig_p = _proj(0)
+    sl_e = np.unique(np.linspace(0, n_eta - 1, n_eta_slices).round().astype(int))
+    ref_phi = None
+    if ref_eta is not None:
+        wsum0 = w.sum(axis=0)
+        ref_phi = ((w * np.asarray(ref_eta)[:, None, :]).sum(axis=0)
+                   / np.where(wsum0 > 0, wsum0, 1.0))
+    plot_theta_vs_phi(
+        phi_ctr, grid[sl_e], component_names, f"{prefix}_vs_phi",
+        eta_ctr[sl_e], output_dir, ref=ref_phi,
+        eta_mean=mean_p, eta_band=band_p, band_label="±1σ over η",
+        fisher_sigma=sig_p)
+
+
 def plot_theta_vs_phi(
     phi_grid: np.ndarray,        # [n_phi] φ sample points
     theta: np.ndarray,           # [n_eta_slc, n_phi, n_comp] net output at η-slices
@@ -1304,7 +1368,7 @@ def plot_theta_vs_phi(
         for s in range(n_eta_slc):
             ax.plot(phi_grid, theta[s, :, i],
                     color=eta_colors[s % len(eta_colors)], lw=0.9, alpha=0.55,
-                    label=f"|η|≈{eta_slice_vals[s]:.1f}")
+                    label=f"η≈{eta_slice_vals[s]:+.1f}")
         # η-averaged curve + bands (bold, drawn on top).
         if eta_mean is not None:
             # Fisher statistical band, φ-resolved — drawn first as the reference.
@@ -2775,6 +2839,12 @@ def main() -> int:
                 g, sg, ["A", "e [GeV]", "M"], "theta_scale_etaphi",
                 stats.eta_edges, n_phi_g, out_dir, chi2_info=chi2_info,
                 ref=ref, edm=edm)
+            # 1-D projections (φ-mean vs η, η-mean vs φ, + slices) — easier to
+            # read/compare than the heatmaps. Ref is the PER-η injected table
+            # (φ-uniform), not the per-cell broadcast used for the pulls above.
+            plot_theta_grid_projections(
+                g, sg, ["A", "e [GeV]", "M"], "theta_scale",
+                stats.eta_edges, out_dir, ref_eta=inject_ref_np, edm=edm)
         else:
             plot_theta_vs_eta(
                 theta_scale, sigma_scale, ["A", "e [GeV]", "M"],
@@ -2837,6 +2907,9 @@ def main() -> int:
             plot_theta_grid_etaphi(
                 g, sg, ["a [qop²]", "c [qop²·GeV²]"], "theta_smear_etaphi",
                 stats.eta_edges, n_phi_g, out_dir, edm=edm, ref=sref)
+            plot_theta_grid_projections(
+                g, sg, ["a [qop²]", "c [qop²·GeV²]"], "theta_smear",
+                stats.eta_edges, out_dir, ref_eta=inject_smear_ref_np, edm=edm)
         else:
             plot_theta_vs_eta(
                 theta_smear_eff, sigma_smear, ["a [qop²]", "c [qop²·GeV²]"],
@@ -2912,8 +2985,9 @@ def main() -> int:
                 eta_mean=mlp_phi["ac_mean"], eta_band=mlp_phi["ac_band"],
                 fisher_sigma=_fisher_sigma_phi(cov_smear_2d))
     elif model.theta_grid:
-        print("  --theta-2d-binned: φ structure shown in the η×φ heatmaps; "
-              "skipping the continuous theta_*_vs_phi curves")
+        print("  --theta-2d-binned: theta_*_vs_eta/_vs_phi show the grid "
+              "projections (weighted φ-/η-means + slices); η×φ detail in the "
+              "heatmaps")
     elif model.theta_mode != "mlp":
         print("  binned θ (no φ dependence): skipping theta_*_vs_phi")
 
