@@ -2889,8 +2889,15 @@ def main() -> int:
             n_phi_g = model.n_phi_bins
             n_eta_g = theta_scale.shape[0] // n_phi_g
             g = theta_scale.reshape(n_eta_g, n_phi_g, 3)
-            sg = (sigma_scale.reshape(n_eta_g, n_phi_g, 3)
-                  if sigma_scale is not None else None)
+            # Per-cell σ: the TOTAL (data⊕flow) when --flow-uncertainty is set
+            # (consistent with the χ², which uses the total covariance), else
+            # the data-stat --fisher σ. sigma_scale alone misses the
+            # flow-uncertainty-only case (no --fisher): the per-cell σ then
+            # lives in sigma_scale_total/_data, not sigma_scale.
+            sig_cell = (sigma_scale_total if sigma_scale_total is not None
+                        else sigma_scale)
+            sg = (sig_cell.reshape(n_eta_g, n_phi_g, 3)
+                  if sig_cell is not None else None)
             plot_theta_grid_etaphi(
                 g, sg, ["A", "e [GeV]", "M"], "theta_scale_etaphi",
                 stats.eta_edges, n_phi_g, out_dir, chi2_info=chi2_info,
@@ -2959,8 +2966,10 @@ def main() -> int:
             n_phi_g = model.n_phi_bins
             n_eta_g = theta_smear_eff.shape[0] // n_phi_g
             g = theta_smear_eff.reshape(n_eta_g, n_phi_g, 2)
-            sg = (sigma_smear.reshape(n_eta_g, n_phi_g, 2)
-                  if sigma_smear is not None else None)
+            sig_cell = (sigma_smear_total if sigma_smear_total is not None
+                        else sigma_smear)
+            sg = (sig_cell.reshape(n_eta_g, n_phi_g, 2)
+                  if sig_cell is not None else None)
             sref = (_ref_cells(inject_smear_ref_np, n_phi_g)
                     if inject_smear_ref_np is not None else None)
             plot_theta_grid_etaphi(
