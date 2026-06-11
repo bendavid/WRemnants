@@ -1327,12 +1327,13 @@ def plot_theta_grid_projections(grid, sigma, component_names, prefix,
     ``[n_eta, n_comp]`` (φ-uniform). Averages are INVERSE-VARIANCE weighted
     when σ is available (so empty/unconstrained cells don't dominate), else
     uniform — the ref is projected with the SAME weights so the comparison is
-    apples-to-apples; the σ on the mean is the uncorrelated inverse-variance
-    1/√Σw (per-cell correlations ignored — a readability diagnostic, not a
-    fit-quality test). ``cov``: flat per-cell covariance
+    apples-to-apples. ``cov``: flat per-cell covariance
     ``[n_cells·n_comp, n_cells·n_comp]`` (η-major cell order) — when given,
-    each projection also gets a PROPER χ²/dof vs the projected ref: the means
-    are linear in θ (m = Wθ), so Cov(m) = W·C·Wᵀ with correlations included."""
+    the means are treated as the linear map m = Wθ, so Cov(m) = W·C·Wᵀ with
+    per-cell correlations fully included: the error bars on the means are
+    √diag(W·C·Wᵀ) and each projection gets a PROPER χ²/dof vs the projected
+    ref. (Only the WEIGHTS use the diagonal σ; without ``cov`` the σ on the
+    mean falls back to the uncorrelated inverse-variance 1/√Σw.)"""
     n_eta, n_phi, n_comp = grid.shape
     if sigma is not None:
         w = 1.0 / np.clip(sigma, 1e-30, None) ** 2
@@ -1359,11 +1360,10 @@ def plot_theta_grid_projections(grid, sigma, component_names, prefix,
                if sigma is not None else None)
         return mean, spread, sig
 
-    def _proj_chi2(axis, mean, ref_m, out):
-        # χ² of the projected weighted means vs the (identically projected)
-        # ref — or 0 if no injection — with the FULL projected covariance
-        # Cov(m) = W·C·Wᵀ. Frozen / zero-variance directions are dropped by
-        # the positive-variance eigendecomposition in _chi2_compat_zero.
+    def _proj_cov(axis, out):
+        # FULL covariance of the projected weighted means: m = Wθ is linear,
+        # so Cov(m) = W·C·Wᵀ — per-cell correlations included. Returns the
+        # flat [n_out, n_out] matrix (row-major in the `out` index order).
         if cov is None:
             return None
         wsum = w.sum(axis=axis, keepdims=True)
@@ -1371,9 +1371,17 @@ def plot_theta_grid_projections(grid, sigma, component_names, prefix,
         c6 = np.asarray(cov, dtype=np.float64).reshape(
             n_eta, n_phi, n_comp, n_eta, n_phi, n_comp)
         cm = np.einsum('epc,epcfqd,fqd->' + out, wn, c6, wn, optimize=True)
+        n = int(np.sqrt(cm.size))
+        return cm.reshape(n, n)
+
+    def _proj_chi2(cm, mean, ref_m):
+        # χ² of the projected means vs the (identically projected) ref — or 0
+        # if no injection. Frozen / zero-variance directions are dropped by
+        # the positive-variance eigendecomposition in _chi2_compat_zero.
+        if cm is None:
+            return None
         r = mean - (ref_m if ref_m is not None else 0.0)
-        n = r.size
-        return _chi2_compat_zero(r.reshape(-1), cm.reshape(n, n))
+        return _chi2_compat_zero(r.reshape(-1), cm)
 
     phi_ctr = (np.arange(n_phi) + 0.5) * (2.0 * np.pi / n_phi) - np.pi
     eta_ctr = 0.5 * (np.asarray(eta_edges[:-1]) + np.asarray(eta_edges[1:]))
@@ -1382,7 +1390,12 @@ def plot_theta_grid_projections(grid, sigma, component_names, prefix,
     # φ STRUCTURE spread, faint curves = individual φ slices.
     mean_e, band_e, sig_e = _proj(1)
     ref_e = None if ref_g is None else _wmean(ref_g, 1)
-    chi2_e = _proj_chi2(1, mean_e, ref_e, 'ecfd')
+    cm_e = _proj_cov(1, 'ecfd')
+    if cm_e is not None:
+        # error bar on the mean from the FULL projected covariance
+        # (correlations included) — supersedes the uncorrelated 1/√Σw.
+        sig_e = np.sqrt(np.clip(np.diag(cm_e), 0.0, None)).reshape(mean_e.shape)
+    chi2_e = _proj_chi2(cm_e, mean_e, ref_e)
     sl_p = np.unique(np.linspace(0, n_phi - 1, n_phi_slices).round().astype(int))
     plot_theta_vs_eta(
         mean_e, sig_e, component_names, f"{prefix}_vs_eta", eta_edges,
@@ -1394,7 +1407,10 @@ def plot_theta_grid_projections(grid, sigma, component_names, prefix,
     # η-averaged θ(φ): same construction transposed.
     mean_p, band_p, sig_p = _proj(0)
     ref_p = None if ref_g is None else _wmean(ref_g, 0)
-    chi2_p = _proj_chi2(0, mean_p, ref_p, 'pcqd')
+    cm_p = _proj_cov(0, 'pcqd')
+    if cm_p is not None:
+        sig_p = np.sqrt(np.clip(np.diag(cm_p), 0.0, None)).reshape(mean_p.shape)
+    chi2_p = _proj_chi2(cm_p, mean_p, ref_p)
     sl_e = np.unique(np.linspace(0, n_eta - 1, n_eta_slices).round().astype(int))
     plot_theta_vs_phi(
         phi_ctr, grid[sl_e], component_names, f"{prefix}_vs_phi",
