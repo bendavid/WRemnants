@@ -1121,9 +1121,11 @@ def plot_theta_vs_eta(
     slice_labels: "list | None" = None,    # length n_slices, e.g. ['φ=0', ...]
     sigma_band: bool = False,    # draw `sigma` as a continuous shaded band (MLP)
     sigma_total: "np.ndarray | None" = None,  # [n_eta, n_comp] data⊕flow ±1σ
+    points: bool = False,   # 2-D binned: band → outer error bars, slices → markers
 ):
     n_eta, n_comp = theta.shape
     eta_centers = 0.5 * (eta_edges[:-1] + eta_edges[1:])
+    dx = float(eta_centers[1] - eta_centers[0]) if n_eta > 1 else 1.0
 
     fig, axes = plt.subplots(n_comp, 1, sharex=True, figsize=(8, 2.5 * n_comp))
     if n_comp == 1:
@@ -1140,20 +1142,36 @@ def plot_theta_vs_eta(
                 theta[:, i] + sigma_total[:, i],
                 color="C7", alpha=0.30, linewidth=0,
                 label="±1σ (data⊕flow)")
-        # φ-spread band (MLP mode only — `band` carries the std over φ at each η).
+        # φ-spread: MLP draws it as a shaded band; 2-D binned (`points`) as
+        # wide light OUTER error bars (per-bin params — no continuity implied).
         if band is not None:
-            ax.fill_between(
-                eta_centers, theta[:, i] - band[:, i], theta[:, i] + band[:, i],
-                color="0.5", alpha=0.18, label="±1σ over φ", linewidth=0)
-        # Individual φ slices (faint coloured lines).
+            if points:
+                ax.errorbar(
+                    eta_centers, theta[:, i], yerr=band[:, i], fmt="none",
+                    ecolor="0.65", elinewidth=1.1, capsize=4,
+                    label="±1σ over φ")
+            else:
+                ax.fill_between(
+                    eta_centers, theta[:, i] - band[:, i],
+                    theta[:, i] + band[:, i],
+                    color="0.5", alpha=0.18, label="±1σ over φ", linewidth=0)
+        # Individual φ slices: faint coloured lines (MLP) or x-offset markers
+        # (2-D binned).
         if slices is not None:
             n_slices = slices.shape[1]
             for s_i in range(n_slices):
                 lab = (slice_labels[s_i] if slice_labels and s_i < len(slice_labels)
                        else f"slice {s_i}")
-                ax.plot(eta_centers, slices[:, s_i, i],
-                        color=slice_colors[s_i % len(slice_colors)],
-                        lw=0.9, alpha=0.6, label=lab)
+                if points:
+                    off = dx * 0.3 * ((s_i + 0.5) / n_slices - 0.5)
+                    ax.plot(eta_centers + off, slices[:, s_i, i], "o",
+                            markersize=2.4, linestyle="none",
+                            color=slice_colors[s_i % len(slice_colors)],
+                            alpha=0.65, label=lab)
+                else:
+                    ax.plot(eta_centers, slices[:, s_i, i],
+                            color=slice_colors[s_i % len(slice_colors)],
+                            lw=0.9, alpha=0.6, label=lab)
         # Main: per-bin error bars (binned θ) or a continuous φ-mean line (MLP).
         main_label = "fit" if band is None else "fit (φ-mean)"
         if sigma is not None and sigma_band:
@@ -1184,8 +1202,8 @@ def plot_theta_vs_eta(
                 fmt="o", color="k", markersize=4, capsize=3,
                 label="±1σ (data⊕flow)")
         else:
-            ax.plot(eta_centers, theta[:, i], "o-", color="k", markersize=4,
-                    label=main_label)
+            ax.plot(eta_centers, theta[:, i], "o" if points else "o-",
+                    color="k", markersize=4, label=main_label)
         ax.axhline(0, color="0.5", lw=0.8, ls=":")
         if ref is not None:
             ax.plot(eta_centers, ref[:, i], color="C3", ls="--", lw=1.3,
@@ -1276,9 +1294,10 @@ def plot_theta_grid_projections(grid, sigma, component_names, prefix,
                                 eta_edges, output_dir, ref=None, edm=None,
                                 n_phi_slices=4, n_eta_slices=5):
     """1-D projections of the 2-D binned θ grid (``--theta-2d-binned``):
-    φ-averaged θ vs η and η-averaged θ vs φ, each with the spread band over the
-    averaged coordinate plus a few slices of it — easier to read/compare than
-    the η×φ heatmaps.
+    φ-averaged θ vs η and η-averaged θ vs φ, drawn as POINTS — black markers
+    with inner error bars (σ of the weighted mean) and light outer error bars
+    (the spread over the averaged coordinate) plus a few slices of it as
+    offset markers — easier to read/compare than the η×φ heatmaps.
 
     ``grid``/``sigma``: ``[n_eta, n_phi, n_comp]`` physical values (σ may be
     None); ``ref``: injected-truth reference, per-cell ``[n_eta, n_phi,
@@ -1327,7 +1346,7 @@ def plot_theta_grid_projections(grid, sigma, component_names, prefix,
         output_dir, edm=edm,
         ref=(None if ref_g is None else _wmean(ref_g, 1)), band=band_e,
         slices=grid[:, sl_p, :],
-        slice_labels=[f"φ≈{phi_ctr[s]:+.2f}" for s in sl_p])
+        slice_labels=[f"φ≈{phi_ctr[s]:+.2f}" for s in sl_p], points=True)
 
     # η-averaged θ(φ): same construction transposed.
     mean_p, band_p, sig_p = _proj(0)
@@ -1337,7 +1356,7 @@ def plot_theta_grid_projections(grid, sigma, component_names, prefix,
         eta_ctr[sl_e], output_dir,
         ref=(None if ref_g is None else _wmean(ref_g, 0)),
         eta_mean=mean_p, eta_band=band_p, band_label="±1σ over η",
-        fisher_sigma=sig_p)
+        fisher_sigma=sig_p, points=True)
 
 
 def plot_theta_vs_phi(
@@ -1352,6 +1371,7 @@ def plot_theta_vs_phi(
     eta_band: "np.ndarray | None" = None,   # [n_phi, n_comp] ±1σ band on the η-mean
     band_label: str = "±1σ over η",
     fisher_sigma: "np.ndarray | None" = None,  # [n_phi, n_comp] Fisher ±1σ(φ) on η-mean
+    points: bool = False,   # 2-D binned: bands → error bars, slices → markers
 ):
     """θ output (A,e,M or a,c) as a function of φ, one (faint) curve per
     representative η slice — the φ-direction companion to plot_theta_vs_eta. Only
@@ -1368,13 +1388,33 @@ def plot_theta_vs_phi(
     if n_comp == 1:
         axes = [axes]
     eta_colors = ["C0", "C1", "C2", "C4", "C5", "C6"]
+    dphi = float(phi_grid[1] - phi_grid[0]) if n_phi > 1 else 1.0
     for i, ax in enumerate(axes):
         for s in range(n_eta_slc):
-            ax.plot(phi_grid, theta[s, :, i],
-                    color=eta_colors[s % len(eta_colors)], lw=0.9, alpha=0.55,
-                    label=f"η≈{eta_slice_vals[s]:+.1f}")
-        # η-averaged curve + bands (bold, drawn on top).
-        if eta_mean is not None:
+            if points:
+                off = dphi * 0.3 * ((s + 0.5) / n_eta_slc - 0.5)
+                ax.plot(phi_grid + off, theta[s, :, i], "o", markersize=2.4,
+                        linestyle="none",
+                        color=eta_colors[s % len(eta_colors)], alpha=0.6,
+                        label=f"η≈{eta_slice_vals[s]:+.1f}")
+            else:
+                ax.plot(phi_grid, theta[s, :, i],
+                        color=eta_colors[s % len(eta_colors)], lw=0.9,
+                        alpha=0.55, label=f"η≈{eta_slice_vals[s]:+.1f}")
+        # η-averaged curve: bold line + shaded bands (MLP) or black markers
+        # with inner (statistical) + outer (η-spread) error bars (2-D binned).
+        if eta_mean is not None and points:
+            if eta_band is not None:
+                ax.errorbar(
+                    phi_grid, eta_mean[:, i], yerr=eta_band[:, i], fmt="none",
+                    ecolor="0.65", elinewidth=1.1, capsize=4, label=band_label)
+            fs = (np.nan_to_num(fisher_sigma[:, i], nan=0.0)
+                  if fisher_sigma is not None and np.any(fisher_sigma[:, i] > 0)
+                  else None)
+            ax.errorbar(
+                phi_grid, eta_mean[:, i], yerr=fs, fmt="o", color="k",
+                markersize=4, capsize=2, label="η-mean")
+        elif eta_mean is not None:
             # Fisher statistical band, φ-resolved — drawn first as the reference.
             if fisher_sigma is not None and np.any(fisher_sigma[:, i] > 0):
                 fs = np.nan_to_num(fisher_sigma[:, i], nan=0.0)
