@@ -1212,6 +1212,24 @@ def plot_theta_vs_eta(
         if ref is not None:
             ax.plot(eta_centers, ref[:, i], color="C3", ls="--", lw=1.3,
                     label="injected")
+        if points:
+            # Autoscale WITHOUT the slice error-bar extents (low-occupancy
+            # cells have huge per-cell σ that would flatten everything else):
+            # cover the mean ± its bars, the ref, and the slice point VALUES.
+            cand = [theta[:, i]]
+            for b in (sigma, band, sigma_total):
+                if b is not None:
+                    cand += [theta[:, i] - b[:, i], theta[:, i] + b[:, i]]
+            if ref is not None:
+                cand.append(ref[:, i])
+            if slices is not None:
+                cand.append(slices[:, :, i].ravel())
+            v = np.concatenate([np.asarray(c, dtype=float).ravel() for c in cand])
+            v = v[np.isfinite(v)]
+            if v.size:
+                lo, hi = float(v.min()), float(v.max())
+                pad = 0.06 * ((hi - lo) or abs(hi) or 1.0)
+                ax.set_ylim(lo - pad, hi + pad)
         ax.set_ylabel(component_names[i])
         ax.grid(True, alpha=0.3)
     if (ref is not None or slices is not None or band is not None
@@ -1442,6 +1460,26 @@ def plot_theta_vs_phi(
             ax.plot(phi_grid, ref[:, i], color="C3", ls="--", lw=1.3,
                     label="injected")
         ax.axhline(0, color="0.5", lw=0.8, ls=":")
+        if points:
+            # Autoscale WITHOUT the slice error-bar extents (see
+            # plot_theta_vs_eta): mean ± its bars, ref, slice point values.
+            cand = [theta[:, :, i].ravel()]
+            if eta_mean is not None:
+                cand.append(eta_mean[:, i])
+                if eta_band is not None:
+                    cand += [eta_mean[:, i] - eta_band[:, i],
+                             eta_mean[:, i] + eta_band[:, i]]
+                if fisher_sigma is not None:
+                    fs0 = np.nan_to_num(fisher_sigma[:, i], nan=0.0)
+                    cand += [eta_mean[:, i] - fs0, eta_mean[:, i] + fs0]
+            if ref is not None:
+                cand.append(ref[:, i])
+            v = np.concatenate([np.asarray(c, dtype=float).ravel() for c in cand])
+            v = v[np.isfinite(v)]
+            if v.size:
+                lo, hi = float(v.min()), float(v.max())
+                pad = 0.06 * ((hi - lo) or abs(hi) or 1.0)
+                ax.set_ylim(lo - pad, hi + pad)
         ax.set_ylabel(component_names[i])
         ax.grid(True, alpha=0.3)
     nleg = (n_eta_slc + int(ref is not None) + 2 * int(eta_mean is not None)
