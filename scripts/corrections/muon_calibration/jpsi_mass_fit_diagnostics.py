@@ -1314,7 +1314,7 @@ def plot_theta_grid_etaphi(grid, sigma, component_names, name, eta_edges,
 
 def plot_theta_grid_projections(grid, sigma, component_names, prefix,
                                 eta_edges, output_dir, ref=None, edm=None,
-                                n_phi_slices=4, n_eta_slices=5):
+                                cov=None, n_phi_slices=4, n_eta_slices=5):
     """1-D projections of the 2-D binned θ grid (``--theta-2d-binned``):
     φ-averaged θ vs η and η-averaged θ vs φ, drawn as POINTS — black markers
     with inner error bars (σ of the weighted mean) and light outer error bars
@@ -1329,7 +1329,10 @@ def plot_theta_grid_projections(grid, sigma, component_names, prefix,
     uniform — the ref is projected with the SAME weights so the comparison is
     apples-to-apples; the σ on the mean is the uncorrelated inverse-variance
     1/√Σw (per-cell correlations ignored — a readability diagnostic, not a
-    fit-quality test)."""
+    fit-quality test). ``cov``: flat per-cell covariance
+    ``[n_cells·n_comp, n_cells·n_comp]`` (η-major cell order) — when given,
+    each projection also gets a PROPER χ²/dof vs the projected ref: the means
+    are linear in θ (m = Wθ), so Cov(m) = W·C·Wᵀ with correlations included."""
     n_eta, n_phi, n_comp = grid.shape
     if sigma is not None:
         w = 1.0 / np.clip(sigma, 1e-30, None) ** 2
@@ -1356,31 +1359,54 @@ def plot_theta_grid_projections(grid, sigma, component_names, prefix,
                if sigma is not None else None)
         return mean, spread, sig
 
+    def _proj_chi2(axis, mean, ref_m, out):
+        # χ² of the projected weighted means vs the (identically projected)
+        # ref — or 0 if no injection — with the FULL projected covariance
+        # Cov(m) = W·C·Wᵀ. Frozen / zero-variance directions are dropped by
+        # the positive-variance eigendecomposition in _chi2_compat_zero.
+        if cov is None:
+            return None
+        wsum = w.sum(axis=axis, keepdims=True)
+        wn = w / np.where(wsum > 0, wsum, 1.0)
+        c6 = np.asarray(cov, dtype=np.float64).reshape(
+            n_eta, n_phi, n_comp, n_eta, n_phi, n_comp)
+        cm = np.einsum('epc,epcfqd,fqd->' + out, wn, c6, wn, optimize=True)
+        r = mean - (ref_m if ref_m is not None else 0.0)
+        n = r.size
+        return _chi2_compat_zero(r.reshape(-1), cm.reshape(n, n))
+
     phi_ctr = (np.arange(n_phi) + 0.5) * (2.0 * np.pi / n_phi) - np.pi
     eta_ctr = 0.5 * (np.asarray(eta_edges[:-1]) + np.asarray(eta_edges[1:]))
 
     # φ-averaged θ(η): error bars = σ of the weighted φ-mean, grey band = the
     # φ STRUCTURE spread, faint curves = individual φ slices.
     mean_e, band_e, sig_e = _proj(1)
+    ref_e = None if ref_g is None else _wmean(ref_g, 1)
+    chi2_e = _proj_chi2(1, mean_e, ref_e, 'ecfd')
     sl_p = np.unique(np.linspace(0, n_phi - 1, n_phi_slices).round().astype(int))
     plot_theta_vs_eta(
         mean_e, sig_e, component_names, f"{prefix}_vs_eta", eta_edges,
-        output_dir, edm=edm,
-        ref=(None if ref_g is None else _wmean(ref_g, 1)), band=band_e,
+        output_dir, edm=edm, ref=ref_e, band=band_e, chi2_info=chi2_e,
         slices=grid[:, sl_p, :],
         slice_sigma=(sigma[:, sl_p, :] if sigma is not None else None),
         slice_labels=[f"φ≈{phi_ctr[s]:+.2f}" for s in sl_p], points=True)
 
     # η-averaged θ(φ): same construction transposed.
     mean_p, band_p, sig_p = _proj(0)
+    ref_p = None if ref_g is None else _wmean(ref_g, 0)
+    chi2_p = _proj_chi2(0, mean_p, ref_p, 'pcqd')
     sl_e = np.unique(np.linspace(0, n_eta - 1, n_eta_slices).round().astype(int))
     plot_theta_vs_phi(
         phi_ctr, grid[sl_e], component_names, f"{prefix}_vs_phi",
-        eta_ctr[sl_e], output_dir,
-        ref=(None if ref_g is None else _wmean(ref_g, 0)),
+        eta_ctr[sl_e], output_dir, ref=ref_p,
         eta_mean=mean_p, eta_band=band_p, band_label="±1σ over η",
-        fisher_sigma=sig_p, points=True,
+        fisher_sigma=sig_p, points=True, chi2_info=chi2_p,
         slice_sigma=(sigma[sl_e] if sigma is not None else None))
+    for tag, ci in (("φ-average vs η", chi2_e), ("η-average vs φ", chi2_p)):
+        if ci is not None:
+            chi2, dof, pval = ci
+            print(f"  {prefix} {tag}: χ²/dof = {chi2:.1f}/{dof} = "
+                  f"{chi2 / max(dof, 1):.2f}, p = {pval:.3g}")
 
 
 def plot_theta_vs_phi(
@@ -1397,6 +1423,7 @@ def plot_theta_vs_phi(
     fisher_sigma: "np.ndarray | None" = None,  # [n_phi, n_comp] Fisher ±1σ(φ) on η-mean
     points: bool = False,   # 2-D binned: bands → error bars, slices → markers
     slice_sigma: "np.ndarray | None" = None,  # [n_eta_slc, n_phi, n_comp] per-cell σ
+    chi2_info=None,         # (χ², dof, p) of the η-mean vs ref (title suffix)
 ):
     """θ output (A,e,M or a,c) as a function of φ, one (faint) curve per
     representative η slice — the φ-direction companion to plot_theta_vs_eta. Only
@@ -1486,7 +1513,13 @@ def plot_theta_vs_phi(
             + int(fisher_sigma is not None))
     axes[0].legend(loc="best", fontsize=7, ncol=max(1, nleg // 4 + 1))
     axes[-1].set_xlabel("φ [rad]")
-    axes[0].set_title(name)
+    title = name
+    if chi2_info is not None:
+        chi2, dof, p = chi2_info
+        cmp = "injected" if ref is not None else "0"
+        title += (f"   (vs {cmp}: χ²/dof = {chi2:.1f}/{dof} = "
+                  f"{chi2 / max(dof, 1):.2f}, p = {p:.3g})")
+    axes[0].set_title(title)
     fig.tight_layout()
     for p in _save_fig(fig, output_dir, name):
         print(f"  wrote {p}")
@@ -2958,7 +2991,7 @@ def main() -> int:
                 g, sg, ["A", "e [GeV]", "M"], "theta_scale",
                 stats.eta_edges, out_dir,
                 ref=(None if ref is None else ref.reshape(n_eta_g, n_phi_g, 3)),
-                edm=edm)
+                cov=cov_scale_total, edm=edm)
         else:
             plot_theta_vs_eta(
                 theta_scale, sigma_scale, ["A", "e [GeV]", "M"],
@@ -3025,7 +3058,8 @@ def main() -> int:
                 stats.eta_edges, n_phi_g, out_dir, edm=edm, ref=sref)
             plot_theta_grid_projections(
                 g, sg, ["a [qop²]", "c [qop²·GeV²]"], "theta_smear",
-                stats.eta_edges, out_dir, ref=sref, edm=edm)
+                stats.eta_edges, out_dir, ref=sref, cov=cov_smear_total,
+                edm=edm)
         else:
             plot_theta_vs_eta(
                 theta_smear_eff, sigma_smear, ["a [qop²]", "c [qop²·GeV²]"],
