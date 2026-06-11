@@ -1273,7 +1273,7 @@ def plot_theta_grid_etaphi(grid, sigma, component_names, name, eta_edges,
 
 
 def plot_theta_grid_projections(grid, sigma, component_names, prefix,
-                                eta_edges, output_dir, ref_eta=None, edm=None,
+                                eta_edges, output_dir, ref=None, edm=None,
                                 n_phi_slices=4, n_eta_slices=5):
     """1-D projections of the 2-D binned θ grid (``--theta-2d-binned``):
     φ-averaged θ vs η and η-averaged θ vs φ, each with the spread band over the
@@ -1281,27 +1281,37 @@ def plot_theta_grid_projections(grid, sigma, component_names, prefix,
     the η×φ heatmaps.
 
     ``grid``/``sigma``: ``[n_eta, n_phi, n_comp]`` physical values (σ may be
-    None); ``ref_eta``: per-η ``[n_eta, n_comp]`` reference (injected truth,
-    uniform in φ). Averages are INVERSE-VARIANCE weighted when σ is available
-    (so empty/unconstrained cells don't dominate), else uniform; the σ on the
-    mean is the uncorrelated inverse-variance 1/√Σw (per-cell correlations
-    ignored — a readability diagnostic, not a fit-quality test)."""
+    None); ``ref``: injected-truth reference, per-cell ``[n_eta, n_phi,
+    n_comp]`` (carries the f_φ sinusoid under --inject-nonuniform) or per-η
+    ``[n_eta, n_comp]`` (φ-uniform). Averages are INVERSE-VARIANCE weighted
+    when σ is available (so empty/unconstrained cells don't dominate), else
+    uniform — the ref is projected with the SAME weights so the comparison is
+    apples-to-apples; the σ on the mean is the uncorrelated inverse-variance
+    1/√Σw (per-cell correlations ignored — a readability diagnostic, not a
+    fit-quality test)."""
     n_eta, n_phi, n_comp = grid.shape
     if sigma is not None:
         w = 1.0 / np.clip(sigma, 1e-30, None) ** 2
         w = np.where(np.isfinite(w), w, 0.0)
     else:
         w = np.ones_like(grid)
+    ref_g = None
+    if ref is not None:
+        ref = np.asarray(ref)
+        ref_g = (np.broadcast_to(ref[:, None, :], grid.shape)
+                 if ref.ndim == 2 else ref)
+
+    def _wmean(a, axis):
+        wsum = w.sum(axis=axis)
+        return (w * a).sum(axis=axis) / np.where(wsum > 0, wsum, 1.0)
 
     def _proj(axis):
-        wsum = w.sum(axis=axis)
-        ok = wsum > 0
-        wsafe = np.where(ok, wsum, 1.0)
-        mean = (w * grid).sum(axis=axis) / wsafe
+        mean = _wmean(grid, axis)
         spread = np.sqrt(np.clip(
-            (w * (grid - np.expand_dims(mean, axis)) ** 2).sum(axis=axis)
-            / wsafe, 0.0, None))
-        sig = (np.where(ok, 1.0 / np.sqrt(wsafe), np.nan)
+            _wmean((grid - np.expand_dims(mean, axis)) ** 2, axis), 0.0, None))
+        sig = (np.where(w.sum(axis=axis) > 0,
+                        1.0 / np.sqrt(np.clip(w.sum(axis=axis), 1e-300, None)),
+                        np.nan)
                if sigma is not None else None)
         return mean, spread, sig
 
@@ -1309,29 +1319,23 @@ def plot_theta_grid_projections(grid, sigma, component_names, prefix,
     eta_ctr = 0.5 * (np.asarray(eta_edges[:-1]) + np.asarray(eta_edges[1:]))
 
     # φ-averaged θ(η): error bars = σ of the weighted φ-mean, grey band = the
-    # φ STRUCTURE spread, faint curves = individual φ slices. A φ-uniform
-    # per-η ref is its own weighted φ-mean, so ref_eta passes through directly.
+    # φ STRUCTURE spread, faint curves = individual φ slices.
     mean_e, band_e, sig_e = _proj(1)
     sl_p = np.unique(np.linspace(0, n_phi - 1, n_phi_slices).round().astype(int))
     plot_theta_vs_eta(
         mean_e, sig_e, component_names, f"{prefix}_vs_eta", eta_edges,
-        output_dir, edm=edm, ref=ref_eta, band=band_e,
+        output_dir, edm=edm,
+        ref=(None if ref_g is None else _wmean(ref_g, 1)), band=band_e,
         slices=grid[:, sl_p, :],
         slice_labels=[f"φ≈{phi_ctr[s]:+.2f}" for s in sl_p])
 
-    # η-averaged θ(φ): same construction transposed. The (φ-uniform) per-η ref
-    # is averaged over η with the SAME per-φ weights as the value mean, so the
-    # comparison is apples-to-apples.
+    # η-averaged θ(φ): same construction transposed.
     mean_p, band_p, sig_p = _proj(0)
     sl_e = np.unique(np.linspace(0, n_eta - 1, n_eta_slices).round().astype(int))
-    ref_phi = None
-    if ref_eta is not None:
-        wsum0 = w.sum(axis=0)
-        ref_phi = ((w * np.asarray(ref_eta)[:, None, :]).sum(axis=0)
-                   / np.where(wsum0 > 0, wsum0, 1.0))
     plot_theta_vs_phi(
         phi_ctr, grid[sl_e], component_names, f"{prefix}_vs_phi",
-        eta_ctr[sl_e], output_dir, ref=ref_phi,
+        eta_ctr[sl_e], output_dir,
+        ref=(None if ref_g is None else _wmean(ref_g, 0)),
         eta_mean=mean_p, eta_band=band_p, band_label="±1σ over η",
         fisher_sigma=sig_p)
 
@@ -2493,6 +2497,19 @@ def main() -> int:
     inject_smear_ref_np = (None if inject_smear_np is None
                            else inject_smear_np * _feta[:, None])
 
+    def _ref_cells(ref_eta, n_phi):
+        # Per-CELL injected reference for the 2-D binned θ grid
+        # [n_eta, n_phi, ncol]: the per-η base·f_η times the φ-BIN-AVERAGED
+        # sinusoid f_φ(φ) = 1 + amp·sin(Nφ) when --inject-nonuniform (f_φ ≡ 1
+        # for a uniform injection). A per-cell θ absorbs the cell AVERAGE of
+        # the modulation, so the bin-centre sinusoid is damped by
+        # sinc(N/n_phi) = sin(Nw/2)/(Nw/2), w = 2π/n_phi (11% for N=2, 8 bins).
+        phi_ctr = (np.arange(n_phi) + 0.5) * (2.0 * np.pi / n_phi) - np.pi
+        fphi = (1.0 + _INJECT_AMP * np.sinc(_INJECT_PHI_NOSC / n_phi)
+                * np.sin(_INJECT_PHI_NOSC * phi_ctr)
+                if nonuniform else np.ones_like(phi_ctr))
+        return np.asarray(ref_eta)[:, None, :] * fphi[None, :, None]
+
     # m_ll grid.
     m_edges = torch.linspace(model._m_lo_f, model._m_hi_f, args.n_mll_bins + 1)
     bin_width = float((m_edges[1] - m_edges[0]).item())
@@ -2808,12 +2825,11 @@ def main() -> int:
         # reference (the injected values if a shift was injected, else 0), using
         # the full θ_scale covariance block (correlations included).
         ref = inject_ref_np if inject_ref_np is not None else None
-        # 2-D binned: the injection is per-η (uniform in φ) → broadcast the
-        # [n_eta,3] reference across the n_phi φ-cells to a per-cell [n_cells,3]
-        # so it aligns with the per-cell θ table / covariance.
+        # 2-D binned: expand the [n_eta,3] φ-averaged reference to per-cell
+        # [n_cells,3] (× the injected f_φ sinusoid when --inject-nonuniform) so
+        # it aligns with the per-cell θ table / covariance.
         if ref is not None and model.theta_grid:
-            ref = np.repeat(ref[:, None, :], model.n_phi_bins, axis=1
-                            ).reshape(-1, 3)
+            ref = _ref_cells(ref, model.n_phi_bins).reshape(-1, 3)
         chi2_info = None
         # Use the TOTAL (data⊕flow) covariance when --flow-uncertainty is set,
         # so the compatibility test accounts for the flow uncertainty too.
@@ -2840,11 +2856,14 @@ def main() -> int:
                 stats.eta_edges, n_phi_g, out_dir, chi2_info=chi2_info,
                 ref=ref, edm=edm)
             # 1-D projections (φ-mean vs η, η-mean vs φ, + slices) — easier to
-            # read/compare than the heatmaps. Ref is the PER-η injected table
-            # (φ-uniform), not the per-cell broadcast used for the pulls above.
+            # read/compare than the heatmaps. Pass the full per-cell ref so the
+            # vs-φ curve shows the injected f_φ sinusoid under
+            # --inject-nonuniform.
             plot_theta_grid_projections(
                 g, sg, ["A", "e [GeV]", "M"], "theta_scale",
-                stats.eta_edges, out_dir, ref_eta=inject_ref_np, edm=edm)
+                stats.eta_edges, out_dir,
+                ref=(None if ref is None else ref.reshape(n_eta_g, n_phi_g, 3)),
+                edm=edm)
         else:
             plot_theta_vs_eta(
                 theta_scale, sigma_scale, ["A", "e [GeV]", "M"],
@@ -2902,14 +2921,14 @@ def main() -> int:
             g = theta_smear_eff.reshape(n_eta_g, n_phi_g, 2)
             sg = (sigma_smear.reshape(n_eta_g, n_phi_g, 2)
                   if sigma_smear is not None else None)
-            sref = (np.repeat(inject_smear_ref_np[:, None, :], n_phi_g, axis=1)
+            sref = (_ref_cells(inject_smear_ref_np, n_phi_g)
                     if inject_smear_ref_np is not None else None)
             plot_theta_grid_etaphi(
                 g, sg, ["a [qop²]", "c [qop²·GeV²]"], "theta_smear_etaphi",
                 stats.eta_edges, n_phi_g, out_dir, edm=edm, ref=sref)
             plot_theta_grid_projections(
                 g, sg, ["a [qop²]", "c [qop²·GeV²]"], "theta_smear",
-                stats.eta_edges, out_dir, ref_eta=inject_smear_ref_np, edm=edm)
+                stats.eta_edges, out_dir, ref=sref, edm=edm)
         else:
             plot_theta_vs_eta(
                 theta_smear_eff, sigma_smear, ["a [qop²]", "c [qop²·GeV²]"],
