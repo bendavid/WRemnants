@@ -1017,9 +1017,8 @@ def plot_mll_closure(
     cont = bool(evals.get("continuity", False))
 
     def _draw_panel(ax, axr, data_mask, mc_mask):
-        """Draw one slice into (main, ratio) axes; return
-        (ymax, has_curves, half) where `half` is this panel's suggested
-        symmetric ratio half-window (or None when no curves/populated bins)."""
+        """Draw one slice into (main, ratio) axes and set the ratio panel's
+        own autoscaled y-range; return (ymax, has_curves)."""
         # Data hist.
         if data_mask.any():
             data_hist, _ = np.histogram(
@@ -1080,10 +1079,17 @@ def plot_mll_closure(
                 half = None
         else:
             half = None
+        # Each slice gets its OWN symmetric ratio window (clamped so it is
+        # neither absurdly tight nor wider than the legacy [0.6, 1.4]).
+        if half is not None:
+            h = min(max(half, 0.03), 0.4)
+            axr.set_ylim(1.0 - h, 1.0 + h)
+        else:
+            axr.set_ylim(0.6, 1.4)
         axr.axhline(1.0, color="C0", lw=1)
         ymax = max(float((data_hist + np.sqrt(np.abs(data_hist))).max()),
                    float(mc_hist.max()), float(total.max()))
-        return ymax, total.sum() > 0, half
+        return ymax, total.sum() > 0
 
     for prefix, label, fmt, dv, mv, cols in _closure_slice_dims(
             evals, eta_slice_edges):
@@ -1092,15 +1098,13 @@ def plot_mll_closure(
             2, ncol, figsize=(max(6.0, 4.3 * ncol), 6.2), squeeze=False,
             sharex="col", gridspec_kw={"height_ratios": [3, 1]})
         leg_ax = None
-        axr_vis = []
-        half_all = 0.0
         for ci, (tag, slice_def) in enumerate(cols):
             ax, axr = axes[0, ci], axes[1, ci]
             data_mask = _select_slice(dv, slice_def) if dv.size else np.zeros((0,), bool)
             mc_mask = _select_slice(mv, slice_def) if mv.size else np.zeros((0,), bool)
             if data_mask.sum() == 0 and mc_mask.sum() == 0:
                 ax.set_visible(False); axr.set_visible(False); continue
-            ymax, ok, half = _draw_panel(ax, axr, data_mask, mc_mask)
+            ymax, ok = _draw_panel(ax, axr, data_mask, mc_mask)
             if ok and leg_ax is None:
                 leg_ax = ax
             ttl = ("inclusive" if slice_def is None
@@ -1112,19 +1116,6 @@ def plot_mll_closure(
                 ax.set_ylabel("events / bin (weighted)")
                 axr.set_ylabel(f"{'pseudo-data' if pseudo else 'data'} / model")
             axr.set_xlabel("m_ll [GeV]")
-            axr_vis.append(axr)
-            if half is not None:
-                half_all = max(half_all, half)
-        # Common, AUTOSCALED ratio range across the figure's panels: a symmetric
-        # window about 1 sized from the populated-bin spread, clamped so it is
-        # neither absurdly tight nor wider than the legacy [0.6, 1.4].
-        if half_all > 0:
-            half = min(max(half_all, 0.03), 0.4)
-            lo, hi = 1.0 - half, 1.0 + half
-        else:
-            lo, hi = 0.6, 1.4
-        for axr in axr_vis:
-            axr.set_ylim(lo, hi)
         if leg_ax is not None:
             h, l = leg_ax.get_legend_handles_labels()
             fig.legend(h, l, loc="upper center", bbox_to_anchor=(0.5, 0.945),
@@ -1676,9 +1667,8 @@ def plot_mc_closure(
     injected = bool(evals.get("injected", False))
 
     def _draw_panel(ax, axr, mc_mask):
-        """Draw one MC-closure slice into (main, ratio) axes; return
-        (ymax, half) where `half` is the suggested symmetric ratio half-window
-        (or None when no populated bins)."""
+        """Draw one MC-closure slice into (main, ratio) axes and set the ratio
+        panel's own autoscaled y-range; return ymax."""
         mc_hist, _ = np.histogram(
             evals["mll_mc_fold"][mc_mask], bins=m_edges,
             weights=evals["w_mc"][mc_mask])
@@ -1745,21 +1735,24 @@ def plot_mc_closure(
                          lw=1.3, zorder=2)
         axr.axhline(1.0, color="C1", lw=1)   # folded flow (model) = reference
         # ratio-panel autoscale: robust symmetric half-window about 1, sized
-        # from well-populated bins (see plot_mll_closure).
+        # from well-populated bins (see plot_mll_closure). Each slice gets its
+        # OWN window.
         good = np.isfinite(ratio) & (
             mc_hist > 0.10 * max(float(mc_hist.max()), 1e-30))
         if good.any():
             dev = float(np.percentile(np.abs(ratio[good] - 1.0), 90))
             half = max(dev, float(np.median(ratio_err[good]))) * 1.3
+            h = min(max(half, 0.03), 0.4)
+            axr.set_ylim(1.0 - h, 1.0 + h)
         else:
-            half = None
+            axr.set_ylim(0.6, 1.4)
         ymax = max(float((mc_hist + np.sqrt(np.abs(mc_hist))).max()),
                    float(model_curve.max()),
                    float(nom_hist.max()) if has_nom else 0.0,
                    float(nom_curve.max()) if has_nom else 0.0,
                    float(pseudo_hist.max()) if show_pseudo else 0.0,
                    float(inj_curve.max()) if show_inj_curve else 0.0)
-        return ymax, half
+        return ymax
 
     for prefix, label, fmt, _dv, mv, cols in _closure_slice_dims(
             evals, eta_slice_edges):
@@ -1768,14 +1761,12 @@ def plot_mc_closure(
             2, ncol, figsize=(max(6.0, 4.3 * ncol), 6.2), squeeze=False,
             sharex="col", gridspec_kw={"height_ratios": [3, 1]})
         leg_ax = None
-        axr_vis = []
-        half_all = 0.0
         for ci, (tag, slice_def) in enumerate(cols):
             ax, axr = axes[0, ci], axes[1, ci]
             mc_mask = _select_slice(mv, slice_def) if mv.size else np.zeros((0,), bool)
             if mc_mask.sum() == 0:
                 ax.set_visible(False); axr.set_visible(False); continue
-            ymax, half = _draw_panel(ax, axr, mc_mask)
+            ymax = _draw_panel(ax, axr, mc_mask)
             if leg_ax is None:
                 leg_ax = ax
             ttl = ("inclusive" if slice_def is None
@@ -1787,17 +1778,6 @@ def plot_mc_closure(
                 ax.set_ylabel("events / bin (weighted)")
                 axr.set_ylabel("ratio to folded flow")
             axr.set_xlabel("m_ll [GeV]")
-            axr_vis.append(axr)
-            if half is not None:
-                half_all = max(half_all, half)
-        # Common, AUTOSCALED ratio range across panels (see plot_mll_closure).
-        if half_all > 0:
-            half = min(max(half_all, 0.03), 0.4)
-            lo, hi = 1.0 - half, 1.0 + half
-        else:
-            lo, hi = 0.6, 1.4
-        for axr in axr_vis:
-            axr.set_ylim(lo, hi)
         if leg_ax is not None:
             h, l = leg_ax.get_legend_handles_labels()
             fig.legend(h, l, loc="upper center", bbox_to_anchor=(0.5, 0.945),
