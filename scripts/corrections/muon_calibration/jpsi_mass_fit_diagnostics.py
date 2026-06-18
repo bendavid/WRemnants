@@ -1065,10 +1065,21 @@ def plot_mll_closure(
                 ratio_err = np.sqrt(np.abs(data_hist)) / denom
             axr.errorbar(m_centers_np, ratio, yerr=ratio_err, fmt="o",
                          color="k", markersize=3)
+            # ratio-panel autoscale: restrict to WELL-POPULATED bins so the
+            # large-error tail bins don't blow up the zoom.
+            good = np.isfinite(ratio) & (
+                data_hist > 0.05 * max(float(data_hist.max()), 1e-30))
+            if good.any():
+                rlo = float(np.nanmin((ratio - ratio_err)[good]))
+                rhi = float(np.nanmax((ratio + ratio_err)[good]))
+            else:
+                rlo = rhi = None
+        else:
+            rlo = rhi = None
         axr.axhline(1.0, color="C0", lw=1)
         ymax = max(float((data_hist + np.sqrt(np.abs(data_hist))).max()),
                    float(mc_hist.max()), float(total.max()))
-        return ymax, total.sum() > 0
+        return ymax, total.sum() > 0, rlo, rhi
 
     for prefix, label, fmt, dv, mv, cols in _closure_slice_dims(
             evals, eta_slice_edges):
@@ -1077,13 +1088,15 @@ def plot_mll_closure(
             2, ncol, figsize=(max(6.0, 4.3 * ncol), 6.2), squeeze=False,
             sharex="col", gridspec_kw={"height_ratios": [3, 1]})
         leg_ax = None
+        axr_vis = []
+        rlo_all, rhi_all = np.inf, -np.inf
         for ci, (tag, slice_def) in enumerate(cols):
             ax, axr = axes[0, ci], axes[1, ci]
             data_mask = _select_slice(dv, slice_def) if dv.size else np.zeros((0,), bool)
             mc_mask = _select_slice(mv, slice_def) if mv.size else np.zeros((0,), bool)
             if data_mask.sum() == 0 and mc_mask.sum() == 0:
                 ax.set_visible(False); axr.set_visible(False); continue
-            ymax, ok = _draw_panel(ax, axr, data_mask, mc_mask)
+            ymax, ok, rlo, rhi = _draw_panel(ax, axr, data_mask, mc_mask)
             if ok and leg_ax is None:
                 leg_ax = ax
             ttl = ("inclusive" if slice_def is None
@@ -1094,7 +1107,21 @@ def plot_mll_closure(
             if ci == 0:
                 ax.set_ylabel("events / bin (weighted)")
                 axr.set_ylabel(f"{'pseudo-data' if pseudo else 'data'} / model")
-            axr.set_xlabel("m_ll [GeV]"); axr.set_ylim(0.6, 1.4)
+            axr.set_xlabel("m_ll [GeV]")
+            axr_vis.append(axr)
+            if rlo is not None:
+                rlo_all, rhi_all = min(rlo_all, rlo), max(rhi_all, rhi)
+        # Common, AUTOSCALED ratio range across the figure's panels: zoom onto
+        # the populated spread, always keep a window around 1, and never widen
+        # beyond the legacy [0.6, 1.4].
+        if np.isfinite(rlo_all) and np.isfinite(rhi_all):
+            lo, hi = min(rlo_all, 0.98), max(rhi_all, 1.02)
+            pad = 0.08 * (hi - lo)
+            lo, hi = max(0.6, lo - pad), min(1.4, hi + pad)
+        else:
+            lo, hi = 0.6, 1.4
+        for axr in axr_vis:
+            axr.set_ylim(lo, hi)
         if leg_ax is not None:
             h, l = leg_ax.get_legend_handles_labels()
             fig.legend(h, l, loc="upper center", bbox_to_anchor=(0.5, 0.945),
