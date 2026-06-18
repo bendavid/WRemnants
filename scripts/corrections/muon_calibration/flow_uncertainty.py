@@ -1082,7 +1082,9 @@ def main(argv=None) -> int:
                   inject_seed=int(targs.get("inject_smear_seed", 12345)),
                   cond_basis=targs.get("cond_basis", "muon_kin"),
                   inject_nonuniform=bool(targs.get("inject_nonuniform", False)),
-                  event_fraction=float(targs.get("event_fraction", 1.0) or 1.0))
+                  event_fraction=float(targs.get("event_fraction", 1.0) or 1.0),
+                  reco_ptll_min=targs.get("reco_ptll_min"),
+                  reco_ptll_max=targs.get("reco_ptll_max"))
     fit_loader = JpsiMassArrowLoader(
         shard_files, stats, half=half_fit, inject_theta_scale=inj,
         inject_theta_smear=inj_sm, inject_bkg=inj_bkg,

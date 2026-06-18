@@ -854,7 +854,9 @@ def _make_loaders(args, shard_files, stats, *, half=None, inject_theta=None,
         inject_theta_smear=inject_smear, inject_seed=seed,
         cond_basis=getattr(args, "cond_basis", "muon_kin"),
         max_events=me, event_fraction=ef, inject_nonuniform=nu,
-        inject_bkg=inject_bkg, m_window=m_window, inject_prod=inject_prod)
+        inject_bkg=inject_bkg, m_window=m_window, inject_prod=inject_prod,
+        reco_ptll_min=getattr(args, "reco_ptll_min", None),
+        reco_ptll_max=getattr(args, "reco_ptll_max", None))
     val_loader = JpsiMassArrowLoader(
         shard_files, stats, batch_size=bs, split="val",
         val_fraction=vf, holdout_fraction=hf,
@@ -862,7 +864,9 @@ def _make_loaders(args, shard_files, stats, *, half=None, inject_theta=None,
         inject_theta_smear=inject_smear, inject_seed=seed,
         cond_basis=getattr(args, "cond_basis", "muon_kin"),
         max_events=me, event_fraction=ef, inject_nonuniform=nu,
-        inject_bkg=inject_bkg, m_window=m_window, inject_prod=inject_prod)
+        inject_bkg=inject_bkg, m_window=m_window, inject_prod=inject_prod,
+        reco_ptll_min=getattr(args, "reco_ptll_min", None),
+        reco_ptll_max=getattr(args, "reco_ptll_max", None))
     return train_loader, val_loader
 
 
@@ -934,6 +938,9 @@ _FLOW_ARCH_KEYS = (
     "compact_layer", "bernstein_degree", "nce_quad_nodes",
     # the compact/nce/dcb/ege flows' standardised [a, b] are the FLOW window
     "flow_m_lo", "flow_m_hi",
+    # the additional reco-level ptll selection defines the event sample the flow
+    # was trained on, so stage 2 must fit the same selection (like cond_basis).
+    "reco_ptll_min", "reco_ptll_max",
 )
 
 
@@ -2481,7 +2488,9 @@ def _run_fisher_continuity(args, model, shard_files, stats, device) -> None:
                     if getattr(args, "validation", False) else None),
         inject_prod=(_inject_prod_args(args)
                      if getattr(args, "validation", False) else None),
-        m_window=_stage_windows(args, stats)[1])
+        m_window=_stage_windows(args, stats)[1],
+        reco_ptll_min=getattr(args, "reco_ptll_min", None),
+        reco_ptll_max=getattr(args, "reco_ptll_max", None))
     print(f"\ncomputing observed Fisher information (θ_scale + active θ_smear, "
           f"fixed flow + MLP) on split={args.fisher_split}"
           + ("  half=%s (MC pseudo-data)" % ('all' if half is None else half)
@@ -2611,7 +2620,9 @@ def run_bootstrap_continuity(args, model, shard_files, stats, device, *,
                     if getattr(args, "validation", False) else None),
         inject_prod=(_inject_prod_args(args)
                      if getattr(args, "validation", False) else None),
-        m_window=_stage_windows(args, stats)[1])
+        m_window=_stage_windows(args, stats)[1],
+        reco_ptll_min=getattr(args, "reco_ptll_min", None),
+        reco_ptll_max=getattr(args, "reco_ptll_max", None))
     nominal_sd = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
 
     # Freeze the flow; float the MLP + active θ (the MLP must re-fit per replica
@@ -3177,7 +3188,9 @@ def _run_empirical_fisher_mlp(args, model, shard_files, stats, device) -> None:
                     if getattr(args, "validation", False) else None),
         inject_prod=(_inject_prod_args(args)
                      if getattr(args, "validation", False) else None),
-        m_window=_stage_windows(args, stats)[1])
+        m_window=_stage_windows(args, stats)[1],
+        reco_ptll_min=getattr(args, "reco_ptll_min", None),
+        reco_ptll_max=getattr(args, "reco_ptll_max", None))
     ridge = float(args.empirical_fisher_ridge)
     print(f"\ncomputing θ-NET-weight empirical Fisher (per-event scores → ridge="
           f"{ridge:g} inverse → output Jacobian) on split={args.fisher_split}"
@@ -3596,7 +3609,9 @@ def _run_output_fisher_mlp(args, model, shard_files, stats, device) -> None:
                     if getattr(args, "validation", False) else None),
         inject_prod=(_inject_prod_args(args)
                      if getattr(args, "validation", False) else None),
-        m_window=_stage_windows(args, stats)[1])
+        m_window=_stage_windows(args, stats)[1],
+        reco_ptll_min=getattr(args, "reco_ptll_min", None),
+        reco_ptll_max=getattr(args, "reco_ptll_max", None))
     print(f"\ncomputing OUTPUT-space Fisher (method={method}, project={project}"
           + (f", svd_rtol={svd_rtol:g}" if project == "net" else "")
           + (", marginalize_bkg" if marg_bkg else "")
@@ -3796,7 +3811,9 @@ def _run_empirical_fisher(args, model, shard_files, stats, device) -> None:
                     if getattr(args, "validation", False) else None),
         inject_prod=(_inject_prod_args(args)
                      if getattr(args, "validation", False) else None),
-        m_window=_stage_windows(args, stats)[1])
+        m_window=_stage_windows(args, stats)[1],
+        reco_ptll_min=getattr(args, "reco_ptll_min", None),
+        reco_ptll_max=getattr(args, "reco_ptll_max", None))
     print(f"\ncomputing joint (θ,φ) empirical Fisher (per-event scores → pinv) on "
           f"split={args.fisher_split}"
           + ("  half=%s (MC pseudo-data)" % ('all' if half is None else half)
@@ -4375,6 +4392,19 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    help="Lower edge of the m_ll fit window [GeV].")
     p.add_argument("--m-hi", type=float, default=3.28, dest="m_hi",
                    help="Upper edge of the m_ll fit window [GeV].")
+    p.add_argument("--reco-ptll-min", type=float, default=None,
+                   dest="reco_ptll_min",
+                   help="Optional ADDITIONAL reco-level dilepton-pt selection "
+                   "applied on top of whatever cut produced the shard: keep "
+                   "only events with reco ptll >= this [GeV]. Cut on the stored "
+                   "reco ptll column (not the post-injection ptll), so it is a "
+                   "clean refinement of the shard selection. Like cond_basis / "
+                   "the flow window it is locked across stages from the flow "
+                   "checkpoint and adopted by the diagnostics. Default: no cut.")
+    p.add_argument("--reco-ptll-max", type=float, default=None,
+                   dest="reco_ptll_max",
+                   help="Optional upper reco ptll edge [GeV] for the same "
+                   "additional selection (see --reco-ptll-min). Default: no cut.")
     p.add_argument("--flow-m-lo", type=float, default=None,
                    help="Optional TIGHTER lower mass edge for STAGE 1 (flow "
                    "training + the flow's own normalisation window). Default: "

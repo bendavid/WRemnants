@@ -797,8 +797,18 @@ def _batch_tensors(
     rng_bkg: "np.random.Generator | None" = None,
     m_window: "tuple[float, float] | None" = None,
     inject_prod: "tuple[float, float, float] | None" = None,
+    reco_ptll_min: "float | None" = None,
+    reco_ptll_max: "float | None" = None,
 ) -> dict[str, torch.Tensor]:
     """Build the tensor batch from one Arrow record batch's columns.
+
+    ``reco_ptll_min`` / ``reco_ptll_max`` (optional): an ADDITIONAL reco-level
+    dilepton-pt selection applied on top of whatever cut produced the shard.
+    It is cut on the STORED reco ``ptll`` column (the production reco quantity,
+    NOT the post-injection ptll), so it is a clean refinement of the shard's
+    selection — applied identically to real data and to validation pseudo-data.
+    Failing rows fail selection outright: they are zero-weighted AND dropped
+    from the batch (like a tighter-than-shard ``m_window``).
 
     ``inject_theta_scale`` ([n_eta, 3], validation closure only): the MC
     (``is_data == 0``) m_ll is shifted by the advective scale shift at that
@@ -967,13 +977,27 @@ def _batch_tensors(
     # whose muons drifted past the outermost η edge (~2e-3 of adjusted
     # muons): zero-weight them like the window cut (b_pm would be clipped to
     # the edge bin and the event sits outside the modelled acceptance).
-    w = w * (in_window & bkg_fid).astype(np.float32)
+    # Additional reco-level ptll selection (see the docstring): cut on the
+    # STORED reco ptll so it is a clean refinement of the production selection,
+    # identical for data and pseudo-data. Failing rows are zero-weighted and
+    # (below) dropped, exactly like a tighter-than-shard mass window.
+    sel_ok = np.ones(mll.shape[0], dtype=bool)
+    if reco_ptll_min is not None or reco_ptll_max is not None:
+        ptll_reco = cols["ptll"].astype(np.float32, copy=False)
+        if reco_ptll_min is not None:
+            sel_ok &= (ptll_reco >= np.float32(reco_ptll_min))
+        if reco_ptll_max is not None:
+            sel_ok &= (ptll_reco <= np.float32(reco_ptll_max))
+    keep_mask = in_window & bkg_fid & sel_ok
+    w = w * keep_mask.astype(np.float32)
     keep = None
-    if m_window is not None and (w_lo > float(stats.m_lo)
-                                 or w_hi < float(stats.m_hi)):
-        # Tighter-than-shard window: DROP the out-of-window rows (they carry
-        # w = 0 and would only burn flow evaluations downstream).
-        keep = in_window & bkg_fid
+    ptll_cut = reco_ptll_min is not None or reco_ptll_max is not None
+    if ptll_cut or (m_window is not None and (w_lo > float(stats.m_lo)
+                                              or w_hi < float(stats.m_hi))):
+        # Tighter-than-shard window OR a reco-ptll cut: DROP the zero-weight
+        # rows (they would only burn flow evaluations downstream). With neither
+        # active this stays None → no filtering (exact historical behaviour).
+        keep = keep_mask
 
     def _sel(arr):
         return arr if keep is None else arr[keep]
@@ -1045,6 +1069,8 @@ class JpsiMassArrowLoader(IterableDataset):
         inject_bkg: "tuple[float, float] | None" = None,
         m_window: "tuple[float, float] | None" = None,
         inject_prod: "tuple[float, float, float] | None" = None,
+        reco_ptll_min: "float | None" = None,
+        reco_ptll_max: "float | None" = None,
     ):
         if split not in self._SPLITS:
             raise ValueError(f"split must be one of {self._SPLITS}, got {split!r}")
@@ -1108,6 +1134,12 @@ class JpsiMassArrowLoader(IterableDataset):
         # Optional per-stage tighter mass window (lo, hi); None = shard window.
         self.m_window = (tuple(float(x) for x in m_window)
                          if m_window is not None else None)
+        # Optional ADDITIONAL reco-level ptll selection on top of the shard's
+        # production cut (None = no extra cut); see _batch_tensors.
+        self.reco_ptll_min = (float(reco_ptll_min)
+                              if reco_ptll_min is not None else None)
+        self.reco_ptll_max = (float(reco_ptll_max)
+                              if reco_ptll_max is not None else None)
         # Validation production/decay bias injection (s_pt, s_y, s_c) reweighting
         # the signal MC pseudo-data in (ptll, yll, cosθ*); None if all zero.
         self.inject_prod = (tuple(float(x) for x in inject_prod)
@@ -1229,7 +1261,8 @@ class JpsiMassArrowLoader(IterableDataset):
                     emit, self.stats, self.inject_theta_scale,
                     self.inject_theta_smear, rng, self.cond_basis,
                     self.inject_nonuniform, self.inject_bkg, rng_bkg,
-                    self.m_window, self.inject_prod)
+                    self.m_window, self.inject_prod,
+                    self.reco_ptll_min, self.reco_ptll_max)
 
         # Final partial batch.
         if accum_n > 0 and not self.drop_last:
@@ -1238,7 +1271,8 @@ class JpsiMassArrowLoader(IterableDataset):
                 cols, self.stats, self.inject_theta_scale,
                 self.inject_theta_smear, rng, self.cond_basis,
                 self.inject_nonuniform, self.inject_bkg, rng_bkg,
-                self.m_window, self.inject_prod)
+                self.m_window, self.inject_prod,
+                self.reco_ptll_min, self.reco_ptll_max)
 
 
 # ---------------------------------------------------------------------------

@@ -2657,6 +2657,8 @@ def main() -> int:
         inject_bkg=inject_bkg_np,
         m_window=(model._m_lo_f, model._m_hi_f),
         inject_prod=inject_prod_np,
+        reco_ptll_min=train_args.get("reco_ptll_min"),
+        reco_ptll_max=train_args.get("reco_ptll_max"),
     )
     # φ-AVERAGED injected reference for the θ-vs-η plots + χ²: the φ sinusoid
     # averages to 1 over the plotted φ-mean, leaving base·f_η(η) per η-bin
@@ -3078,7 +3080,9 @@ def main() -> int:
                 cond_basis=train_args.get("cond_basis", "muon_kin"),
                 inject_nonuniform=nonuniform,
                 inject_prod=inject_prod_np,
-                m_window=(model._m_lo_f, model._m_hi_f))
+                m_window=(model._m_lo_f, model._m_hi_f),
+                reco_ptll_min=train_args.get("reco_ptll_min"),
+                reco_ptll_max=train_args.get("reco_ptll_max"))
             plot_theta_scale_likelihood_scan(
                 model, scan_loader, device, out_dir,
                 scale_fit_params=model.scale_fit_params,
