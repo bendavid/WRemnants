@@ -825,6 +825,17 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         "--skip-shard", action="store_true",
         help="Skip the sharder step.",
     )
+    p_all.add_argument("--no-offline-cuts", action="store_true",
+                       dest="no_offline_cuts",
+                       help="Keep ONLY the trigger (+ MC gen-match); defer the "
+                       "offline eta/pt/ptll/mass cuts to the fit. Produces a "
+                       "wider, data-constrained sample.")
+    p_all.add_argument("--loose-m-lo", type=float, default=None, dest="loose_m_lo",
+                       help="With --no-offline-cuts: optional loose lower mass "
+                       "bound [GeV] to cap shard size (else no mass cut).")
+    p_all.add_argument("--loose-m-hi", type=float, default=None, dest="loose_m_hi",
+                       help="With --no-offline-cuts: optional loose upper mass "
+                       "bound [GeV].")
 
     # Insert the implicit ``all`` subcommand when none was given, so
     # ``python jpsi_mass_fit_snapshot.py [--flags...]`` dispatches to
@@ -885,6 +896,9 @@ def run_all_pipeline(args) -> int:
         ptll_min=args.ptll_min,
         m_lo=args.m_lo,
         m_hi=args.m_hi,
+        no_offline_cuts=getattr(args, "no_offline_cuts", False),
+        loose_m_lo=getattr(args, "loose_m_lo", None),
+        loose_m_hi=getattr(args, "loose_m_hi", None),
     )
 
     if not args.skip_mc:

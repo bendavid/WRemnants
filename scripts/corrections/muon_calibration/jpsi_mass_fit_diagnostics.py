@@ -70,6 +70,16 @@ from compact_flow import infer_learn_weights  # noqa: E402
 # ---------------------------------------------------------------------------
 
 
+def _fit_select_from(targs):
+    """(ptll_min, pt_lead_min, pt_both_min) loader selection from checkpoint
+    args, or None — selects the analysis sample at diagnostics time so the
+    plots/normalisation match the fit (the model also carries these as its
+    per-event normalisation edge)."""
+    sel = (targs.get("fit_ptll_min"), targs.get("fit_pt_lead_min"),
+           targs.get("fit_pt_both_min"))
+    return sel if any(sel) else None
+
+
 def load_model_from_checkpoint(checkpoint_path: str, device: str):
     """Rebuild the trained model from a checkpoint dict."""
     ckpt = torch.load(checkpoint_path, map_location=device, weights_only=False)
@@ -2662,6 +2672,7 @@ def main() -> int:
         inject_prod=inject_prod_np,
         reco_ptll_min=train_args.get("reco_ptll_min"),
         reco_ptll_max=train_args.get("reco_ptll_max"),
+        fit_select=_fit_select_from(train_args),
     )
     # φ-AVERAGED injected reference for the θ-vs-η plots + χ²: the φ sinusoid
     # averages to 1 over the plotted φ-mean, leaving base·f_η(η) per η-bin
@@ -3085,7 +3096,8 @@ def main() -> int:
                 inject_prod=inject_prod_np,
                 m_window=(model._m_lo_f, model._m_hi_f),
                 reco_ptll_min=train_args.get("reco_ptll_min"),
-                reco_ptll_max=train_args.get("reco_ptll_max"))
+                reco_ptll_max=train_args.get("reco_ptll_max"),
+                fit_select=_fit_select_from(train_args))
             plot_theta_scale_likelihood_scan(
                 model, scan_loader, device, out_dir,
                 scale_fit_params=model.scale_fit_params,

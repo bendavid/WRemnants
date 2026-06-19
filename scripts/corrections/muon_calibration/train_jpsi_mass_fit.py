@@ -830,7 +830,7 @@ def _setup_common(args, *, stats_override=None):
 def _make_loaders(args, shard_files, stats, *, half=None, inject_theta=None,
                   inject_smear=None, inject_bkg=None, val_fraction=None,
                   holdout_fraction=None, batch_size=None, m_window=None,
-                  inject_prod=None):
+                  inject_prod=None, fit_select=None):
     """Build the ``(train, val)`` loaders for one stage. ``half`` selects a
     deterministic disjoint event half (0/1) — used by the MC-closure
     validation mode (stage 1 ← half 0, stage 2 ← half 1); ``None`` = all
@@ -856,7 +856,8 @@ def _make_loaders(args, shard_files, stats, *, half=None, inject_theta=None,
         max_events=me, event_fraction=ef, inject_nonuniform=nu,
         inject_bkg=inject_bkg, m_window=m_window, inject_prod=inject_prod,
         reco_ptll_min=getattr(args, "reco_ptll_min", None),
-        reco_ptll_max=getattr(args, "reco_ptll_max", None))
+        reco_ptll_max=getattr(args, "reco_ptll_max", None),
+        fit_select=fit_select)
     val_loader = JpsiMassArrowLoader(
         shard_files, stats, batch_size=bs, split="val",
         val_fraction=vf, holdout_fraction=hf,
@@ -866,8 +867,20 @@ def _make_loaders(args, shard_files, stats, *, half=None, inject_theta=None,
         max_events=me, event_fraction=ef, inject_nonuniform=nu,
         inject_bkg=inject_bkg, m_window=m_window, inject_prod=inject_prod,
         reco_ptll_min=getattr(args, "reco_ptll_min", None),
-        reco_ptll_max=getattr(args, "reco_ptll_max", None))
+        reco_ptll_max=getattr(args, "reco_ptll_max", None),
+        fit_select=fit_select)
     return train_loader, val_loader
+
+
+def _fit_select_args(args):
+    """(ptll_min, pt_lead_min, pt_both_min) loader selection from the fit-time
+    cut args, or None if none set. Applied at the FIT + diagnostics loaders to
+    select the analysis sample (the stage-1 flow loader stays uncut), matching
+    the model's per-event normalisation edge."""
+    sel = (getattr(args, "fit_ptll_min", None),
+           getattr(args, "fit_pt_lead_min", None),
+           getattr(args, "fit_pt_both_min", None))
+    return sel if any(sel) else None
 
 
 def _inject_theta_np(args, n_eta):
@@ -2418,6 +2431,7 @@ def train_loop(args: argparse.Namespace) -> int:
                                          inject_bkg=inj_bkg, m_window=fit_win,
                                          val_fraction=0.0, holdout_fraction=0.0,
                                          inject_prod=inj_prod,
+                                         fit_select=_fit_select_args(args),
                                          batch_size=getattr(args, "fit_batch_size", 0) or None)
     else:
         if (_inject_theta_np(args, len(stats.eta_edges) - 1) is not None
@@ -2436,6 +2450,7 @@ def train_loop(args: argparse.Namespace) -> int:
         s2_train, s2_val = _make_loaders(args, shard_files, stats,
                                          val_fraction=0.0, holdout_fraction=0.0,
                                          m_window=fit_win,
+                                         fit_select=_fit_select_args(args),
                                          batch_size=getattr(args, "fit_batch_size", 0) or None)
 
     if args.stage in ("both", "flow"):
@@ -2493,7 +2508,8 @@ def _run_fisher_continuity(args, model, shard_files, stats, device) -> None:
                      if getattr(args, "validation", False) else None),
         m_window=_stage_windows(args, stats)[1],
         reco_ptll_min=getattr(args, "reco_ptll_min", None),
-        reco_ptll_max=getattr(args, "reco_ptll_max", None))
+        reco_ptll_max=getattr(args, "reco_ptll_max", None),
+        fit_select=_fit_select_args(args))
     print(f"\ncomputing observed Fisher information (θ_scale + active θ_smear, "
           f"fixed flow + MLP) on split={args.fisher_split}"
           + ("  half=%s (MC pseudo-data)" % ('all' if half is None else half)
@@ -2625,7 +2641,8 @@ def run_bootstrap_continuity(args, model, shard_files, stats, device, *,
                      if getattr(args, "validation", False) else None),
         m_window=_stage_windows(args, stats)[1],
         reco_ptll_min=getattr(args, "reco_ptll_min", None),
-        reco_ptll_max=getattr(args, "reco_ptll_max", None))
+        reco_ptll_max=getattr(args, "reco_ptll_max", None),
+        fit_select=_fit_select_args(args))
     nominal_sd = {k: v.detach().cpu().clone() for k, v in model.state_dict().items()}
 
     # Freeze the flow; float the MLP + active θ (the MLP must re-fit per replica
@@ -3193,7 +3210,8 @@ def _run_empirical_fisher_mlp(args, model, shard_files, stats, device) -> None:
                      if getattr(args, "validation", False) else None),
         m_window=_stage_windows(args, stats)[1],
         reco_ptll_min=getattr(args, "reco_ptll_min", None),
-        reco_ptll_max=getattr(args, "reco_ptll_max", None))
+        reco_ptll_max=getattr(args, "reco_ptll_max", None),
+        fit_select=_fit_select_args(args))
     ridge = float(args.empirical_fisher_ridge)
     print(f"\ncomputing θ-NET-weight empirical Fisher (per-event scores → ridge="
           f"{ridge:g} inverse → output Jacobian) on split={args.fisher_split}"
@@ -3614,7 +3632,8 @@ def _run_output_fisher_mlp(args, model, shard_files, stats, device) -> None:
                      if getattr(args, "validation", False) else None),
         m_window=_stage_windows(args, stats)[1],
         reco_ptll_min=getattr(args, "reco_ptll_min", None),
-        reco_ptll_max=getattr(args, "reco_ptll_max", None))
+        reco_ptll_max=getattr(args, "reco_ptll_max", None),
+        fit_select=_fit_select_args(args))
     print(f"\ncomputing OUTPUT-space Fisher (method={method}, project={project}"
           + (f", svd_rtol={svd_rtol:g}" if project == "net" else "")
           + (", marginalize_bkg" if marg_bkg else "")
@@ -3816,7 +3835,8 @@ def _run_empirical_fisher(args, model, shard_files, stats, device) -> None:
                      if getattr(args, "validation", False) else None),
         m_window=_stage_windows(args, stats)[1],
         reco_ptll_min=getattr(args, "reco_ptll_min", None),
-        reco_ptll_max=getattr(args, "reco_ptll_max", None))
+        reco_ptll_max=getattr(args, "reco_ptll_max", None),
+        fit_select=_fit_select_args(args))
     print(f"\ncomputing joint (θ,φ) empirical Fisher (per-event scores → pinv) on "
           f"split={args.fisher_split}"
           + ("  half=%s (MC pseudo-data)" % ('all' if half is None else half)

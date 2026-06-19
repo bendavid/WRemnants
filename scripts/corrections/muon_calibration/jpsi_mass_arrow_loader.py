@@ -799,6 +799,7 @@ def _batch_tensors(
     inject_prod: "tuple[float, float, float] | None" = None,
     reco_ptll_min: "float | None" = None,
     reco_ptll_max: "float | None" = None,
+    fit_select: "tuple | None" = None,
 ) -> dict[str, torch.Tensor]:
     """Build the tensor batch from one Arrow record batch's columns.
 
@@ -988,15 +989,33 @@ def _batch_tensors(
             sel_ok &= (ptll_reco >= np.float32(reco_ptll_min))
         if reco_ptll_max is not None:
             sel_ok &= (ptll_reco <= np.float32(reco_ptll_max))
+    # Fit-time analysis SELECTION (deferred-cuts scheme): drop events failing the
+    # reco ptll / leading-muon / both-muon pt cuts, on the STORED reco columns
+    # (same convention as reco_ptll_min). Applied ONLY at the fit + diagnostics
+    # loaders, NOT the stage-1 flow loader — so the flow trains on the full
+    # (uncut) sample while the fit runs on the selected sample and the model
+    # normalises the signal/background over the per-event window (m_min(c)).
+    if fit_select is not None:
+        ps_ptll, ps_lead, ps_both = fit_select
+        if ps_ptll:
+            sel_ok &= (cols["ptll"].astype(np.float32, copy=False)
+                       >= np.float32(ps_ptll))
+        if ps_lead:
+            lead = np.maximum(cols["pt_plus"], cols["pt_minus"])
+            sel_ok &= (lead.astype(np.float32, copy=False) >= np.float32(ps_lead))
+        if ps_both:
+            soft = np.minimum(cols["pt_plus"], cols["pt_minus"])
+            sel_ok &= (soft.astype(np.float32, copy=False) >= np.float32(ps_both))
     keep_mask = in_window & bkg_fid & sel_ok
     w = w * keep_mask.astype(np.float32)
     keep = None
-    ptll_cut = reco_ptll_min is not None or reco_ptll_max is not None
-    if ptll_cut or (m_window is not None and (w_lo > float(stats.m_lo)
-                                              or w_hi < float(stats.m_hi))):
-        # Tighter-than-shard window OR a reco-ptll cut: DROP the zero-weight
-        # rows (they would only burn flow evaluations downstream). With neither
-        # active this stays None → no filtering (exact historical behaviour).
+    sel_active = (reco_ptll_min is not None or reco_ptll_max is not None
+                  or fit_select is not None)
+    if sel_active or (m_window is not None and (w_lo > float(stats.m_lo)
+                                                or w_hi < float(stats.m_hi))):
+        # Tighter-than-shard window OR a reco/fit selection cut: DROP the
+        # zero-weight rows (they would only burn flow evaluations downstream).
+        # With none active this stays None → no filtering (historical path).
         keep = keep_mask
 
     def _sel(arr):
@@ -1071,6 +1090,7 @@ class JpsiMassArrowLoader(IterableDataset):
         inject_prod: "tuple[float, float, float] | None" = None,
         reco_ptll_min: "float | None" = None,
         reco_ptll_max: "float | None" = None,
+        fit_select: "tuple | None" = None,
     ):
         if split not in self._SPLITS:
             raise ValueError(f"split must be one of {self._SPLITS}, got {split!r}")
@@ -1140,6 +1160,11 @@ class JpsiMassArrowLoader(IterableDataset):
                               if reco_ptll_min is not None else None)
         self.reco_ptll_max = (float(reco_ptll_max)
                               if reco_ptll_max is not None else None)
+        # Fit-time analysis selection (ptll_min, pt_lead_min, pt_both_min) applied
+        # as event drops at the FIT/diagnostics loaders only (None = inactive);
+        # see _batch_tensors. Each component may itself be None.
+        self.fit_select = (tuple(fit_select) if fit_select is not None
+                           and any(v for v in fit_select) else None)
         # Validation production/decay bias injection (s_pt, s_y, s_c) reweighting
         # the signal MC pseudo-data in (ptll, yll, cosθ*); None if all zero.
         self.inject_prod = (tuple(float(x) for x in inject_prod)
@@ -1262,7 +1287,7 @@ class JpsiMassArrowLoader(IterableDataset):
                     self.inject_theta_smear, rng, self.cond_basis,
                     self.inject_nonuniform, self.inject_bkg, rng_bkg,
                     self.m_window, self.inject_prod,
-                    self.reco_ptll_min, self.reco_ptll_max)
+                    self.reco_ptll_min, self.reco_ptll_max, self.fit_select)
 
         # Final partial batch.
         if accum_n > 0 and not self.drop_last:
