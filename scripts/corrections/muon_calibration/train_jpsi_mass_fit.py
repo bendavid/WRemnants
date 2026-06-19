@@ -1033,6 +1033,9 @@ def _build_model(args, stats, device):
         smear_param_form=getattr(args, "smear_param_form", "linear"),
         norm_correction=getattr(args, "norm_correction", "none"),
         background_enabled=not getattr(args, "no_background", False),
+        fit_ptll_min=getattr(args, "fit_ptll_min", None),
+        fit_pt_lead_min=getattr(args, "fit_pt_lead_min", None),
+        fit_pt_both_min=getattr(args, "fit_pt_both_min", None),
         bkg_model=getattr(args, "bkg_model", "bernstein"),
         bkg_degree=int(getattr(args, "bkg_degree", 1)),
         theta_mode=("mlp" if getattr(args, "theta_mlp", False)
@@ -4405,6 +4408,24 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    dest="reco_ptll_max",
                    help="Optional upper reco ptll edge [GeV] for the same "
                    "additional selection (see --reco-ptll-min). Default: no cut.")
+    # Fit-time reco pt cuts applied as a per-event LOWER mass edge in the
+    # signal+background normalisation (model._fit_cut_m_min): at fixed
+    # conditioning pt∝m, so a fixed pt cut C on quantity q forbids
+    # m < C·... = mll(α_min·pt). Use when the cuts are deferred from shard
+    # production to the fit so the flow is trained data-constrained across the
+    # forbidden region. These configure the MODEL normalisation; the loader
+    # selection that drops failing fit events is driven by the same values.
+    p.add_argument("--fit-ptll-min", type=float, default=None, dest="fit_ptll_min",
+                   help="Fit-time dimuon-pt cut [GeV] → per-event lower mass edge "
+                   "in the normalisation. Default: no edge (legacy fixed window).")
+    p.add_argument("--fit-pt-lead-min", type=float, default=None,
+                   dest="fit_pt_lead_min",
+                   help="Fit-time leading-muon pt cut [GeV] → per-event lower mass "
+                   "edge. Default: none.")
+    p.add_argument("--fit-pt-both-min", type=float, default=None,
+                   dest="fit_pt_both_min",
+                   help="Fit-time both-muon pt cut [GeV] → per-event lower mass "
+                   "edge. Default: none.")
     p.add_argument("--flow-m-lo", type=float, default=None,
                    help="Optional TIGHTER lower mass edge for STAGE 1 (flow "
                    "training + the flow's own normalisation window). Default: "

@@ -427,7 +427,13 @@ def bernstein_basis_n(mll: torch.Tensor, m_lo: float, m_hi: float,
     binom, k = _BKG_BINOM_CACHE[key]
     width = m_hi - m_lo
     u = ((mll - m_lo) / width).unsqueeze(-1).clamp(0.0, 1.0)
-    return ((degree + 1.0) / width) * binom * u.pow(k) * (1.0 - u).pow(degree - k)
+    # m_lo/m_hi may be per-event [B] tensors (fit-time cut → per-event window);
+    # the (degree+1)/width prefactor then needs a trailing axis to broadcast
+    # against the [..., n+1] basis. Scalar edges keep the float fast path.
+    pref = (degree + 1.0) / width
+    if torch.is_tensor(pref):
+        pref = pref.unsqueeze(-1)
+    return pref * binom * u.pow(k) * (1.0 - u).pow(degree - k)
 
 
 def exp_bkg_density(mll: torch.Tensor, m_lo: float, m_hi: float,
@@ -850,6 +856,19 @@ class JpsiMassMixtureModel(nn.Module):
         # where the MLP grows f_bkg in forward |η| bins to absorb tail
         # events the signal model can't broaden into.
         background_enabled: bool = True,
+        # FIT-TIME reco pt selection cuts (GeV). At fixed conditioning pt ∝ m,
+        # so a fixed pt cut C on a pt quantity q (observed ratio R=q_obs/m_obs)
+        # forbids m < C/R = C·m_obs/q_obs — a per-event LOWER mass edge
+        # m_min(c). When set, the signal+background are normalised over the
+        # per-event window [max(m_lo, m_min(c)), m_hi] instead of the fixed
+        # [m_lo, m_hi]. None (default) → no extra edge → exact legacy behaviour.
+        # Used when the cuts are deferred from shard production to the fit (so
+        # the flow is trained data-constrained across the forbidden region).
+        # The |η| cut is conditioning-fixed (no mass edge) and is applied as an
+        # event mask in the loader, not here.
+        fit_ptll_min: "float | None" = None,
+        fit_pt_lead_min: "float | None" = None,
+        fit_pt_both_min: "float | None" = None,
         # FLOW-stage mass window override (defaults to the model/fit window
         # m_lo/m_hi). The compact/nce/dcb/ege flows are defined and
         # normalised on THIS window (their standardised [a, b]); the fit's
@@ -937,6 +956,10 @@ class JpsiMassMixtureModel(nn.Module):
                 f"got {norm_correction!r}")
         self.norm_correction = str(norm_correction)
         self.background_enabled = bool(background_enabled)
+        # Fit-time reco pt cuts → per-event lower mass edge (None = inactive).
+        self._fit_ptll_min = (float(fit_ptll_min) if fit_ptll_min else None)
+        self._fit_pt_lead_min = (float(fit_pt_lead_min) if fit_pt_lead_min else None)
+        self._fit_pt_both_min = (float(fit_pt_both_min) if fit_pt_both_min else None)
         if theta_mode not in ("binned", "mlp", "binned2d"):
             raise ValueError(
                 f"theta_mode must be 'binned', 'binned2d', or 'mlp', "
@@ -2524,6 +2547,41 @@ class JpsiMassMixtureModel(nn.Module):
                                     mk_flat[i:i + _FLOW_EVAL_CHUNK])
             for i in range(0, n, _FLOW_EVAL_CHUNK)])
 
+    def _fit_cut_m_min(self, m_obs, pt_obs, eta_pm, phi_pm) -> torch.Tensor:
+        """Per-event LOWER mass edge ``[B]`` set by the fit-time reco pt cuts.
+
+        At fixed conditioning every pt magnitude scales with a single overall
+        factor α (pt ∝ α), so a cut ``C`` on a pt quantity ``q`` is met exactly
+        at ``α = C/q_obs``; the binding scale is ``α_min = max_c C_c/q_obs,c``
+        and the forbidden region is ``m < m_min = mll(α_min · pt_obs)`` —
+        evaluated with the FULL muon-mass kinematics (``_event_mll``), so the
+        edge is exact (no massless pt∝m approximation). Floored at the window
+        ``m_lo`` and capped just below ``m_hi``. With no fit-time cuts this
+        returns the constant ``m_lo`` (exact legacy path).
+
+        Events that pass the cuts have ``m_obs ≥ m_min`` by construction, so the
+        per-event window ``[m_min, m_hi]`` is non-empty; the clamp only guards
+        numerical edge cases."""
+        if not (self._fit_ptll_min or self._fit_pt_lead_min
+                or self._fit_pt_both_min):
+            return m_obs.new_full(m_obs.shape, self._m_lo_f)
+        alpha = m_obs.new_zeros(m_obs.shape)
+        if self._fit_ptll_min:
+            px = pt_obs[:, 0] * torch.cos(phi_pm[:, 0]) + \
+                pt_obs[:, 1] * torch.cos(phi_pm[:, 1])
+            py = pt_obs[:, 0] * torch.sin(phi_pm[:, 0]) + \
+                pt_obs[:, 1] * torch.sin(phi_pm[:, 1])
+            ptll = torch.sqrt((px * px + py * py).clamp_min(1e-12))
+            alpha = torch.maximum(alpha, self._fit_ptll_min / ptll)
+        if self._fit_pt_lead_min:
+            lead = torch.maximum(pt_obs[:, 0], pt_obs[:, 1])
+            alpha = torch.maximum(alpha, self._fit_pt_lead_min / lead)
+        if self._fit_pt_both_min:
+            soft = torch.minimum(pt_obs[:, 0], pt_obs[:, 1])
+            alpha = torch.maximum(alpha, self._fit_pt_both_min / soft)
+        m_min = _event_mll(alpha.unsqueeze(-1) * pt_obs, eta_pm, phi_pm)
+        return m_min.clamp(self._m_lo_f, self._m_hi_f - 1e-6)
+
     def _norm_correction_log_Z(self, m_obs, mk, pt_obs, eta_pm, phi_pm, q_pm,
                                b_pm, n_iter: int = 2) -> torch.Tensor:
         """Per-event ``log Z(θ;c) = log ∫_{m_lo}^{m_hi} p_θ(x|c) dx`` — the
@@ -2590,7 +2648,7 @@ class JpsiMassMixtureModel(nn.Module):
                     y = y - dt * self._flow_score(y, mk_src)
             return y
 
-        m_lo = m_obs.new_full(m_obs.shape, self._m_lo_f)
+        m_lo = self._fit_cut_m_min(m_obs, pt_obs, eta_pm, phi_pm)
         m_hi = m_obs.new_full(m_obs.shape, self._m_hi_f)
         # BACKWARD (data → MC) scale images of the window boundaries along the
         # event's observed ray — explicit and exactly θ-differentiable (the
@@ -2698,7 +2756,7 @@ class JpsiMassMixtureModel(nn.Module):
         xig = xi.view(1, G)
 
         # BACKWARD scale images of the boundaries (per event, node-independent).
-        m_lo_t = m_obs.new_full(m_obs.shape, self._m_lo_f)
+        m_lo_t = self._fit_cut_m_min(m_obs, pt_obs, eta_pm, phi_pm)
         m_hi_t = m_obs.new_full(m_obs.shape, self._m_hi_f)
         m_s_lo, _ = self._scale_backward_mass_linear(
             m_lo_t, m_obs, pt_obs, eta_pm, q_pm, theta_scale_pm)
@@ -2807,9 +2865,11 @@ class JpsiMassMixtureModel(nn.Module):
         # event-mass un-kicked config gives the right ρ / event-level vector.
         _, pt_truth_evt = self._gh_qop_unsmear(pto, etao, phio, qo, bpo, eps)
         # Nominal masses at the two window boundaries (observed config scaled to
-        # m_lo / m_hi along pt∝m, then un-kicked).
+        # the per-event lower edge m_min(c) / m_hi along pt∝m, then un-kicked).
+        m_lo_pe = self._fit_cut_m_min(
+            m_obs, pt_obs, eta_pm, phi_pm).unsqueeze(1)  # [B,1]
         m_t_lo, _ = self._gh_qop_unsmear(
-            pto * (self._m_lo_f / mo).unsqueeze(-1), etao, phio, qo, bpo, eps)
+            pto * (m_lo_pe / mo).unsqueeze(-1), etao, phio, qo, bpo, eps)
         m_t_hi, _ = self._gh_qop_unsmear(
             pto * (self._m_hi_f / mo).unsqueeze(-1), etao, phio, qo, bpo, eps)
         mk_g = mk.unsqueeze(1).expand(B, G2, mk.shape[-1]).clone()
@@ -2863,15 +2923,21 @@ class JpsiMassMixtureModel(nn.Module):
                 m, mk, pt, eta, phi, q, b, n_iter=n_iter)
             log_ps = log_ps - log_Z
         if self.background_enabled:
+            # Normalise the background over the SAME per-event window as the
+            # signal: [max(m_lo, m_min(c)), m_hi]. With no fit-time cuts this is
+            # the scalar m_lo (exact legacy path); else a per-event [B] edge.
+            bkg_m_lo = (self._fit_cut_m_min(m, pt, eta, phi)
+                        if (self._fit_ptll_min or self._fit_pt_lead_min
+                            or self._fit_pt_both_min) else self._m_lo_f)
             if self.bkg_model == "exp":
                 # fractions + conditioning-dependent slope in one MLP pass
                 f, s_bkg = self.mlp.forward_with_slope(mk)
                 p_bkg = f[:, 0] * exp_bkg_density(
-                    m, self._m_lo_f, self._m_hi_f, s_bkg)
+                    m, bkg_m_lo, self._m_hi_f, s_bkg)
             else:
                 f = self.f_data(mk)                   # [n_d, n_bkg+1], signal LAST
                 basis = bernstein_basis_n(
-                    m, self._m_lo_f, self._m_hi_f, self.bkg_degree)
+                    m, bkg_m_lo, self._m_hi_f, self.bkg_degree)
                 p_bkg = (f[:, :-1] * basis).sum(-1)
             p_mix = p_bkg + f[:, -1] * log_ps.exp()
             per_data = -torch.log(p_mix.clamp_min(eps))

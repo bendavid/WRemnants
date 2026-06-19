@@ -239,6 +239,13 @@ def _apply_reco_selection(df, args):
         df = df.Filter(
             f"static_cast<bool>({expr})", f"hlt_OR_{len(args.hlt_path)}"
         )
+    # --no-offline-cuts: keep ONLY the trigger (and gen-match, applied by the
+    # caller). The eta/pt/ptll/mass offline cuts are deferred to the fit, where
+    # they are applied exactly per event (model._fit_cut_m_min + the fit-stage
+    # selection) so the flow is trained data-constrained across the forbidden
+    # region. See plan: move selection cuts to fit time.
+    if getattr(args, "no_offline_cuts", False):
+        return df
     df = df.Filter(
         f"std::fabs(Mupluscor_eta) < {args.eta_max}f && "
         f"std::fabs(Muminuscor_eta) < {args.eta_max}f",
@@ -319,8 +326,14 @@ def run_jpsi_mass_snapshot_mc(args) -> str:
         minus_eta="Muminuscor_eta",
         minus_phi="Muminuscor_phi",
     )
-    df = df.Filter(f"ptll > {args.ptll_min}f", "reco_ptll")
-    df = _apply_window_cut(df, args.m_lo, args.m_hi)
+    if not getattr(args, "no_offline_cuts", False):
+        df = df.Filter(f"ptll > {args.ptll_min}f", "reco_ptll")
+        df = _apply_window_cut(df, args.m_lo, args.m_hi)
+    elif (getattr(args, "loose_m_lo", None) is not None
+          and getattr(args, "loose_m_hi", None) is not None):
+        # Deferred cuts: keep only a LOOSE mass bound to cap shard size; the
+        # analysis ptll/mass cuts are applied at fit time.
+        df = _apply_window_cut(df, args.loose_m_lo, args.loose_m_hi)
 
     df = df.Define("is_data", "static_cast<unsigned char>(0)")
     # Per-sample source_id offset (Pt0to8 → +1, Pt8toInf / other → +0),
@@ -400,8 +413,14 @@ def run_jpsi_mass_snapshot_data(args) -> str:
         minus_eta="Muminuscor_eta",
         minus_phi="Muminuscor_phi",
     )
-    df = df.Filter(f"ptll > {args.ptll_min}f", "reco_ptll")
-    df = _apply_window_cut(df, args.m_lo, args.m_hi)
+    if not getattr(args, "no_offline_cuts", False):
+        df = df.Filter(f"ptll > {args.ptll_min}f", "reco_ptll")
+        df = _apply_window_cut(df, args.m_lo, args.m_hi)
+    elif (getattr(args, "loose_m_lo", None) is not None
+          and getattr(args, "loose_m_hi", None) is not None):
+        # Deferred cuts: keep only a LOOSE mass bound to cap shard size; the
+        # analysis ptll/mass cuts are applied at fit time.
+        df = _apply_window_cut(df, args.loose_m_lo, args.loose_m_hi)
 
     df = df.Define("is_data", "static_cast<unsigned char>(1)")
     df = df.Define("source_id", f"static_cast<int>({int(args.source_id or 1)})")
@@ -570,6 +589,17 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                       help="Lower edge of the J/ψ mass window [GeV].")
     p_mc.add_argument("--m-hi", type=float, default=3.28, dest="m_hi",
                       help="Upper edge of the J/ψ mass window [GeV].")
+    p_mc.add_argument("--no-offline-cuts", action="store_true",
+                      dest="no_offline_cuts",
+                      help="Keep ONLY the trigger + gen-match; defer the offline "
+                      "eta/pt/ptll/mass cuts to the fit (applied exactly per "
+                      "event there). Produces a wider, data-constrained sample.")
+    p_mc.add_argument("--loose-m-lo", type=float, default=None, dest="loose_m_lo",
+                      help="With --no-offline-cuts: optional loose lower mass "
+                      "bound [GeV] to cap shard size (else no mass cut).")
+    p_mc.add_argument("--loose-m-hi", type=float, default=None, dest="loose_m_hi",
+                      help="With --no-offline-cuts: optional loose upper mass "
+                      "bound [GeV].")
     p_mc.add_argument(
         "--source-id",
         type=int,
@@ -648,6 +678,17 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                         help="Lower edge of the J/ψ mass window [GeV].")
     p_data.add_argument("--m-hi", type=float, default=3.28, dest="m_hi",
                         help="Upper edge of the J/ψ mass window [GeV].")
+    p_data.add_argument("--no-offline-cuts", action="store_true",
+                        dest="no_offline_cuts",
+                        help="Keep ONLY the trigger; defer the offline "
+                        "eta/pt/ptll/mass cuts to the fit (applied exactly per "
+                        "event there). Produces a wider, data-constrained sample.")
+    p_data.add_argument("--loose-m-lo", type=float, default=None, dest="loose_m_lo",
+                        help="With --no-offline-cuts: optional loose lower mass "
+                        "bound [GeV] to cap shard size (else no mass cut).")
+    p_data.add_argument("--loose-m-hi", type=float, default=None, dest="loose_m_hi",
+                        help="With --no-offline-cuts: optional loose upper mass "
+                        "bound [GeV].")
     p_data.add_argument(
         "--source-id",
         type=int,

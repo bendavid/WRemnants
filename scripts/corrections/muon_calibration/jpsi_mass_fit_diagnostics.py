@@ -114,6 +114,9 @@ def load_model_from_checkpoint(checkpoint_path: str, device: str):
         smear_param_form=args.get("smear_param_form", "linear"),
         norm_correction=args.get("norm_correction", "none"),
         background_enabled=not bool(args.get("no_background", False)),
+        fit_ptll_min=args.get("fit_ptll_min"),
+        fit_pt_lead_min=args.get("fit_pt_lead_min"),
+        fit_pt_both_min=args.get("fit_pt_both_min"),
         bkg_model=args.get("bkg_model", "bernstein"),
         bkg_degree=int(args.get("bkg_degree", 1)),
         theta_mode=("mlp" if args.get("theta_mlp", False)
