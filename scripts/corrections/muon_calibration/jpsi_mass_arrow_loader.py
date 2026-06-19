@@ -978,34 +978,45 @@ def _batch_tensors(
     # whose muons drifted past the outermost η edge (~2e-3 of adjusted
     # muons): zero-weight them like the window cut (b_pm would be clipped to
     # the edge bin and the event sits outside the modelled acceptance).
-    # Additional reco-level ptll selection (see the docstring): cut on the
-    # STORED reco ptll so it is a clean refinement of the production selection,
-    # identical for data and pseudo-data. Failing rows are zero-weighted and
-    # (below) dropped, exactly like a tighter-than-shard mass window.
+    # Selection kinematics MUST be the OBSERVED (post-injection) per-muon pt —
+    # NOT the stored cols[...]. For real data the injection is a no-op so pt_pm
+    # == cols. For validation pseudo-data the injection rescales pt_pm (and, for
+    # background, resamples mll); using the STORED cols["ptll"] with the INJECTED
+    # mll makes the ratio cut ptll/mll = ptll_host/m_t MASS-DEPENDENT on the
+    # resampled background (m_t ⊥ ptll_host) → it reshapes the injected Bernstein
+    # (low-mass enriched) and breaks the closure. Computing ptll/lead/sub from the
+    # post-injection pt_pm restores ptll_bkg/m_t = R(c) (conditioning-fixed).
+    ptll_obs = np.hypot((pt_pm * np.cos(phi_pm)).sum(axis=1),
+                        (pt_pm * np.sin(phi_pm)).sum(axis=1)).astype(np.float32)
+    lead_obs = pt_pm.max(axis=1).astype(np.float32)
+    soft_obs = pt_pm.min(axis=1).astype(np.float32)
+    # Additional reco-level ptll selection (see the docstring): a clean refinement
+    # of the production selection, identical for data and pseudo-data. Failing
+    # rows are zero-weighted and (below) dropped, like a tighter-than-shard window.
     sel_ok = np.ones(mll.shape[0], dtype=bool)
     if reco_ptll_min is not None or reco_ptll_max is not None:
-        ptll_reco = cols["ptll"].astype(np.float32, copy=False)
         if reco_ptll_min is not None:
-            sel_ok &= (ptll_reco >= np.float32(reco_ptll_min))
+            sel_ok &= (ptll_obs >= np.float32(reco_ptll_min))
         if reco_ptll_max is not None:
-            sel_ok &= (ptll_reco <= np.float32(reco_ptll_max))
+            sel_ok &= (ptll_obs <= np.float32(reco_ptll_max))
     # Fit-time analysis SELECTION (deferred-cuts scheme): drop events failing the
-    # reco ptll / leading-muon / both-muon pt cuts, on the STORED reco columns
-    # (same convention as reco_ptll_min). Applied ONLY at the fit + diagnostics
-    # loaders, NOT the stage-1 flow loader — so the flow trains on the full
-    # (uncut) sample while the fit runs on the selected sample and the model
-    # normalises the signal/background over the per-event window (m_min(c)).
+    # reco ptll / leading-muon / both-muon pt cuts, on the OBSERVED kinematics.
+    # Applied ONLY at the fit + diagnostics loaders, NOT the stage-1 flow loader.
     if fit_select is not None:
-        ps_ptll, ps_lead, ps_both = fit_select
+        # 4th element (optional) flags RATIO mode: thresholds are C/m_lo and the
+        # cut is on the scale-invariant pt/m_ll (conditioning-fixed: at fixed
+        # conditioning pt/m=R(c) is constant over the window, so no in-window mass
+        # is forbidden → no per-event m_min needed). Legacy 3-tuple = direct pt>C.
+        is_ratio = len(fit_select) > 3 and bool(fit_select[3])
+        ps_ptll, ps_lead, ps_both = fit_select[0], fit_select[1], fit_select[2]
+        denom = (mll.astype(np.float32, copy=False) if is_ratio
+                 else np.float32(1.0))
         if ps_ptll:
-            sel_ok &= (cols["ptll"].astype(np.float32, copy=False)
-                       >= np.float32(ps_ptll))
+            sel_ok &= (ptll_obs / denom >= np.float32(ps_ptll))
         if ps_lead:
-            lead = np.maximum(cols["pt_plus"], cols["pt_minus"])
-            sel_ok &= (lead.astype(np.float32, copy=False) >= np.float32(ps_lead))
+            sel_ok &= (lead_obs / denom >= np.float32(ps_lead))
         if ps_both:
-            soft = np.minimum(cols["pt_plus"], cols["pt_minus"])
-            sel_ok &= (soft.astype(np.float32, copy=False) >= np.float32(ps_both))
+            sel_ok &= (soft_obs / denom >= np.float32(ps_both))
     keep_mask = in_window & bkg_fid & sel_ok
     w = w * keep_mask.astype(np.float32)
     keep = None

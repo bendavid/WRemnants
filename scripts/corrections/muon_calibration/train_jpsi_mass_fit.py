@@ -873,14 +873,32 @@ def _make_loaders(args, shard_files, stats, *, half=None, inject_theta=None,
 
 
 def _fit_select_args(args):
-    """(ptll_min, pt_lead_min, pt_both_min) loader selection from the fit-time
-    cut args, or None if none set. Applied at the FIT + diagnostics loaders to
-    select the analysis sample (the stage-1 flow loader stays uncut), matching
-    the model's per-event normalisation edge."""
+    """Loader selection from the fit-time cut args, or None if none set. Applied
+    at the FIT + diagnostics loaders to select the analysis sample (the stage-1
+    flow loader stays uncut).
+
+    Two modes:
+      * pt-threshold (legacy): returns ``(ptll_min, pt_lead_min, pt_both_min)`` —
+        direct pt>C cuts, matched by the model's per-event normalisation edge
+        m_min(c).
+      * ratio (``--fit-cuts-as-ratio``): returns
+        ``(ptll/m_lo, lead/m_lo, both/m_lo, True)`` — scale-invariant pt/m>C/m_lo
+        cuts. The 4th element flags the loader to divide by m_ll. These are
+        conditioning-fixed (no in-window mass threshold) so NO per-event m_min is
+        used (the model gets None edges in _build_model)."""
     sel = (getattr(args, "fit_ptll_min", None),
            getattr(args, "fit_pt_lead_min", None),
            getattr(args, "fit_pt_both_min", None))
-    return sel if any(sel) else None
+    if not any(sel):
+        return None
+    if getattr(args, "fit_cuts_as_ratio", False):
+        m_lo = getattr(args, "fit_m_lo", None)
+        if m_lo is None:
+            raise ValueError("--fit-cuts-as-ratio requires --fit-m-lo (window "
+                             "lower edge) to set ratio thresholds C/m_lo")
+        m_lo = float(m_lo)
+        return tuple((c / m_lo if c else None) for c in sel) + (True,)
+    return sel
 
 
 def _inject_theta_np(args, n_eta):
@@ -1046,9 +1064,15 @@ def _build_model(args, stats, device):
         smear_param_form=getattr(args, "smear_param_form", "linear"),
         norm_correction=getattr(args, "norm_correction", "none"),
         background_enabled=not getattr(args, "no_background", False),
-        fit_ptll_min=getattr(args, "fit_ptll_min", None),
-        fit_pt_lead_min=getattr(args, "fit_pt_lead_min", None),
-        fit_pt_both_min=getattr(args, "fit_pt_both_min", None),
+        # Ratio-mode (--fit-cuts-as-ratio) cuts are conditioning-fixed, so the
+        # signal normalises over the full fixed window — disable the per-event
+        # m_min(c) edge (None) to avoid the thin-window normalisation collapse.
+        fit_ptll_min=(None if getattr(args, "fit_cuts_as_ratio", False)
+                      else getattr(args, "fit_ptll_min", None)),
+        fit_pt_lead_min=(None if getattr(args, "fit_cuts_as_ratio", False)
+                         else getattr(args, "fit_pt_lead_min", None)),
+        fit_pt_both_min=(None if getattr(args, "fit_cuts_as_ratio", False)
+                         else getattr(args, "fit_pt_both_min", None)),
         bkg_model=getattr(args, "bkg_model", "bernstein"),
         bkg_degree=int(getattr(args, "bkg_degree", 1)),
         theta_mode=("mlp" if getattr(args, "theta_mlp", False)
@@ -4446,6 +4470,16 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    dest="fit_pt_both_min",
                    help="Fit-time both-muon pt cut [GeV] → per-event lower mass "
                    "edge. Default: none.")
+    p.add_argument("--fit-cuts-as-ratio", action="store_true",
+                   dest="fit_cuts_as_ratio",
+                   help="Apply the fit-time pt cuts (--fit-ptll/pt-lead/pt-both-min) "
+                   "as SCALE-INVARIANT ratio cuts pt/m_ll > C/m_lo instead of direct "
+                   "pt > C cuts. At fixed conditioning pt/m=R(c) is constant over the "
+                   "mass window, so the cut is conditioning-fixed (all-or-nothing, "
+                   "forbids no in-window mass) → the signal normalises over the FULL "
+                   "fixed window [m_lo,m_hi] with NO per-event m_min(c) (avoids the "
+                   "thin-window normalisation collapse). Threshold C/m_lo guarantees "
+                   "pt>C over the whole window. Requires --fit-m-lo.")
     p.add_argument("--flow-m-lo", type=float, default=None,
                    help="Optional TIGHTER lower mass edge for STAGE 1 (flow "
                    "training + the flow's own normalisation window). Default: "

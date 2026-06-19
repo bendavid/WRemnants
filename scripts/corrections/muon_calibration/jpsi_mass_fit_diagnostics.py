@@ -77,7 +77,14 @@ def _fit_select_from(targs):
     per-event normalisation edge)."""
     sel = (targs.get("fit_ptll_min"), targs.get("fit_pt_lead_min"),
            targs.get("fit_pt_both_min"))
-    return sel if any(sel) else None
+    if not any(sel):
+        return None
+    if targs.get("fit_cuts_as_ratio"):
+        # Scale-invariant ratio mode: thresholds C/m_lo, cut on pt/m_ll (4th
+        # element flags the loader). Matches the fit (no per-event m_min).
+        m_lo = float(targs.get("fit_m_lo"))
+        return tuple((c / m_lo if c else None) for c in sel) + (True,)
+    return sel
 
 
 def load_model_from_checkpoint(checkpoint_path: str, device: str):
@@ -124,9 +131,14 @@ def load_model_from_checkpoint(checkpoint_path: str, device: str):
         smear_param_form=args.get("smear_param_form", "linear"),
         norm_correction=args.get("norm_correction", "none"),
         background_enabled=not bool(args.get("no_background", False)),
-        fit_ptll_min=args.get("fit_ptll_min"),
-        fit_pt_lead_min=args.get("fit_pt_lead_min"),
-        fit_pt_both_min=args.get("fit_pt_both_min"),
+        # Ratio-mode cuts are conditioning-fixed → fixed-window normalisation, so
+        # the model carries NO per-event m_min edge (matches the fit).
+        fit_ptll_min=(None if args.get("fit_cuts_as_ratio")
+                      else args.get("fit_ptll_min")),
+        fit_pt_lead_min=(None if args.get("fit_cuts_as_ratio")
+                         else args.get("fit_pt_lead_min")),
+        fit_pt_both_min=(None if args.get("fit_cuts_as_ratio")
+                         else args.get("fit_pt_both_min")),
         bkg_model=args.get("bkg_model", "bernstein"),
         bkg_degree=int(args.get("bkg_degree", 1)),
         theta_mode=("mlp" if args.get("theta_mlp", False)
@@ -2017,6 +2029,12 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     p.add_argument("--split", default="holdout", choices=("train", "val", "holdout", "all"),
                    help="Which loader split to evaluate on. 'holdout' is the "
                    "untouched-by-training default and the canonical choice.")
+    p.add_argument("--half", type=int, default=None, choices=(0, 1),
+                   help="Validation deterministic event half (0=flow-train half, "
+                   "1=fit half). When set, the loader uses ALL of that half "
+                   "(split=train, val/holdout fraction=0), matching the fit's "
+                   "stage-2 sample — for consistent in-sample (half 1) vs "
+                   "out-of-sample (half 0) closure. Default: no half split.")
     p.add_argument("--eval-seed", type=int, default=42,
                    help="Fixed seed for the smearing-kernel ε on MC events. "
                    "Keeps the predicted-signal histogram deterministic across "
@@ -2654,13 +2672,21 @@ def main() -> int:
     if nonuniform and (inject_np is not None or inject_smear_np is not None):
         print("  injection is NON-UNIFORM (quadratic-η × sinusoidal-φ); the "
               "θ-vs-η reference uses the φ-averaged truth base·f_η(η)")
-    print(f"found {len(shard_files)} shard(s); split={args.split}")
+    # --half: match the validation fit's stage-2 sample (ALL of the half, no
+    # train/val/holdout sub-split) so the closure is consistent in-sample
+    # (half 1) / out-of-sample (half 0). Otherwise use the requested split.
+    _half = getattr(args, "half", None)
+    _split = "train" if _half is not None else args.split
+    _vf = 0.0 if _half is not None else float(train_args.get("val_fraction", 0.10))
+    _hf = 0.0 if _half is not None else float(train_args.get("holdout_fraction", 0.05))
+    print(f"found {len(shard_files)} shard(s); split={_split}"
+          + (f"; half={_half} (all of the half, no sub-split)" if _half is not None else ""))
     loader = JpsiMassArrowLoader(
         shard_files, stats,
         batch_size=args.batch_size,
-        split=args.split,
-        val_fraction=float(train_args.get("val_fraction", 0.10)),
-        holdout_fraction=float(train_args.get("holdout_fraction", 0.05)),
+        split=_split, half=_half,
+        val_fraction=_vf,
+        holdout_fraction=_hf,
         drop_last=False,
         inject_theta_scale=inject_np,
         inject_theta_smear=inject_smear_np,
