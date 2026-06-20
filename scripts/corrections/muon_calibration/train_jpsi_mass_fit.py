@@ -872,6 +872,14 @@ def _make_loaders(args, shard_files, stats, *, half=None, inject_theta=None,
     return train_loader, val_loader
 
 
+def _conditioning_fixed_cuts(args):
+    """True when the fit-time cuts are applied as conditioning-fixed selections
+    (ratio or exact-rescale) — both drop at load and normalise the signal over
+    the full fixed window, so the model carries NO per-event m_min(c) edge."""
+    return bool(getattr(args, "fit_cuts_as_ratio", False)
+                or getattr(args, "fit_cuts_exact_rescale", False))
+
+
 def _fit_select_args(args):
     """Loader selection from the fit-time cut args, or None if none set. Applied
     at the FIT + diagnostics loaders to select the analysis sample (the stage-1
@@ -891,6 +899,14 @@ def _fit_select_args(args):
            getattr(args, "fit_pt_both_min", None))
     if not any(sel):
         return None
+    if getattr(args, "fit_cuts_exact_rescale", False):
+        # EXACT-RESCALE: keep the ORIGINAL pt thresholds; the loader cuts on the
+        # pt evaluated at the window lower edge (exact, muon mass included). The
+        # "exact" flag (4th element) selects this mode; needs --fit-m-lo (the
+        # loader uses the fit-window lower edge as the reference mass).
+        if getattr(args, "fit_m_lo", None) is None:
+            raise ValueError("--fit-cuts-exact-rescale requires --fit-m-lo")
+        return sel + ("exact",)
     if getattr(args, "fit_cuts_as_ratio", False):
         m_lo = getattr(args, "fit_m_lo", None)
         if m_lo is None:
@@ -1064,14 +1080,14 @@ def _build_model(args, stats, device):
         smear_param_form=getattr(args, "smear_param_form", "linear"),
         norm_correction=getattr(args, "norm_correction", "none"),
         background_enabled=not getattr(args, "no_background", False),
-        # Ratio-mode (--fit-cuts-as-ratio) cuts are conditioning-fixed, so the
-        # signal normalises over the full fixed window — disable the per-event
-        # m_min(c) edge (None) to avoid the thin-window normalisation collapse.
-        fit_ptll_min=(None if getattr(args, "fit_cuts_as_ratio", False)
+        # Ratio / exact-rescale cuts are conditioning-fixed, so the signal
+        # normalises over the full fixed window — disable the per-event m_min(c)
+        # edge (None) to avoid the thin-window normalisation collapse.
+        fit_ptll_min=(None if _conditioning_fixed_cuts(args)
                       else getattr(args, "fit_ptll_min", None)),
-        fit_pt_lead_min=(None if getattr(args, "fit_cuts_as_ratio", False)
+        fit_pt_lead_min=(None if _conditioning_fixed_cuts(args)
                          else getattr(args, "fit_pt_lead_min", None)),
-        fit_pt_both_min=(None if getattr(args, "fit_cuts_as_ratio", False)
+        fit_pt_both_min=(None if _conditioning_fixed_cuts(args)
                          else getattr(args, "fit_pt_both_min", None)),
         bkg_model=getattr(args, "bkg_model", "bernstein"),
         bkg_degree=int(getattr(args, "bkg_degree", 1)),
@@ -4470,6 +4486,15 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    dest="fit_pt_both_min",
                    help="Fit-time both-muon pt cut [GeV] → per-event lower mass "
                    "edge. Default: none.")
+    p.add_argument("--fit-cuts-exact-rescale", action="store_true",
+                   dest="fit_cuts_exact_rescale",
+                   help="Apply the fit-time pt cuts EXACTLY conditioning-fixed: "
+                   "cut on the pt the event would have at the window lower edge "
+                   "m_lo (muon_kin: common pt rescale via the m(s·pt)=m_lo fixed "
+                   "point; event_level: closed-form inverse-CS at m_lo). Removes "
+                   "the O((m_μ/m)²)≈1e-3 muon-mass leak of --fit-cuts-as-ratio "
+                   "while keeping full-window normalisation (no per-event m_min). "
+                   "Requires --fit-m-lo; takes precedence over --fit-cuts-as-ratio.")
     p.add_argument("--fit-cuts-as-ratio", action="store_true",
                    dest="fit_cuts_as_ratio",
                    help="Apply the fit-time pt cuts (--fit-ptll/pt-lead/pt-both-min) "

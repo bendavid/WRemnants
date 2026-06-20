@@ -1003,20 +1003,58 @@ def _batch_tensors(
     # reco ptll / leading-muon / both-muon pt cuts, on the OBSERVED kinematics.
     # Applied ONLY at the fit + diagnostics loaders, NOT the stage-1 flow loader.
     if fit_select is not None:
-        # 4th element (optional) flags RATIO mode: thresholds are C/m_lo and the
-        # cut is on the scale-invariant pt/m_ll (conditioning-fixed: at fixed
-        # conditioning pt/m=R(c) is constant over the window, so no in-window mass
-        # is forbidden → no per-event m_min needed). Legacy 3-tuple = direct pt>C.
-        is_ratio = len(fit_select) > 3 and bool(fit_select[3])
+        # 4th element (optional) selects the cut MODE:
+        #   None / falsey  → DIRECT pt>C (legacy 3-tuple).
+        #   True / "ratio" → RATIO pt/m_ll>C/m_lo: massless-exact, conditioning-
+        #                    fixed to O((m_μ/m)²)≈1e-3 (the muon-mass leak).
+        #   "exact"        → EXACT-RESCALE: cut on the pt the event would have at
+        #                    the reference mass m_ref (= window lower edge),
+        #                    holding the conditioning fixed → EXACTLY conditioning-
+        #                    fixed (muon mass included, no leak). Either way the
+        #                    cut is conditioning-fixed so the signal normalises
+        #                    over the full fixed window (NO per-event m_min).
+        mode = fit_select[3] if len(fit_select) > 3 else None
+        is_exact = (mode == "exact")
+        is_ratio = (mode is True or mode == "ratio")
         ps_ptll, ps_lead, ps_both = fit_select[0], fit_select[1], fit_select[2]
-        denom = (mll.astype(np.float32, copy=False) if is_ratio
-                 else np.float32(1.0))
-        if ps_ptll:
-            sel_ok &= (ptll_obs / denom >= np.float32(ps_ptll))
-        if ps_lead:
-            sel_ok &= (lead_obs / denom >= np.float32(ps_lead))
-        if ps_both:
-            sel_ok &= (soft_obs / denom >= np.float32(ps_both))
+        if is_exact:
+            # Reconstruct (ptll, lead, sub) at m_ref. muon_kin: a common pt
+            # rescale s with _event_mll(s·pt)=m_ref (ρ/η/φ invariant) → all lab
+            # pt scale by s. event_level: closed-form inverse-CS at m_ref (all
+            # CS conditioning fixed). m_ref = the fit-window lower edge w_lo.
+            m_ref = float(w_lo)
+            if cond_basis == "event_level":
+                cond = _event_cond_raw_np(pt_pm, eta_pm, phi_pm).astype(np.float64)
+                pt_r, _eta_r, phi_r = _inverse_cs_np(
+                    np.full(mll.shape[0], m_ref, dtype=np.float64), cond[:, 0],
+                    np.exp(cond[:, 1]) * m_ref, cond[:, 2], cond[:, 3],
+                    cond[:, 4], cond[:, 5], cond[:, 6])
+                ptll_r = np.hypot((pt_r * np.cos(phi_r)).sum(axis=1),
+                                  (pt_r * np.sin(phi_r)).sum(axis=1))
+                lead_r = pt_r.max(axis=1); soft_r = pt_r.min(axis=1)
+            else:
+                p64 = pt_pm.astype(np.float64)
+                e64 = eta_pm.astype(np.float64); f64 = phi_pm.astype(np.float64)
+                s = m_ref / np.maximum(mll.astype(np.float64), 1e-9)
+                for _ in range(3):
+                    cur = _event_mll_np(p64 * s[:, None], e64, f64)
+                    s = s * (m_ref / np.maximum(cur, 1e-9))
+                ptll_r = s * ptll_obs; lead_r = s * lead_obs; soft_r = s * soft_obs
+            if ps_ptll:
+                sel_ok &= (ptll_r >= np.float32(ps_ptll))
+            if ps_lead:
+                sel_ok &= (lead_r >= np.float32(ps_lead))
+            if ps_both:
+                sel_ok &= (soft_r >= np.float32(ps_both))
+        else:
+            denom = (mll.astype(np.float32, copy=False) if is_ratio
+                     else np.float32(1.0))
+            if ps_ptll:
+                sel_ok &= (ptll_obs / denom >= np.float32(ps_ptll))
+            if ps_lead:
+                sel_ok &= (lead_obs / denom >= np.float32(ps_lead))
+            if ps_both:
+                sel_ok &= (soft_obs / denom >= np.float32(ps_both))
     keep_mask = in_window & bkg_fid & sel_ok
     w = w * keep_mask.astype(np.float32)
     keep = None

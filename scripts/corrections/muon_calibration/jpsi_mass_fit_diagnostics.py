@@ -79,6 +79,9 @@ def _fit_select_from(targs):
            targs.get("fit_pt_both_min"))
     if not any(sel):
         return None
+    if targs.get("fit_cuts_exact_rescale"):
+        # Exact-rescale: original pt thresholds, loader cuts at m_lo exactly.
+        return sel + ("exact",)
     if targs.get("fit_cuts_as_ratio"):
         # Scale-invariant ratio mode: thresholds C/m_lo, cut on pt/m_ll (4th
         # element flags the loader). Matches the fit (no per-event m_min).
@@ -131,13 +134,17 @@ def load_model_from_checkpoint(checkpoint_path: str, device: str):
         smear_param_form=args.get("smear_param_form", "linear"),
         norm_correction=args.get("norm_correction", "none"),
         background_enabled=not bool(args.get("no_background", False)),
-        # Ratio-mode cuts are conditioning-fixed → fixed-window normalisation, so
-        # the model carries NO per-event m_min edge (matches the fit).
-        fit_ptll_min=(None if args.get("fit_cuts_as_ratio")
+        # Ratio / exact-rescale cuts are conditioning-fixed → fixed-window
+        # normalisation, so the model carries NO per-event m_min edge (matches
+        # the fit).
+        fit_ptll_min=(None if (args.get("fit_cuts_as_ratio")
+                               or args.get("fit_cuts_exact_rescale"))
                       else args.get("fit_ptll_min")),
-        fit_pt_lead_min=(None if args.get("fit_cuts_as_ratio")
+        fit_pt_lead_min=(None if (args.get("fit_cuts_as_ratio")
+                                  or args.get("fit_cuts_exact_rescale"))
                          else args.get("fit_pt_lead_min")),
-        fit_pt_both_min=(None if args.get("fit_cuts_as_ratio")
+        fit_pt_both_min=(None if (args.get("fit_cuts_as_ratio")
+                                  or args.get("fit_cuts_exact_rescale"))
                          else args.get("fit_pt_both_min")),
         bkg_model=args.get("bkg_model", "bernstein"),
         bkg_degree=int(args.get("bkg_degree", 1)),
