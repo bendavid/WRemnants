@@ -1148,7 +1148,7 @@ def _inject_prod_args(args):
 _FLOW_ARCH_KEYS = (
     "flow_arch", "flow_n_transforms", "flow_hidden", "flow_n_hidden",
     "gf_components", "nsf_bins", "cond_basis", "compact_learn_weights",
-    "compact_layer", "bernstein_degree", "nce_quad_nodes",
+    "compact_layer", "bernstein_degree", "mixture_layer", "nce_quad_nodes",
     # the compact/nce/dcb/ege flows' standardised [a, b] are the FLOW window
     "flow_m_lo", "flow_m_hi",
     # the additional reco-level ptll selection defines the event sample the flow
@@ -1233,6 +1233,7 @@ def _build_model(args, stats, device):
         compact_learn_weights=getattr(args, "compact_learn_weights", False),
         compact_layer=getattr(args, "compact_layer", "logistic"),
         bernstein_degree=getattr(args, "bernstein_degree", 16),
+        mixture_layer=getattr(args, "mixture_layer", "gaussian"),
         nce_quad_nodes=getattr(args, "nce_quad_nodes", 64),
         mlp_hidden=args.mlp_hidden, mlp_n_layers=args.mlp_n_layers,
         smearing_enabled=not args.disable_smearing,
@@ -2140,6 +2141,7 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
     nce = getattr(model, "flow_is_nce", False)
     dcb = getattr(model, "flow_is_dcb", False)
     ege = getattr(model, "flow_is_ege", False)
+    mixture = getattr(model, "flow_is_mixture", False)
     window_norm = ((not getattr(args, "no_flow_window_norm", False))
                    and not compact and not nce and not dcb and not ege)
     if dcb:
@@ -2210,6 +2212,12 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
             print("  --compile: NCE BCE loss compiled (training pass only — "
                   "the seeded-generator validation pass stays eager; first "
                   "batches include one-off compilation)")
+        elif mixture:
+            # The mixture flow's forward is closed-form elementwise (analytic
+            # Jacobian — no inner autograd.grad), so the full density compiles.
+            compiled_inwindow = torch.compile(model.flow.forward)
+            print("  --compile: mixture-flow density compiled "
+                  "(first batches include one-off compilation)")
         else:
             print(f"  --compile: SKIPPED for flow-arch {model.flow_arch} "
                   f"(zuko's inner autograd.grad is untraceable)")
@@ -5010,7 +5018,8 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     # during warmup.
     # Flow / MLP hyperparams
     p.add_argument(
-        "--flow-arch", choices=("gf", "nsf", "compact", "nce", "dcb", "ege"),
+        "--flow-arch",
+        choices=("gf", "nsf", "compact", "mixture", "nce", "dcb", "ege"),
         default="gf",
         help="Signal flow architecture: 'gf' = Gaussianization flow (default) — "
         "C∞-smooth density, so the continuity score/Hessian have no knot kinks. "
@@ -5051,7 +5060,17 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         "(ExpGaussExp): only (μ,σ,α_L,α_R) conditional — the tail slopes are "
         "forced to α by the C⁰+C¹ matching (the most a log-linear tail can "
         "match). No n parameters / integrability constraints, an even "
-        "simpler analytic CDF; otherwise identical design to dcb.",
+        "simpler analytic CDF; otherwise identical design to dcb. "
+        "'mixture' = normal-base, FULL-support COMPOSED flow (mixture_flow.py): "
+        "--flow-n-transforms stacked Gaussian- or logistic-mixture-CDF "
+        "Gaussianisation layers (--mixture-layer; --gf-components components/"
+        "layer) on a standard-normal base. Analytic density AND CDF (→ exact "
+        "cheap window-Z = Φ(z_hi)−Φ(z_lo)) with an ANALYTIC Jacobian → "
+        "torch.compile-traceable (unlike gf). Support = ℝ with LEARNED tails "
+        "(no compact matched tails); like gf it is window-renormalised in both "
+        "stages and the out-of-window mass gauge is pinned by --flow-gauge-"
+        "penalty (Z≈1). gaussian kernels surject (∫_ℝ=1); logistic give heavier "
+        "tails at a harmless global factor (window-renorm cancels it).",
     )
     p.add_argument(
         "--nsf-bins", type=int, default=8,
@@ -5065,7 +5084,16 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     p.add_argument("--flow-n-hidden", type=int, default=3,
                    help="Number of hidden layers in each flow conditioner MLP.")
     p.add_argument("--gf-components", type=int, default=8,
-                   help="(--flow-arch gf/compact) mixture components per layer.")
+                   help="(--flow-arch gf/compact/mixture) mixture components per layer.")
+    p.add_argument("--mixture-layer", choices=("gaussian", "logistic"),
+                   default="gaussian",
+                   help="(--flow-arch mixture) Per-layer mixture-CDF kernel. "
+                   "'gaussian' (default): Gaussian-mixture CDF — surjects ℝ→ℝ so "
+                   "the density is exactly normalised; Gaussian (light) tails. "
+                   "'logistic': logistic-mixture CDF — heavier exponential tails, "
+                   "at a harmless global sub-normalisation that the window-renorm "
+                   "cancels. Depth = --flow-n-transforms, components = "
+                   "--gf-components.")
     p.add_argument("--compact-layer", choices=("logistic", "bernstein", "rqs"),
                    default="logistic",
                    help="(--flow-arch compact) Per-layer monotone [0,1]→[0,1] "

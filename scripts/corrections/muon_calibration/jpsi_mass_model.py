@@ -46,6 +46,7 @@ if _HERE not in sys.path:
 
 from train_muon_response_flow import FlowWithLogProb, build_flow  # noqa: E402
 from compact_flow import CompactMatchedFlow  # noqa: E402
+from mixture_flow import MixtureFlow  # noqa: E402
 from dcb_density import DCBDensity, EGEDensity  # noqa: E402
 from nce_density import NCEDensity  # noqa: E402
 
@@ -745,6 +746,7 @@ class JpsiMassMixtureModel(nn.Module):
         compact_learn_weights: bool = False,
         compact_layer: str = "logistic",
         bernstein_degree: int = 16,
+        mixture_layer: str = "gaussian",
         nce_quad_nodes: int = 64,
         mlp_hidden: int = 32,
         mlp_n_layers: int = 2,
@@ -1049,6 +1051,13 @@ class JpsiMassMixtureModel(nn.Module):
         # C⁰+C¹ matching (the maximum possible for a log-linear tail). Same
         # window-normalised, analytic-CDF, full-ℝ-tails design.
         self.flow_is_ege = (self.flow_arch == "ege")
+        # ``mixture``: normal-base, FULL-support 1-D flow — a stack of Gaussian-
+        # or logistic-mixture-CDF Gaussianisation layers (see mixture_flow.py).
+        # Analytic density + CDF (→ exact cheap window-Z) and analytic Jacobian
+        # (torch.compile-traceable, unlike gf). Support = ℝ with LEARNED tails
+        # (no compact matched tails); normal base, so it uses the same fp64-stable
+        # window-Z path as gf/nsf (the window mass can be < 1 / drift small).
+        self.flow_is_mixture = (self.flow_arch == "mixture")
         self._flow_m_lo_f = float(flow_m_lo if flow_m_lo is not None else m_lo)
         self._flow_m_hi_f = float(flow_m_hi if flow_m_hi is not None else m_hi)
         if self.flow_is_compact:
@@ -1092,6 +1101,18 @@ class JpsiMassMixtureModel(nn.Module):
                 n_cond=N_MUON_KIN, a=a_std, b=b_std,
                 hidden_features=flow_hidden_features,
                 n_layers=flow_n_hidden_layers,
+            )
+        elif self.flow_is_mixture:
+            # Full-support (ℝ), no window edges — the normal base supplies the
+            # tails. Depth = flow_n_transforms, components/layer = flow_gf_components
+            # (shared with gf for parameter parity).
+            self.flow = MixtureFlow(
+                n_cond=N_MUON_KIN,
+                hidden_features=flow_hidden_features,
+                n_layers=flow_n_hidden_layers,
+                n_components=flow_gf_components,
+                n_transforms=flow_n_transforms,
+                layer_type=mixture_layer,
             )
         else:
             flow_inner = build_flow(
@@ -2430,6 +2451,16 @@ class JpsiMassMixtureModel(nn.Module):
             log_J_smear = mp.new_zeros(mp.shape)
         return log_J_scale + log_J_smear
 
+    def _flow_normal_base_z(self, m_std: torch.Tensor,
+                            mk: torch.Tensor) -> torch.Tensor:
+        """Base-space latent ``z = f(m_std | c)`` for the normal-base archs
+        (CDF F = Φ(z)). ``mixture`` uses its analytic ``transform`` (no autograd,
+        compile-traceable); gf/nsf use zuko's monotonic ``dist.transform``."""
+        if getattr(self, "flow_is_mixture", False):
+            return self.flow.transform(m_std, mk)
+        dist = self.flow.flow(mk)
+        return dist.transform(m_std.unsqueeze(-1)).squeeze(-1)
+
     def _flow_log_cdf(self, m: torch.Tensor, mk: torch.Tensor) -> torch.Tensor:
         """``log F_0(m | mk)`` — the FLOW's CDF at observed mass ``m``.
 
@@ -2458,8 +2489,7 @@ class JpsiMassMixtureModel(nn.Module):
             # exponential tail antiderivatives), normalised so
             # F₀(b)−F₀(a)=1 exactly.
             return self.flow.log_cdf(m_std, mk)
-        dist = self.flow.flow(mk)
-        z = dist.transform(m_std.unsqueeze(-1)).squeeze(-1)
+        z = self._flow_normal_base_z(m_std, mk)
         F = 0.5 * (1.0 + torch.erf(z / math.sqrt(2.0)))
         return F.clamp(min=1e-30).log()
 
@@ -2530,9 +2560,8 @@ class JpsiMassMixtureModel(nn.Module):
             -MLL_STD_FLOW_CLAMP, MLL_STD_FLOW_CLAMP)
         m_std_hi = self._standardise_mll(m_hi_t).clamp(
             -MLL_STD_FLOW_CLAMP, MLL_STD_FLOW_CLAMP)
-        dist = self.flow.flow(mk)
-        z_lo = dist.transform(m_std_lo.unsqueeze(-1)).squeeze(-1)
-        z_hi = dist.transform(m_std_hi.unsqueeze(-1)).squeeze(-1)
+        z_lo = self._flow_normal_base_z(m_std_lo, mk)
+        z_hi = self._flow_normal_base_z(m_std_hi, mk)
         return self._log_phi_window(z_lo, z_hi)
 
     def _flow_log_window_Z_chunked(self, m_lo_flat, m_hi_flat, mk_flat):
