@@ -184,7 +184,14 @@ def _move_batch(batch: dict, device: str,
 
 def _lr_str(optim: torch.optim.Optimizer) -> str:
     """Compact current-lr string for the progress bar: a single value if all
-    param groups share an lr, else the per-group lrs joined by '/'."""
+    param groups share an lr, else the per-group lrs joined by '/'. For Prodigy
+    (schedule-free) the meaningful step size is the adapted effective lr (d·lr),
+    not the static ``lr`` multiplier, so report that (prefixed 'd')."""
+    if _is_schedule_free(optim):
+        eff = [g.get("effective_lr") or g.get("d", 0.0) for g in optim.param_groups]
+        if len(set(eff)) == 1:
+            return f"d{eff[0]:.2g}"
+        return "d" + "/".join(f"{x:.2g}" for x in eff)
     lrs = [g["lr"] for g in optim.param_groups]
     if len(set(lrs)) == 1:
         return f"{lrs[0]:.2g}"
@@ -261,6 +268,55 @@ def _make_scheduler(args, optim, epochs):
     return None, "none"
 
 
+def _make_prodigy(params, args, *, drop_group_lr=False):
+    """Prodigy-plus-schedule-free optimiser (the ``prodigyplus`` package): Prodigy
+    learning-rate adaptation (the per-group coefficient ``d``, init ``d0``) fused
+    with a schedule-free iterate average — so it needs NO LR schedule and NO
+    hand-tuned LR (``lr`` is just a multiplier on the adapted ``d``). It REQUIRES
+    ``.train()`` before optimisation steps and ``.eval()`` before any evaluation /
+    checkpointing (the schedule-free average ``x`` differs from the train iterate
+    ``z``); _run_epochs handles that via _sf_set_train / _sf_set_eval.
+
+    ``drop_group_lr``: when ``params`` is a list of param-GROUP dicts (the stage-2
+    mlp/θ_scale/θ_smear split), strip each group's hand-tuned ``lr`` so all groups
+    share the single ``--prodigy-lr`` multiplier and Prodigy adapts each group's
+    ``d`` independently (split_groups=True). The per-group --fit-*-lr are then
+    unused (Prodigy adapts)."""
+    try:
+        from prodigyplus import ProdigyPlusScheduleFree
+    except ImportError as e:
+        raise RuntimeError("the 'prodigy' optimizer requires the prodigyplus "
+                           f"package (import failed: {e})")
+    if drop_group_lr:
+        params = [{"params": g["params"]} for g in params]
+    opt = ProdigyPlusScheduleFree(
+        params,
+        lr=float(getattr(args, "prodigy_lr", 1.0)),
+        d0=float(getattr(args, "prodigy_d0", 1e-6)),
+        d_coef=float(getattr(args, "prodigy_d_coef", 1.0)),
+        weight_decay=float(getattr(args, "prodigy_weight_decay", 0.0)),
+        split_groups=True, use_schedulefree=True)
+    opt._is_sf = True   # flag for _is_schedule_free (needs train()/eval() bracketing)
+    return opt
+
+
+def _is_schedule_free(optim) -> bool:
+    """True for a schedule-free optimiser (here: prodigy-plus-schedule-free), which
+    keeps a train iterate ``z`` and an eval average ``x`` and must be put in
+    ``.train()`` mode for steps and ``.eval()`` mode for evaluation/checkpointing."""
+    return bool(getattr(optim, "_is_sf", False))
+
+
+def _sf_set_train(optim):
+    if _is_schedule_free(optim):
+        optim.train()
+
+
+def _sf_set_eval(optim):
+    if _is_schedule_free(optim):
+        optim.eval()
+
+
 def _make_fit_optimizer(args, groups, minibatch_loop=False, kind=None):
     """Build the stage-2 optimizer over ``groups`` (list of {params, lr} dicts)
     per ``--fit-optimizer``. 'adam' (default): the historical torch.optim.Adam.
@@ -300,18 +356,25 @@ def _make_fit_optimizer(args, groups, minibatch_loop=False, kind=None):
     --fit-optimizer."""
     if kind is None:
         kind = getattr(args, "fit_optimizer", "adam")
-    # Hybrids ('adam+lbfgs', 'soap+trust-krylov', …) and the closure/scipy-driven
-    # optimisers need their own driver loop; the minibatch bootstrap refit can
-    # only use a plain step-based optimiser, so fall back to the base (adam/soap)
-    # or adam.
+    # Hybrids ('adam+lbfgs', 'soap+trust-krylov', …), the closure/scipy-driven
+    # optimisers, and the schedule-free 'prodigy' (needs train()/eval() bracketing
+    # the short bootstrap loop doesn't do) need their own driver loop; the
+    # minibatch bootstrap refit can only use a plain step-based optimiser, so fall
+    # back to the base (adam/soap) or adam.
     if minibatch_loop and ("+" in kind or kind in ("lbfgs", "trust-krylov",
-                                                    "trust-ncg", "trust-exact")):
+                                                    "trust-ncg", "trust-exact",
+                                                    "prodigy")):
         base = kind.split("+")[0]
         kind = base if base in ("adam", "soap") else "adam"
         print(f"  note: --fit-optimizer {getattr(args, 'fit_optimizer', '')} "
               f"needs its own driver loop; the bootstrap refit uses {kind}.")
     if kind == "adam":
         return torch.optim.Adam(groups)
+    if kind == "prodigy":
+        # Prodigy adapts each group's lr (split_groups), so the hand-tuned
+        # per-group --fit-*-lr are dropped in favour of the single --prodigy-lr
+        # multiplier; schedule-free → _run_epochs skips the LR scheduler.
+        return _make_prodigy(groups, args, drop_group_lr=True)
     if kind == "lbfgs":
         flat = [p for g in groups for p in g["params"]]
         return torch.optim.LBFGS(
@@ -1164,10 +1227,15 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
     # The streaming loader has no __len__; learn the batch count on epoch 1 so
     # epochs ≥2 show a true percentage-complete bar.
     n_batches_total = None
-    # L-BFGS governs its own step via the line search; an external LR scheduler
-    # would fight it, so disable scheduling for L-BFGS (early-stop still applies).
-    if isinstance(optim, torch.optim.LBFGS):
+    # L-BFGS governs its own step via the line search; a schedule-free optimiser
+    # (Prodigy) adapts its own lr and is schedule-free BY DESIGN — an external LR
+    # scheduler would fight either, so disable scheduling for both (early-stop
+    # still applies).
+    if isinstance(optim, torch.optim.LBFGS) or _is_schedule_free(optim):
         sched, sched_kind = None, "none"
+        if _is_schedule_free(optim):
+            print(f"  [{stage_name}] schedule-free optimiser (Prodigy): no LR "
+                  f"schedule; lr adapted internally (reported as d·lr)")
     else:
         sched, sched_kind = _make_scheduler(args, optim, epochs)
     if sched_kind != "none":
@@ -1193,7 +1261,7 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
     prof_steps = int(getattr(args, "profile_steps", 0) or 0)
     is_lbfgs = isinstance(optim, torch.optim.LBFGS)
     for epoch in range(1, epochs + 1):
-        t0 = time.time(); model.train()
+        t0 = time.time(); model.train(); _sf_set_train(optim)   # SF: optimise at z
         tr_sum = 0.0; tr_w = 0.0; n_seen = 0; tr_sq = 0.0; tr_w2 = 0.0
         lr_str = _lr_str(optim)
         epoch_gnorm = None   # Σw-weighted gradient norm of the mean NLL (convergence)
@@ -1334,6 +1402,14 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
         if n_batches_total is None:
             n_batches_total = n_seen   # exact count for the % bar from epoch 2 on
         train_nll = tr_sum / max(tr_w, 1e-30)
+
+        # Schedule-free: swap the model params to the eval average ``x`` before the
+        # validation pass AND the checkpoint save below, so both use the iterate
+        # that actually generalises (the per-step iterate ``z`` is for optimising
+        # only). The next epoch's _sf_set_train swaps back to ``z``. (No-op for
+        # Adam/SOAP/LBFGS.) The train-NLL monitor is still measured at ``z`` during
+        # the steps — fine for the plateau/early-stop signal.
+        _sf_set_eval(optim)
 
         # Monitored metric: held-out val NLL (stage 1) or the training NLL itself
         # (stage 2 — all events, no held-out split; skip the val pass).
@@ -1913,9 +1989,16 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
           "--flow-monitor train, as the stage-2 fit)" if fm == "train" else
           "  monitor: held-out val NLL (--flow-monitor val; "
           f"val_fraction={args.val_fraction:g} holdout={args.holdout_fraction:g})")
-    optim = torch.optim.Adam(model.flow.parameters(), lr=args.lr,
-                             weight_decay=args.weight_decay)
-    print(f"  optimizer: flow ({sum(p.numel() for p in model.flow.parameters()):,} params), lr={args.lr:g}")
+    nparam = sum(p.numel() for p in model.flow.parameters())
+    fo = getattr(args, "flow_optimizer", "adam")
+    if fo == "prodigy":
+        optim = _make_prodigy(list(model.flow.parameters()), args)
+        print(f"  optimizer: flow prodigy-plus-schedule-free ({nparam:,} params; "
+              f"adaptive lr, schedule-free; --prodigy-lr={getattr(args,'prodigy_lr',1.0):g})")
+    else:
+        optim = torch.optim.Adam(model.flow.parameters(), lr=args.lr,
+                                 weight_decay=args.weight_decay)
+        print(f"  optimizer: flow adam ({nparam:,} params), lr={args.lr:g}")
     # The compact flow is intrinsically window-normalised (∫_window p₀ ≡ 1 by
     # construction), so the window-norm correction is identically 0 — skip it
     # (avoids a pointless per-batch CDF evaluation/autograd at the edges).
@@ -4237,7 +4320,8 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "for all of (A,e,M,a,c); the net's output reference scaling "
                    "sets the relative A,e,M vs a,c magnitudes.")
     p.add_argument("--fit-optimizer",
-                   choices=("adam", "soap", "lbfgs", "adam+lbfgs", "soap+lbfgs",
+                   choices=("adam", "soap", "prodigy", "lbfgs",
+                            "adam+lbfgs", "soap+lbfgs", "prodigy+lbfgs",
                             "trust-krylov", "trust-ncg", "trust-exact",
                             "adam+trust-krylov", "soap+trust-krylov",
                             "adam+trust-ncg", "soap+trust-ncg",
@@ -4283,7 +4367,30 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "driver for --fit-epochs iters) to reach a tight gradient norm "
                    "Adam/SOAP — normalising by the gradient RMS — structurally "
                    "cannot. If the polish regresses, the phase-1 result is "
-                   "restored.")
+                   "restored. 'prodigy': Prodigy-plus-schedule-free (the "
+                   "prodigyplus package) — Prodigy LR adaptation fused with a "
+                   "schedule-free iterate average; needs NO LR schedule and no "
+                   "hand-tuned per-group lr (split_groups adapts each of "
+                   "mlp/θ_scale/θ_smear independently; --fit-*-lr are ignored, "
+                   "--prodigy-lr is the multiplier). Reported as d·lr.")
+    p.add_argument("--flow-optimizer", choices=("adam", "prodigy"),
+                   default="adam",
+                   help="Stage-1 (flow) optimizer. 'adam' (default): "
+                   "torch.optim.Adam at --lr. 'prodigy': Prodigy-plus-schedule-"
+                   "free (adaptive lr, schedule-free; --lr ignored, --prodigy-lr "
+                   "is the multiplier).")
+    p.add_argument("--prodigy-lr", type=float, default=1.0,
+                   help="(--*-optimizer prodigy) Multiplier on Prodigy's adapted "
+                   "step size d. 1.0 is the recommended default; Prodigy adapts "
+                   "the effective lr itself, so this rarely needs tuning.")
+    p.add_argument("--prodigy-d0", type=float, default=1e-6,
+                   help="(prodigy) Initial d estimate (the lr ramps up from here).")
+    p.add_argument("--prodigy-d-coef", type=float, default=1.0,
+                   help="(prodigy) Scales the d adaptation; >1 ramps faster, <1 "
+                   "more conservatively. Try ~0.5–2 if the default over/under-shoots.")
+    p.add_argument("--prodigy-weight-decay", type=float, default=0.0,
+                   help="(prodigy) Decoupled weight decay (0 for a calibration "
+                   "fit — must not pull θ toward 0).")
     p.add_argument("--lbfgs-lr", type=float, default=1.0,
                    help="(--fit-optimizer lbfgs) Initial step scale; with the "
                    "strong-Wolfe line search 1.0 is standard (the search rescales "
