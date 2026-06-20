@@ -87,7 +87,8 @@ args = ap.parse_args()
 
 sys.path.insert(0, args.repo)
 import train_jpsi_mass_fit as T                       # noqa: E402
-from jpsi_mass_fit_diagnostics import load_model_from_checkpoint, _move_batch  # noqa: E402
+from jpsi_mass_fit_diagnostics import (load_model_from_checkpoint, _move_batch,  # noqa: E402
+                                       _fit_select_from)
 from jpsi_mass_arrow_loader import JpsiMassArrowLoader  # noqa: E402
 from jpsi_mass_model import _event_mll, THETA_SCALE_REF  # noqa: E402
 
@@ -151,6 +152,12 @@ loader = JpsiMassArrowLoader(
     inject_seed=int(targs.get("inject_smear_seed", 12345)),
     cond_basis=targs.get("cond_basis", "muon_kin"),
     m_window=(model._m_lo_f, model._m_hi_f),
+    # Apply the SAME fit-time ptll/pt selection (fit_select) the stage-2 fit +
+    # diagnostics use, so the decompose measures the A-bias on the fit's analysis
+    # sample (not the uncut window). η is shard-level (identical everywhere);
+    # reco_ptll is passed below. In ratio mode the cut is an event selection with
+    # no per-event mass edge, so the fixed window-Z stays correct.
+    fit_select=_fit_select_from(targs),
     reco_ptll_min=targs.get("reco_ptll_min"),
     reco_ptll_max=targs.get("reco_ptll_max"))
 
