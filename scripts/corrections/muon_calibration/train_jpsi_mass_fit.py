@@ -187,7 +187,14 @@ def _lr_str(optim: torch.optim.Optimizer) -> str:
     param groups share an lr, else the per-group lrs joined by '/'. For Prodigy
     (schedule-free OR plain+cosine) the meaningful step size is the adapted
     effective lr (d·lr, with lr the cosine-annealed multiplier in plain mode),
-    not the static ``lr``, so report that (prefixed 'd')."""
+    not the static ``lr``, so report that (prefixed 'd'). For the schedulefree
+    package (sf-radam/sf-adamw) report the optimiser's own ``scheduled_lr`` (the
+    weight-power-warmed effective lr it applies)."""
+    if getattr(optim, "_is_sf_pkg", False):
+        lrs = [g.get("scheduled_lr", g.get("lr", 0.0)) for g in optim.param_groups]
+        if len(set(lrs)) == 1:
+            return f"{lrs[0]:.2g}"
+        return "/".join(f"{x:.2g}" for x in lrs)
     if getattr(optim, "_is_prodigy", False):
         eff = [g.get("effective_lr") or g.get("d", 0.0) for g in optim.param_groups]
         if len(set(eff)) == 1:
@@ -310,13 +317,52 @@ def _make_prodigy(params, args, *, drop_group_lr=False):
     return opt
 
 
+def _make_schedulefree(params, args, *, variant="radam", drop_group_lr=False):
+    """Build a schedule-free optimiser from Meta's ``schedulefree`` package:
+    'radam' → RAdamScheduleFree (default; RAdam's warmup-free variance
+    rectification fused with the schedule-free iterate average) or 'adamw' →
+    AdamWScheduleFree. Like prodigy-plus-schedule-free it keeps a train iterate
+    ``z`` and an eval average ``x`` and must be bracketed by ``.train()`` (steps)
+    / ``.eval()`` (evaluation, checkpointing) — handled by _run_epochs via
+    _is_schedule_free — and needs NO external LR schedule (the average IS the
+    anneal).
+
+    UNLIKE prodigy it does NOT adapt the lr magnitude, so the lr must be set
+    (--sf-lr). Per-group lrs ARE respected, so for the stage-2 mlp/θ split they
+    are NOT dropped (drop_group_lr=False) — the hand-tuned --fit-*-lr carry over,
+    with --sf-lr the default for any group without one. RAdam is warmup-free; the
+    adamw variant takes --sf-warmup-steps."""
+    try:
+        import schedulefree
+    except ImportError as e:
+        raise RuntimeError("the 'sf-radam'/'sf-adamw' optimizer requires Meta's "
+                           f"'schedulefree' package (import failed: {e})")
+    if drop_group_lr:
+        params = [{"params": g["params"]} for g in params]
+    lr = float(getattr(args, "sf_lr", 0.0025))
+    wd = float(getattr(args, "sf_weight_decay", 0.0))
+    betas = (float(getattr(args, "sf_beta1", 0.9)),
+             float(getattr(args, "sf_beta2", 0.999)))
+    if variant == "adamw":
+        opt = schedulefree.AdamWScheduleFree(
+            params, lr=lr, betas=betas, weight_decay=wd,
+            warmup_steps=int(getattr(args, "sf_warmup_steps", 0)))
+    else:
+        opt = schedulefree.RAdamScheduleFree(
+            params, lr=lr, betas=betas, weight_decay=wd)
+    opt._is_sf = True       # schedule-free → train()/eval() + scheduler-disable + |g(x)|
+    opt._is_sf_pkg = True   # report scheduled_lr (not d·lr) in _lr_str
+    return opt
+
+
 def _is_schedule_free(optim) -> bool:
-    """True for a schedule-free optimiser (here: prodigy-plus-schedule-free with
-    use_schedulefree=True), which keeps a train iterate ``z`` and an eval average
-    ``x`` and must be put in ``.train()`` for steps and ``.eval()`` for evaluation/
-    checkpointing — AND needs no external LR schedule (the average IS the anneal).
-    False for plain Prodigy (--prodigy-no-schedulefree), which uses ``z`` and needs
-    the cosine schedule restored."""
+    """True for a schedule-free optimiser (prodigy-plus-schedule-free with
+    use_schedulefree=True, or the schedulefree-package sf-radam/sf-adamw), which
+    keeps a train iterate ``z`` and an eval average ``x`` and must be put in
+    ``.train()`` for steps and ``.eval()`` for evaluation/checkpointing — AND
+    needs no external LR schedule (the average IS the anneal). False for plain
+    Prodigy (--prodigy-no-schedulefree), which uses ``z`` and needs the cosine
+    schedule restored."""
     return bool(getattr(optim, "_is_sf", False))
 
 
@@ -414,7 +460,8 @@ def _make_fit_optimizer(args, groups, minibatch_loop=False, kind=None):
     # back to the base (adam/soap) or adam.
     if minibatch_loop and ("+" in kind or kind in ("lbfgs", "trust-krylov",
                                                     "trust-ncg", "trust-exact",
-                                                    "prodigy")):
+                                                    "prodigy", "sf-radam",
+                                                    "sf-adamw")):
         base = kind.split("+")[0]
         kind = base if base in ("adam", "soap") else "adam"
         print(f"  note: --fit-optimizer {getattr(args, 'fit_optimizer', '')} "
@@ -426,6 +473,11 @@ def _make_fit_optimizer(args, groups, minibatch_loop=False, kind=None):
         # per-group --fit-*-lr are dropped in favour of the single --prodigy-lr
         # multiplier; schedule-free → _run_epochs skips the LR scheduler.
         return _make_prodigy(groups, args, drop_group_lr=True)
+    if kind in ("sf-radam", "sf-adamw"):
+        # schedulefree package: schedule-free RAdamW. Does NOT adapt the lr
+        # magnitude (unlike prodigy), so the per-group --fit-*-lr are KEPT (with
+        # --sf-lr the default); schedule-free → _run_epochs skips the scheduler.
+        return _make_schedulefree(groups, args, variant=kind.split("-", 1)[1])
     if kind == "lbfgs":
         flat = [p for g in groups for p in g["params"]]
         return torch.optim.LBFGS(
@@ -1285,8 +1337,10 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
     if isinstance(optim, torch.optim.LBFGS) or _is_schedule_free(optim):
         sched, sched_kind = None, "none"
         if _is_schedule_free(optim):
-            print(f"  [{stage_name}] schedule-free optimiser (Prodigy): no LR "
-                  f"schedule; lr adapted internally (reported as d·lr)")
+            _rep = ("scheduled_lr" if getattr(optim, "_is_sf_pkg", False)
+                    else "d·lr")
+            print(f"  [{stage_name}] schedule-free optimiser: no LR schedule "
+                  f"(the iterate average IS the anneal); lr reported as {_rep}")
     else:
         sched, sched_kind = _make_scheduler(args, optim, epochs)
     if sched_kind != "none":
@@ -2069,6 +2123,12 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
         print(f"  optimizer: flow prodigy ({nparam:,} params; adaptive lr; "
               + ("schedule-free)" if _sf else "plain z-iterate + LR schedule)")
               + f" --prodigy-lr={getattr(args,'prodigy_lr',1.0):g}")
+    elif fo in ("sf-radam", "sf-adamw"):
+        optim = _make_schedulefree(list(model.flow.parameters()), args,
+                                   variant=fo.split("-", 1)[1])
+        print(f"  optimizer: flow {fo} ({nparam:,} params; schedule-free "
+              f"{'RAdamW' if fo == 'sf-radam' else 'AdamW'}; "
+              f"--sf-lr={getattr(args,'sf_lr',0.0025):g})")
     else:
         optim = torch.optim.Adam(model.flow.parameters(), lr=args.lr,
                                  weight_decay=args.weight_decay)
@@ -4394,7 +4454,8 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "for all of (A,e,M,a,c); the net's output reference scaling "
                    "sets the relative A,e,M vs a,c magnitudes.")
     p.add_argument("--fit-optimizer",
-                   choices=("adam", "soap", "prodigy", "lbfgs",
+                   choices=("adam", "soap", "prodigy", "sf-radam", "sf-adamw",
+                            "lbfgs",
                             "adam+lbfgs", "soap+lbfgs", "prodigy+lbfgs",
                             "trust-krylov", "trust-ncg", "trust-exact",
                             "adam+trust-krylov", "soap+trust-krylov",
@@ -4446,13 +4507,22 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "schedule-free iterate average; needs NO LR schedule and no "
                    "hand-tuned per-group lr (split_groups adapts each of "
                    "mlp/θ_scale/θ_smear independently; --fit-*-lr are ignored, "
-                   "--prodigy-lr is the multiplier). Reported as d·lr.")
-    p.add_argument("--flow-optimizer", choices=("adam", "prodigy"),
+                   "--prodigy-lr is the multiplier). Reported as d·lr. "
+                   "'sf-radam'/'sf-adamw': schedule-free RAdamW / AdamW from "
+                   "Meta's 'schedulefree' package — the schedule-free iterate "
+                   "average (no LR schedule needed) on a FIXED base lr (--sf-lr; "
+                   "does NOT auto-adapt the magnitude like prodigy). RAdam is "
+                   "warmup-free; per-group --fit-*-lr are KEPT (--sf-lr the "
+                   "default). Reported as the optimiser's scheduled_lr.")
+    p.add_argument("--flow-optimizer",
+                   choices=("adam", "prodigy", "sf-radam", "sf-adamw"),
                    default="adam",
                    help="Stage-1 (flow) optimizer. 'adam' (default): "
                    "torch.optim.Adam at --lr. 'prodigy': Prodigy-plus-schedule-"
                    "free (adaptive lr, schedule-free; --lr ignored, --prodigy-lr "
-                   "is the multiplier).")
+                   "is the multiplier). 'sf-radam'/'sf-adamw': schedule-free "
+                   "RAdamW / AdamW (Meta 'schedulefree' package) at a fixed "
+                   "--sf-lr (no LR schedule needed; --lr ignored).")
     p.add_argument("--prodigy-lr", type=float, default=1.0,
                    help="(--*-optimizer prodigy) Multiplier on Prodigy's adapted "
                    "step size d. 1.0 is the recommended default; Prodigy adapts "
@@ -4475,6 +4545,22 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "decay. Recommended for the FLOW stage, where the schedule-free "
                    "average lands off-minimum (large |g(x)|, worse A-bias); the fit "
                    "stage's near-quadratic θ is fine with schedule-free on.")
+    p.add_argument("--sf-lr", type=float, default=0.0025,
+                   help="(--*-optimizer sf-radam/sf-adamw) Base lr for the "
+                   "schedulefree-package optimiser. UNLIKE prodigy it is NOT "
+                   "auto-adapted, so this is the actual step size (the package "
+                   "default 0.0025); for the flow it replaces --lr. For the fit, "
+                   "per-group --fit-*-lr override it where set.")
+    p.add_argument("--sf-weight-decay", type=float, default=0.0,
+                   help="(sf-radam/sf-adamw) Decoupled weight decay (0 for a "
+                   "calibration fit — must not pull θ toward 0).")
+    p.add_argument("--sf-beta1", type=float, default=0.9,
+                   help="(sf-radam/sf-adamw) Adam β1 (momentum).")
+    p.add_argument("--sf-beta2", type=float, default=0.999,
+                   help="(sf-radam/sf-adamw) Adam β2 (second-moment decay).")
+    p.add_argument("--sf-warmup-steps", type=int, default=0,
+                   help="(sf-adamw only) Linear lr warmup steps; RAdam is "
+                   "warmup-free (variance rectification) and ignores this.")
     p.add_argument("--lbfgs-lr", type=float, default=1.0,
                    help="(--fit-optimizer lbfgs) Initial step scale; with the "
                    "strong-Wolfe line search 1.0 is standard (the search rescales "
