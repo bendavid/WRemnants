@@ -189,7 +189,17 @@ def _lr_str(optim: torch.optim.Optimizer) -> str:
     effective lr (d·lr, with lr the cosine-annealed multiplier in plain mode),
     not the static ``lr``, so report that (prefixed 'd'). For the schedulefree
     package (sf-radam/sf-adamw) report the optimiser's own ``scheduled_lr`` (the
-    weight-power-warmed effective lr it applies)."""
+    weight-power-warmed effective lr it applies). For TRAC (trac-soap) report the
+    effective step s·lr (s = TRAC's learned coin-betting scale), prefixed 's'."""
+    if getattr(optim, "_is_trac", False):
+        s = 1.0
+        tr = getattr(optim, "state", {}).get("trac")
+        if isinstance(tr, dict) and torch.is_tensor(tr.get("s")):
+            s = float(tr["s"].sum())
+        eff = [g["lr"] * s for g in optim.param_groups]
+        if len(set(eff)) == 1:
+            return f"s{eff[0]:.2g}"
+        return "s" + "/".join(f"{x:.2g}" for x in eff)
     if getattr(optim, "_is_sf_pkg", False):
         lrs = [g.get("scheduled_lr", g.get("lr", 0.0)) for g in optim.param_groups]
         if len(set(lrs)) == 1:
@@ -414,6 +424,25 @@ def _grad_norm_at_x(model, optim, loader, step_fn, device, amp_ctx):
     return (gsq ** 0.5) / max(sw_tot, 1e-30)
 
 
+def _make_soap(args, groups):
+    """SOAP (Shampoo-in-the-Adam-eigenbasis) over ``groups`` with the calibration
+    settings: weight_decay=0 (SOAP defaults 0.01 — a calibration fit must NOT be
+    pulled toward θ=0) and precondition_1d=True (SOAP defaults False, which leaves
+    every 1-D bias — incl. the θ_net (A,e,M,a,c) bias — un-preconditioned).
+    Shared by --fit-optimizer 'soap' and the TRAC-wrapped 'trac-soap'."""
+    try:
+        from pytorch_optimizer import SOAP
+    except ImportError as e:
+        raise RuntimeError(
+            "the 'soap' optimizer requires the pytorch_optimizer package "
+            f"(import failed: {e})")
+    sb = args.soap_shampoo_beta
+    return SOAP(groups, weight_decay=0.0, precondition_1d=True,
+                eps=float(args.soap_eps),
+                shampoo_beta=(float(sb) if sb is not None and sb >= 0 else None),
+                precondition_frequency=int(args.soap_precondition_frequency))
+
+
 def _make_fit_optimizer(args, groups, minibatch_loop=False, kind=None):
     """Build the stage-2 optimizer over ``groups`` (list of {params, lr} dicts)
     per ``--fit-optimizer``. 'adam' (default): the historical torch.optim.Adam.
@@ -461,8 +490,8 @@ def _make_fit_optimizer(args, groups, minibatch_loop=False, kind=None):
     if minibatch_loop and ("+" in kind or kind in ("lbfgs", "trust-krylov",
                                                     "trust-ncg", "trust-exact",
                                                     "prodigy", "sf-radam",
-                                                    "sf-adamw")):
-        base = kind.split("+")[0]
+                                                    "sf-adamw", "trac-soap")):
+        base = "soap" if kind == "trac-soap" else kind.split("+")[0]
         kind = base if base in ("adam", "soap") else "adam"
         print(f"  note: --fit-optimizer {getattr(args, 'fit_optimizer', '')} "
               f"needs its own driver loop; the bootstrap refit uses {kind}.")
@@ -487,26 +516,31 @@ def _make_fit_optimizer(args, groups, minibatch_loop=False, kind=None):
             tolerance_grad=float(args.lbfgs_tolerance_grad),
             tolerance_change=float(args.lbfgs_tolerance_change))
     if kind == "soap":
+        # precondition_frequency: steps between the (cheap, tiny-tensor here)
+        # eigendecompositions. eps: the denominator floor in the rotated space —
+        # acts as a ridge on the preconditioner (larger → less aggressive
+        # whitening of the sloppy/near-degenerate directions).
+        return _make_soap(args, groups)
+    if kind == "trac-soap":
+        # TRAC (Cutkosky et al., NeurIPS 2023) — a parameter-free coin-betting LR
+        # TUNER that WRAPS SOAP and learns a single scalar step scale ``s`` online,
+        # so the per-group --fit-*-lr act only as relative RATIOS while TRAC sets
+        # the overall magnitude (no hand-tuned lr). It tunes the scale, NOT a decay
+        # → _run_epochs disables the external LR scheduler (_no_external_sched),
+        # like the schedule-free optimisers; the near-convex stage-2 θ basin needs
+        # no anneal (cf. the schedule-free fit). SOAP's curvature whitening + TRAC's
+        # auto-magnitude: the preconditioner makes the lr scale-insensitive and
+        # TRAC then sets it. Reported as s·lr (s = TRAC's learned scale).
         try:
-            from pytorch_optimizer import SOAP
+            from pytorch_optimizer import TRAC
         except ImportError as e:
             raise RuntimeError(
-                "--fit-optimizer soap requires the pytorch_optimizer package "
+                "--fit-optimizer trac-soap requires the pytorch_optimizer package "
                 f"(import failed: {e})")
-        # weight_decay=0.0 (SOAP defaults to 0.01!) — a calibration fit must NOT
-        # be pulled toward θ=0; this matches the Adam(groups) path (wd=0).
-        # precondition_1d=True (SOAP defaults to False!) — else 1-D parameters
-        # (every nn.Linear bias, incl. the θ_net final-layer (A,e,M,a,c) bias,
-        # and any 1-D θ) are left UN-preconditioned / pure-Adam; we want SOAP to
-        # condition them too. precondition_frequency: steps between the (cheap,
-        # tiny-tensor here) eigendecompositions. eps: the denominator floor in
-        # the rotated space — acts as a ridge on the preconditioner (larger →
-        # less aggressive whitening of the sloppy/near-degenerate directions).
-        sb = args.soap_shampoo_beta
-        return SOAP(groups, weight_decay=0.0, precondition_1d=True,
-                    eps=float(args.soap_eps),
-                    shampoo_beta=(float(sb) if sb is not None and sb >= 0 else None),
-                    precondition_frequency=int(args.soap_precondition_frequency))
+        opt = TRAC(_make_soap(args, groups))
+        opt._is_trac = True            # for s·lr reporting in _lr_str
+        opt._no_external_sched = True  # TRAC tunes the magnitude; no LR scheduler
+        return opt
     raise ValueError(f"unknown --fit-optimizer {kind!r}")
 
 
@@ -1335,13 +1369,17 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
     # (Prodigy) adapts its own lr and is schedule-free BY DESIGN — an external LR
     # scheduler would fight either, so disable scheduling for both (early-stop
     # still applies).
-    if isinstance(optim, torch.optim.LBFGS) or _is_schedule_free(optim):
+    if (isinstance(optim, torch.optim.LBFGS) or _is_schedule_free(optim)
+            or getattr(optim, "_no_external_sched", False)):
         sched, sched_kind = None, "none"
         if _is_schedule_free(optim):
             _rep = ("scheduled_lr" if getattr(optim, "_is_sf_pkg", False)
                     else "d·lr")
             print(f"  [{stage_name}] schedule-free optimiser: no LR schedule "
                   f"(the iterate average IS the anneal); lr reported as {_rep}")
+        elif getattr(optim, "_no_external_sched", False):
+            print(f"  [{stage_name}] TRAC LR-tuner: no external LR schedule "
+                  f"(the coin-betting scale s sets the step); lr reported as s·lr")
     else:
         sched, sched_kind = _make_scheduler(args, optim, epochs)
     if sched_kind != "none":
@@ -4463,7 +4501,7 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "sets the relative A,e,M vs a,c magnitudes.")
     p.add_argument("--fit-optimizer",
                    choices=("adam", "soap", "prodigy", "sf-radam", "sf-adamw",
-                            "lbfgs",
+                            "trac-soap", "lbfgs",
                             "adam+lbfgs", "soap+lbfgs", "prodigy+lbfgs",
                             "trust-krylov", "trust-ncg", "trust-exact",
                             "adam+trust-krylov", "soap+trust-krylov",
@@ -4521,7 +4559,15 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "average (no LR schedule needed) on a FIXED base lr (--sf-lr; "
                    "does NOT auto-adapt the magnitude like prodigy). RAdam is "
                    "warmup-free; per-group --fit-*-lr are KEPT (--sf-lr the "
-                   "default). Reported as the optimiser's scheduled_lr.")
+                   "default). Reported as the optimiser's scheduled_lr. "
+                   "'trac-soap': SOAP wrapped by TRAC (Cutkosky et al.) — a "
+                   "parameter-free coin-betting LR TUNER that learns a single "
+                   "scalar step scale s online, so the per-group --fit-*-lr act "
+                   "only as relative ratios and no overall lr is hand-tuned. "
+                   "SOAP's curvature whitening makes the lr scale-insensitive and "
+                   "TRAC sets it; no external LR schedule (TRAC tunes the "
+                   "magnitude, not a decay — fine for the near-convex θ basin, as "
+                   "with the schedule-free fit). Reported as s·lr.")
     p.add_argument("--flow-optimizer",
                    choices=("adam", "prodigy", "sf-radam", "sf-adamw"),
                    default="adam",
