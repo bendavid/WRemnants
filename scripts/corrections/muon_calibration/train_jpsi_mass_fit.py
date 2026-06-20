@@ -185,9 +185,10 @@ def _move_batch(batch: dict, device: str,
 def _lr_str(optim: torch.optim.Optimizer) -> str:
     """Compact current-lr string for the progress bar: a single value if all
     param groups share an lr, else the per-group lrs joined by '/'. For Prodigy
-    (schedule-free) the meaningful step size is the adapted effective lr (d·lr),
-    not the static ``lr`` multiplier, so report that (prefixed 'd')."""
-    if _is_schedule_free(optim):
+    (schedule-free OR plain+cosine) the meaningful step size is the adapted
+    effective lr (d·lr, with lr the cosine-annealed multiplier in plain mode),
+    not the static ``lr``, so report that (prefixed 'd')."""
+    if getattr(optim, "_is_prodigy", False):
         eff = [g.get("effective_lr") or g.get("d", 0.0) for g in optim.param_groups]
         if len(set(eff)) == 1:
             return f"d{eff[0]:.2g}"
@@ -289,21 +290,33 @@ def _make_prodigy(params, args, *, drop_group_lr=False):
                            f"package (import failed: {e})")
     if drop_group_lr:
         params = [{"params": g["params"]} for g in params]
+    # --prodigy-no-schedulefree turns OFF the schedule-free iterate average → plain
+    # Prodigy (auto-lr Adam). The average WAS the implicit anneal, so without it the
+    # caller MUST restore a decay schedule (cosine): Prodigy's d sets only the lr
+    # MAGNITUDE, not the decay-to-zero. _run_epochs keys the scheduler-disable /
+    # train()-eval() swaps / |g(x)| off ``_is_sf`` (= use_schedulefree), so with SF
+    # off the cosine scheduler runs, the swaps are skipped, and the well-converged
+    # train iterate z is used. d·lr reporting (``_is_prodigy``) applies either way.
+    use_sf = not bool(getattr(args, "prodigy_no_schedulefree", False))
     opt = ProdigyPlusScheduleFree(
         params,
         lr=float(getattr(args, "prodigy_lr", 1.0)),
         d0=float(getattr(args, "prodigy_d0", 1e-6)),
         d_coef=float(getattr(args, "prodigy_d_coef", 1.0)),
         weight_decay=float(getattr(args, "prodigy_weight_decay", 0.0)),
-        split_groups=True, use_schedulefree=True)
-    opt._is_sf = True   # flag for _is_schedule_free (needs train()/eval() bracketing)
+        split_groups=True, use_schedulefree=use_sf)
+    opt._is_sf = use_sf       # gates scheduler-disable / train()-eval() / |g(x)|
+    opt._is_prodigy = True    # for d·lr reporting (regardless of schedule-free)
     return opt
 
 
 def _is_schedule_free(optim) -> bool:
-    """True for a schedule-free optimiser (here: prodigy-plus-schedule-free), which
-    keeps a train iterate ``z`` and an eval average ``x`` and must be put in
-    ``.train()`` mode for steps and ``.eval()`` mode for evaluation/checkpointing."""
+    """True for a schedule-free optimiser (here: prodigy-plus-schedule-free with
+    use_schedulefree=True), which keeps a train iterate ``z`` and an eval average
+    ``x`` and must be put in ``.train()`` for steps and ``.eval()`` for evaluation/
+    checkpointing — AND needs no external LR schedule (the average IS the anneal).
+    False for plain Prodigy (--prodigy-no-schedulefree), which uses ``z`` and needs
+    the cosine schedule restored."""
     return bool(getattr(optim, "_is_sf", False))
 
 
@@ -315,6 +328,44 @@ def _sf_set_train(optim):
 def _sf_set_eval(optim):
     if _is_schedule_free(optim):
         optim.eval()
+
+
+def _grad_norm_at_x(model, optim, loader, step_fn, device, amp_ctx):
+    """``||∇(weighted-mean NLL)||`` evaluated at the schedule-free average ``x``
+    (the optimiser must ALREADY be in ``.eval()`` so the model params are ``x``).
+    One forward+backward pass over ``loader``, accumulating Σw·∇(per-batch mean)
+    per parameter exactly like the in-loop ``|g|`` — but at ``x``, not the train
+    iterate ``z``. For Prodigy the ``z``-gradient does NOT vanish at the optimum
+    (``z`` oscillates; only ``x`` → optimum), so this is the meaningful, step-size-
+    independent convergence measure. Restores grads to None and the model's
+    train/eval mode; leaves params at ``x``."""
+    fit_params = [p for grp in optim.param_groups for p in grp["params"]]
+    g_acc = {}
+    sw_tot = 0.0
+    was_training = model.training
+    model.eval()
+    for batch in loader:
+        batch = _move_batch(batch, device, _model_dtype(model))
+        optim.zero_grad(set_to_none=True)
+        with torch.enable_grad(), amp_ctx():
+            loss, sw, _, _ = step_fn(model, batch)
+        if sw <= 0:
+            continue
+        loss.backward()
+        for p in fit_params:
+            if p.grad is not None:
+                if p not in g_acc:
+                    g_acc[p] = torch.zeros(p.numel(), dtype=torch.float64,
+                                           device=p.device)
+                g_acc[p].add_(p.grad.detach().reshape(-1).double(), alpha=sw)
+        sw_tot += sw
+    optim.zero_grad(set_to_none=True)
+    if was_training:
+        model.train()
+    if not g_acc:
+        return None
+    gsq = sum(float(v.pow(2).sum()) for v in g_acc.values())
+    return (gsq ** 0.5) / max(sw_tot, 1e-30)
 
 
 def _make_fit_optimizer(args, groups, minibatch_loop=False, kind=None):
@@ -1411,6 +1462,15 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
         # the steps — fine for the plateau/early-stop signal.
         _sf_set_eval(optim)
 
+        # Schedule-free convergence diagnostic: ||∇NLL(x)|| at the average iterate
+        # (the existing |g| above is at the train iterate z, which does not vanish
+        # for Prodigy). One extra fwd+bwd pass over the train data at x; computed
+        # only for schedule-free optimisers (no cost for adam/soap/lbfgs).
+        epoch_gnorm_x = None
+        if _is_schedule_free(optim):
+            epoch_gnorm_x = _grad_norm_at_x(
+                model, optim, train_loader, step_fn, device, amp_ctx)
+
         # Monitored metric: held-out val NLL (stage 1) or the training NLL itself
         # (stage 2 — all events, no held-out split; skip the val pass).
         if monitor == "val" and val_loader is not None:
@@ -1458,9 +1518,10 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
                 sched.threshold = thr
         val_str = f"val_nll={val_nll:+.4f} " if monitor == "val" else ""
         g_str = f"|g|={epoch_gnorm:.2e} " if epoch_gnorm is not None else ""
+        gx_str = f"|g(x)|={epoch_gnorm_x:.2e} " if epoch_gnorm_x is not None else ""
         thr_str = f"thr={thr:.2e} " if auto_thr else ""
         print(f"[{stage_name}] epoch {epoch:>3}: train_nll={train_nll:+.4f} "
-              f"(Δ={d_str}) {val_str}(Σw={v_w:.2e}) lr={lr_str} {g_str}{thr_str}"
+              f"(Δ={d_str}) {val_str}(Σw={v_w:.2e}) lr={lr_str} {g_str}{gx_str}{thr_str}"
               f"dt={time.time()-t0:.1f}s{extra}")
         prev_train_nll = train_nll
 
@@ -1487,6 +1548,17 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
             sched.step(metric) if sched_kind == "plateau" else sched.step()
         if not improved and not args.no_early_stop and no_improve >= args.patience:
             print(f"[{stage_name}] early-stop: no improvement for {no_improve} epochs")
+            break
+        # Gradient-norm convergence (schedule-free / Prodigy): stop when the
+        # average-iterate gradient ||∇NLL(x)|| falls below --gtol-x. Step-size-
+        # independent and a true first-order optimum test (unlike the NLL-plateau);
+        # checked independently of --patience/--no-early-stop. The best/last ckpt
+        # (saved above at x) is the converged result.
+        gtol_x = getattr(args, "gtol_x", None)
+        if (gtol_x is not None and epoch_gnorm_x is not None
+                and epoch_gnorm_x < float(gtol_x)):
+            print(f"[{stage_name}] converged: |g(x)|={epoch_gnorm_x:.2e} "
+                  f"< --gtol-x={float(gtol_x):g}")
             break
 
     if os.path.exists(best_ckpt):
@@ -1993,8 +2065,10 @@ def train_stage1(args, model, train_loader, val_loader, stats) -> float:
     fo = getattr(args, "flow_optimizer", "adam")
     if fo == "prodigy":
         optim = _make_prodigy(list(model.flow.parameters()), args)
-        print(f"  optimizer: flow prodigy-plus-schedule-free ({nparam:,} params; "
-              f"adaptive lr, schedule-free; --prodigy-lr={getattr(args,'prodigy_lr',1.0):g})")
+        _sf = not getattr(args, "prodigy_no_schedulefree", False)
+        print(f"  optimizer: flow prodigy ({nparam:,} params; adaptive lr; "
+              + ("schedule-free)" if _sf else "plain z-iterate + LR schedule)")
+              + f" --prodigy-lr={getattr(args,'prodigy_lr',1.0):g}")
     else:
         optim = torch.optim.Adam(model.flow.parameters(), lr=args.lr,
                                  weight_decay=args.weight_decay)
@@ -4391,6 +4465,16 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     p.add_argument("--prodigy-weight-decay", type=float, default=0.0,
                    help="(prodigy) Decoupled weight decay (0 for a calibration "
                    "fit — must not pull θ toward 0).")
+    p.add_argument("--prodigy-no-schedulefree", action="store_true",
+                   dest="prodigy_no_schedulefree",
+                   help="(prodigy) Turn OFF the schedule-free iterate average → "
+                   "plain Prodigy (auto-lr Adam), using the well-converged train "
+                   "iterate z instead of the average x. Because the average WAS the "
+                   "implicit anneal, you MUST keep a decay schedule (--lr-schedule "
+                   "cosine) — Prodigy's d sets only the lr magnitude, not the "
+                   "decay. Recommended for the FLOW stage, where the schedule-free "
+                   "average lands off-minimum (large |g(x)|, worse A-bias); the fit "
+                   "stage's near-quadratic θ is fine with schedule-free on.")
     p.add_argument("--lbfgs-lr", type=float, default=1.0,
                    help="(--fit-optimizer lbfgs) Initial step scale; with the "
                    "strong-Wolfe line search 1.0 is standard (the search rescales "
@@ -4506,7 +4590,18 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    help="κ for --patience-threshold auto: threshold = κ·SE of "
                    "the monitored mean NLL (default 0.2).")
     p.add_argument("--no-early-stop", action="store_true",
-                   help="Disable early stopping (train the full --epochs).")
+                   help="Disable the patience/plateau early stopping (train the "
+                   "full --epochs). The --gtol-x convergence test (if set) still "
+                   "applies — it is an independent first-order criterion.")
+    p.add_argument("--gtol-x", type=float, default=None,
+                   help="Schedule-free (Prodigy) convergence: stop when the "
+                   "average-iterate gradient norm ||∇NLL(x)|| (reported as |g(x)| "
+                   "on the epoch line) falls below this tolerance. Step-size-"
+                   "independent, true first-order optimum test — more suitable for "
+                   "Prodigy than the NLL-plateau (the train-iterate |g| at z does "
+                   "not vanish). Model gradients floor at ~1e-4..1e-5, so a value "
+                   "a few× that is the practical setting. Default: off (None). Only "
+                   "the schedule-free optimisers compute |g(x)|; ignored otherwise.")
     p.add_argument("--lr-schedule", choices=["plateau", "cosine", "none"],
                    default="plateau",
                    help="LR schedule (both stages). 'plateau': reduce "
