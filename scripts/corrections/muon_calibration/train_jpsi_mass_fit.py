@@ -539,7 +539,12 @@ def _make_fit_optimizer(args, groups, minibatch_loop=False, kind=None):
                 f"(import failed: {e})")
         opt = TRAC(_make_soap(args, groups))
         opt._is_trac = True            # for s·lr reporting in _lr_str
-        opt._no_external_sched = True  # TRAC tunes the magnitude; no LR scheduler
+        # TRAC tunes the magnitude, so by default no external LR scheduler. But
+        # if the user EXPLICITLY requests one (--lr-schedule cosine/plateau),
+        # honour it — TRAC's learned scale s × the schedule (e.g. a cosine
+        # cooldown on top of TRAC's auto-magnitude).
+        opt._no_external_sched = (
+            str(getattr(args, "lr_schedule", "none")) == "none")
         return opt
     raise ValueError(f"unknown --fit-optimizer {kind!r}")
 
