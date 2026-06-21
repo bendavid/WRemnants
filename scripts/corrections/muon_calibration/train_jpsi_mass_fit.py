@@ -1281,6 +1281,7 @@ def _build_model(args, stats, device):
         smear_param_form=getattr(args, "smear_param_form", "linear"),
         norm_correction=getattr(args, "norm_correction", "none"),
         background_enabled=not getattr(args, "no_background", False),
+        bkg_global=getattr(args, "bkg_global", False),
         # Ratio / exact-rescale cuts are conditioning-fixed, so the signal
         # normalises over the full fixed window — disable the per-event m_min(c)
         # edge (None) to avoid the thin-window normalisation collapse.
@@ -1600,6 +1601,9 @@ def _run_epochs(args, model, optim, train_loader, val_loader, stats, *,
             else:
                 extra = (f" θ_scale‖∞={model.theta_scale.abs().max().item():.3e}"
                          f" θ_smear‖∞={model.theta_smear.abs().max().item():.3e}")
+            if getattr(model, "bkg_global", False):
+                _fg = torch.softmax(model.bkg_global_logits.detach(), dim=-1).tolist()
+                extra += " f_global=[" + ",".join(f"{x:.5f}" for x in _fg) + "]"
         if auto_thr:
             # Recompute κ·SE from THIS epoch's monitored-sample moments: σ̂
             # shrinks as the badly-fit tail disappears, so a frozen epoch-1
@@ -2436,11 +2440,17 @@ def train_stage2(args, model, train_loader, val_loader, stats,
     # the optimiser so nothing depends on its (now-irrelevant) values.
     groups = []
     tags = []
+    _bkg_global = getattr(model, "bkg_global", False)
+    _bkg_params = (lambda: [model.bkg_global_logits]) if _bkg_global \
+        else (lambda: list(model.mlp.parameters()))
     if model.background_enabled:
-        groups.append({"params": model.mlp.parameters(), "lr": args.fit_mlp_lr})
-        tags.append("mlp")
+        groups.append({"params": _bkg_params(), "lr": args.fit_mlp_lr})
+        tags.append("f0f1_global" if _bkg_global else "mlp")
+        if _bkg_global:
+            print("  background: GLOBAL fractions softmax(f0,f1,f_sig) "
+                  "(constant for all events; no MLP)")
     else:
-        for p in model.mlp.parameters():
+        for p in _bkg_params():
             p.requires_grad_(False)
         print("  background DISABLED: f_data ≡ [0, 0, 1] (pure signal); MLP frozen + excluded from optimiser")
     if model.theta_mode == "mlp":
@@ -5530,6 +5540,15 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         "model can't broaden into (and to absorb injection-induced "
         "out-of-window pollution that the Bernstein basis extrapolates to). "
         "Leave OFF for real-data fits, which need the MLP for genuine bkg.",
+    )
+    p.add_argument(
+        "--bkg-global", action="store_true", dest="bkg_global",
+        help="Treat the background fractions as GLOBAL learnable scalars "
+        "(constant softmax(f0..f_n, f_sig) for all events) instead of the "
+        "per-event MLP f(c). Diagnostic mode: removes the MLP's per-event "
+        "flexibility (overfitting / smear↔bkg degeneracy sink) so the fit's "
+        "only background freedom is the global fractions — an injected GLOBAL "
+        "(f0, f1) must be recovered exactly. bernstein background only.",
     )
     p.add_argument(
         "--detect-anomaly", action="store_true",

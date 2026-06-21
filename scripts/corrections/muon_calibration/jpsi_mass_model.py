@@ -858,6 +858,14 @@ class JpsiMassMixtureModel(nn.Module):
         # where the MLP grows f_bkg in forward |η| bins to absorb tail
         # events the signal model can't broaden into.
         background_enabled: bool = True,
+        # Background fractions as GLOBAL learnable scalars (constant across all
+        # events / conditioning) instead of the per-event MLP f(c). The fractions
+        # are softmax(global_logits) → [n_bkg_comp+1] (signal LAST), broadcast to
+        # every event. Diagnostic mode to remove the MLP's per-event flexibility
+        # (and its overfitting / smear↔bkg degeneracy sink): with the background a
+        # pure pair of global numbers, an injected GLOBAL (f0, f1) must be
+        # recovered exactly — isolating the signal-density / window-normalisation.
+        bkg_global: bool = False,
         # FIT-TIME reco pt selection cuts (GeV). At fixed conditioning pt ∝ m,
         # so a fixed pt cut C on a pt quantity q (observed ratio R=q_obs/m_obs)
         # forbids m < C/R = C·m_obs/q_obs — a per-event LOWER mass edge
@@ -1137,12 +1145,24 @@ class JpsiMassMixtureModel(nn.Module):
         self.bkg_model = str(bkg_model)
         self.bkg_degree = int(bkg_degree)
         self.n_bkg_comp = 1 if bkg_model == "exp" else self.bkg_degree + 1
+        self.bkg_global = bool(bkg_global)
         # Background-fraction MLP conditions on the same kinematics as the
-        # flow (muon_kin), minus the nuisances.
-        self.mlp = MixtureMLP(
-            n_input=N_MUON_KIN, hidden=mlp_hidden, n_layers=mlp_n_layers,
-            n_frac=self.n_bkg_comp + 1, exp_slope=(bkg_model == "exp")
-        )
+        # flow (muon_kin), minus the nuisances. ``bkg_global`` replaces it with a
+        # single global logit vector (constant fractions for all events).
+        if self.bkg_global:
+            if bkg_model == "exp":
+                raise ValueError("bkg_global is only supported for the bernstein "
+                                 "background (global f0..f_{n} fractions)")
+            # softmax over [n_bkg_comp+1] (signal LAST) → constant fractions;
+            # init at uniform (logits 0) so f_sig and each f_bkg start at 1/(n+1).
+            self.bkg_global_logits = nn.Parameter(
+                torch.zeros(self.n_bkg_comp + 1, dtype=torch.float32))
+            self.mlp = None
+        else:
+            self.mlp = MixtureMLP(
+                n_input=N_MUON_KIN, hidden=mlp_hidden, n_layers=mlp_n_layers,
+                n_frac=self.n_bkg_comp + 1, exp_slope=(bkg_model == "exp")
+            )
 
         # Learnable nuisances.
         self.theta_scale = nn.Parameter(
@@ -1567,6 +1587,12 @@ class JpsiMassMixtureModel(nn.Module):
     # ------------------------------------------------------------------
 
     def f_data(self, muon_kin_std: torch.Tensor) -> torch.Tensor:
+        if self.bkg_global:
+            # Constant fractions for every event: softmax(global_logits) → [n+1]
+            # (signal LAST), broadcast to [B, n+1].
+            f = torch.softmax(self.bkg_global_logits, dim=-1)
+            return f.to(muon_kin_std.dtype).unsqueeze(0).expand(
+                muon_kin_std.shape[0], -1)
         return self.mlp(muon_kin_std)
 
     # ------------------------------------------------------------------
@@ -2852,6 +2878,37 @@ class JpsiMassMixtureModel(nn.Module):
             mk_g.reshape(B * G, -1)).reshape(B, G)                      # [B, G]
         return torch.logsumexp(logW.view(1, G) + log_nw, dim=1)         # [B]
 
+    def _pt_lambda_to_mass(self, pto, etao, phio, m_obs, m_target,
+                           n_iter: int = 3):
+        """Per-event pt scale ``λ`` such that ``_event_mll(pt·λ) = m_target`` at
+        fixed (η, φ) — the muon-mass-EXACT inverse of pt∝m.
+
+        Newton from the massless guess ``λ₀ = m_target/m_obs``; the closed-form
+        ``∂m_ll/∂λ = (∂m/∂pt · pt)/λ`` uses ``_dm_dpt_analytic``. Shapes: pto/
+        etao/phio ``[...,2]``; m_obs / m_target broadcastable to the leading dims.
+        3 iters → median ~3e-5 GeV (the muon-mass correction is ~1e-3, Newton is
+        quadratic). Replaces the naive massless ``m_target/m_obs`` scaling whose
+        boundary config lands at an observed mass off by ~(m_μ/m)², shrinking the
+        norm window ~0.035% → signal renorm ~0.5% high → bkg-fraction bias."""
+        lam0 = m_target / m_obs
+        # the true correction is < 0.5%; bound the iterate to ±5% of the massless
+        # guess so rare near-collinear events (∂m/∂pt → 0, Newton overshoots)
+        # stay bounded instead of diverging — a no-op for the bulk.
+        lo, hi = lam0 * 0.95, lam0 * 1.05
+        lam = lam0
+        for _ in range(n_iter):
+            ptl = pto * lam.unsqueeze(-1)
+            mll = _event_mll(ptl, etao, phio)
+            dmdl = ((_dm_dpt_analytic(ptl, etao, phio) * ptl).sum(-1)
+                    / lam.clamp_min(1e-12))
+            lam = torch.maximum(torch.minimum(
+                lam - (mll - m_target) / dmdl.clamp_min(1e-12), hi), lo)
+        # guarantee a STRICT improvement over the massless guess for every event
+        # (the rare overshooters fall back to ≈massless, never worse):
+        err_n = (_event_mll(pto * lam.unsqueeze(-1), etao, phio) - m_target).abs()
+        err_0 = (_event_mll(pto * lam0.unsqueeze(-1), etao, phio) - m_target).abs()
+        return torch.where(err_n <= err_0, lam, lam0)
+
     def _norm_correction_log_Z_gh_qop(self, m_obs, mk, pt_obs, eta_pm, phi_pm,
                                        q_pm, b_pm) -> torch.Tensor:
         """``log Z(θ;c)`` for ``smear_operator='gh_convolution_qop'``, in the
@@ -2897,10 +2954,14 @@ class JpsiMassMixtureModel(nn.Module):
         # the per-event lower edge m_min(c) / m_hi along pt∝m, then un-kicked).
         m_lo_pe = self._fit_cut_m_min(
             m_obs, pt_obs, eta_pm, phi_pm).unsqueeze(1)  # [B,1]
+        # muon-mass-EXACT pt scale to the window boundaries (observed mass at the
+        # boundary config = m_edge exactly), not the massless pt∝m approximation.
+        lam_lo = self._pt_lambda_to_mass(pto, etao, phio, mo, m_lo_pe)
+        lam_hi = self._pt_lambda_to_mass(pto, etao, phio, mo, self._m_hi_f)
         m_t_lo, _ = self._gh_qop_unsmear(
-            pto * (m_lo_pe / mo).unsqueeze(-1), etao, phio, qo, bpo, eps)
+            pto * lam_lo.unsqueeze(-1), etao, phio, qo, bpo, eps)
         m_t_hi, _ = self._gh_qop_unsmear(
-            pto * (self._m_hi_f / mo).unsqueeze(-1), etao, phio, qo, bpo, eps)
+            pto * lam_hi.unsqueeze(-1), etao, phio, qo, bpo, eps)
         mk_g = mk.unsqueeze(1).expand(B, G2, mk.shape[-1]).clone()
         if self.scale_enabled or self.smearing_enabled:
             mk_g = self._node_cond(mk_g, pt_truth_evt, etao, phio, qo)

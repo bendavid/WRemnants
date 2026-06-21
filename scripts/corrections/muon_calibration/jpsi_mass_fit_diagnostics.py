@@ -134,6 +134,7 @@ def load_model_from_checkpoint(checkpoint_path: str, device: str):
         smear_param_form=args.get("smear_param_form", "linear"),
         norm_correction=args.get("norm_correction", "none"),
         background_enabled=not bool(args.get("no_background", False)),
+        bkg_global=bool(args.get("bkg_global", False)),
         # Ratio / exact-rescale cuts are conditioning-fixed → fixed-window
         # normalisation, so the model carries NO per-event m_min edge (matches
         # the fit).
