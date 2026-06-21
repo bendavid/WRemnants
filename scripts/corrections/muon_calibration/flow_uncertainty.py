@@ -95,7 +95,8 @@ import torch
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
 from jpsi_mass_arrow_loader import JpsiMassArrowLoader  # noqa: E402
-from jpsi_mass_fit_diagnostics import load_model_from_checkpoint  # noqa: E402
+from jpsi_mass_fit_diagnostics import (load_model_from_checkpoint,  # noqa: E402
+                                       _fit_select_from)
 import train_jpsi_mass_fit as T  # noqa: E402
 from train_jpsi_mass_fit import _move_batch, discover_shards  # noqa: E402
 
@@ -1088,7 +1089,8 @@ def main(argv=None) -> int:
     fit_loader = JpsiMassArrowLoader(
         shard_files, stats, half=half_fit, inject_theta_scale=inj,
         inject_theta_smear=inj_sm, inject_bkg=inj_bkg,
-        m_window=(ft_lo, ft_hi), inject_prod=inj_prod, **common)
+        m_window=(ft_lo, ft_hi), inject_prod=inj_prod,
+        fit_select=_fit_select_from(targs), **common)
     fm = targs.get("flow_monitor", "train")
     flow_loader = JpsiMassArrowLoader(
         shard_files, stats, half=half_flow,
