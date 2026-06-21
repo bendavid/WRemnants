@@ -634,6 +634,8 @@ def _validation_half(args, which: str) -> "int | None":
         return None
     if getattr(args, "no_validation_split", False):
         return None
+    if which == "fit" and getattr(args, "fit_half", None) is not None:
+        return int(args.fit_half)
     return 0 if which == "flow" else 1
 
 
@@ -2703,7 +2705,10 @@ def train_loop(args: argparse.Namespace) -> int:
         h_flow, h_fit = _validation_half(args, "flow"), _validation_half(args, "fit")
         split_desc = ("stage 1 ← ALL events, stage 2 ← ALL events as pseudo-data "
                       "(no half split per --no-validation-split)" if h_flow is None
-                      else "stage 1 ← half 0, stage 2 ← half 1 as pseudo-data")
+                      else f"stage 1 ← half {h_flow}, stage 2 ← half {h_fit} "
+                      "as pseudo-data"
+                      + ("  [--fit-half: IN-SAMPLE, fit on the flow's training "
+                         "half]" if h_fit == h_flow else ""))
         print(f"\n*** MC-closure validation mode: simulation for both stages "
               f"({split_desc}); target {tgt} ***")
         if inj is not None:
@@ -4363,6 +4368,15 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         "is for closure-machinery testing (recovering an injection) rather "
         "than for representative real-data uncertainty estimates. Default OFF "
         "(disjoint-half split, the standard MC-closure setup).",
+    )
+    p.add_argument(
+        "--fit-half", type=int, default=None, choices=(0, 1),
+        help="In --validation mode, force the stage-2 FIT to use this event "
+        "half instead of the default disjoint half (flow←0, fit←1). Set to 0 "
+        "to fit on the FLOW'S TRAINING half (in-sample) — a diagnostic to "
+        "separate the flow's generalization gap / overtraining from genuine "
+        "model bias (in-sample bias should be much smaller). Overrides only "
+        "the fit stage; the flow still uses half 0.",
     )
     # Inject a known θ_scale shift into the validation pseudo-data (closure with
     # a non-zero target): the stage-2 pseudo-data m_ll is advected by this scale,
