@@ -1222,6 +1222,47 @@ def main(argv=None) -> int:
             torch.ones(i1 - i0, dtype=torch.bool, device=dev), n_iter=n_iter)
         return per, fit_ev["w"][sl]
 
+    # ---- JOINT (--stage joint) flow Fisher: add the DATA term to I_φ --------
+    # In a joint fit the flow φ is constrained by BOTH the sim flow NLL AND the
+    # data calibrated NLL, so the exact joint Hessian is
+    #   H_φφ = sim_weight·(sim flow Fisher) + (data flow Fisher).
+    # The sequential bolt-on uses only the sim term and OVER-estimates the flow
+    # uncertainty. Here we add the data events' flow-score empirical Fisher
+    # (∂ data_nll/∂φ), with the SAME weighting as the joint training (per-event
+    # w; sim scaled by --joint-sim-weight). cov_flow is rescaled by 1/α₁ at the
+    # end (sim sample), while the data subset carries α_fit, so the data term is
+    # pre-scaled by α_fit/α₁ to land at α_fit after the final /α₁. Auto-enabled
+    # for joint checkpoints; for sequential checkpoints I_φ stays sim-only.
+    joint_iphi = (str(targs.get("stage", "")) == "joint")
+    if joint_iphi:
+        sim_weight_j = float(targs.get("joint_sim_weight", 1.0) or 1.0)
+        data_phi_scale = alpha_fit / max(alpha1, 1e-30)
+
+        def _data_efvp_phi(v):
+            h = _efvp(fit_per_event, flow_params, n_fit, args.eval_chunk,
+                      _unpack_phi(v))
+            return torch.cat([x.reshape(-1) for x in h]).double()
+
+        def _data_efvp_phi_batch(V):
+            return _efvp_batch(fit_per_event, flow_params, n_fit,
+                               args.eval_chunk, V, offs_phi)
+
+        _sim_raw_phi = raw_phi
+        _sim_efvp_phi_batch = efvp_phi_batch
+
+        def raw_phi(v, _s=_sim_raw_phi, _w=sim_weight_j, _ds=data_phi_scale):
+            return _w * _s(v) + _ds * _data_efvp_phi(v)
+
+        def efvp_phi_batch(V, _s=_sim_efvp_phi_batch, _w=sim_weight_j,
+                           _ds=data_phi_scale):
+            return _w * _s(V) + _ds * _data_efvp_phi_batch(V)
+
+        print(f"  JOINT I_φ: H_φφ = {sim_weight_j:g}·(sim flow Fisher) + (data "
+              f"flow Fisher) — exact joint Hessian (data also constrains φ; "
+              f"data pre-scale α_fit/α₁={data_phi_scale:.4f})")
+    else:
+        print("  SEQUENTIAL I_φ: H_φφ = sim flow Fisher only (frozen-flow bolt-on)")
+
     # ---- stationarity check: ‖∂L₂/∂w‖ at the checkpoint -------------------
     # The covariance is only meaningful if the fit is at a stationary point
     # (∂L₂/∂w ≈ 0); a large QoI-block gradient means the fit did not converge.

@@ -2633,6 +2633,287 @@ def train_stage2(args, model, train_loader, val_loader, stats,
                        precision=_stage_precision(args, "fit"))
 
 
+class _JointLoader:
+    """Pair a simulation loader (flow NLL) and a data loader (calibrated NLL)
+    into combined per-step batches keyed ``s_*`` / ``d_*``, so EVERY optimiser
+    step mixes BOTH classes — the joint gradient ∇L_sim + ∇L_data is applied at
+    each step. That is what robustly breaks the flow↔θ degeneracy: a coarse
+    single-class run of batches would let φ drift to absorb the calibration with
+    no sim correction. The shorter loader is CYCLED so every step stays paired
+    (no single-class block).
+
+    Cycling alone would over-weight the shorter class — but ``step_joint``
+    renormalises each class's per-event weights PER BATCH to its fixed total
+    (Σw_sim / Σw_data), so the weighting is cycle-invariant and stays the natural
+    N_sim:N_data of the input samples regardless of how many times a batch
+    repeats. ``_move_batch`` handles the ``s_*``/``d_*`` keys generically."""
+
+    def __init__(self, sim_loader, data_loader):
+        self.sim = sim_loader
+        self.data = data_loader
+
+    def __iter__(self):
+        si = iter(self.sim)
+        di = iter(self.data)
+        s_done = d_done = False
+        while not (s_done and d_done):
+            sb = next(si, None)
+            if sb is None:
+                s_done = True
+                si = iter(self.sim)
+                sb = next(si, None)
+            db = next(di, None)
+            if db is None:
+                d_done = True
+                di = iter(self.data)
+                db = next(di, None)
+            if sb is None or db is None:   # an empty loader → nothing to pair
+                break
+            out = {("s_" + k): v for k, v in sb.items()}
+            out.update({("d_" + k): v for k, v in db.items()})
+            yield out
+
+
+def _joint_match_sim_loader(args, shard_files, stats, sim_loader, data_loader,
+                            half_flow, flow_win, *, mc_as_data):
+    """For --stage joint: count events in the sim (flow) and data loaders and
+    rebuild the sim loader with a batch size that matches the DATA loader's batch
+    COUNT (sim_bs ≈ data_bs · N_sim/N_data). With matched batch counts the 1:1
+    pairing in _JointLoader needs (almost) no cycling, so the flow is not
+    re-evaluated on cycled batches — the 1-sim-to-r-data efficiency, but memory-
+    safe (no batch concatenation, so the calibrated-NLL backward graph through the
+    flow stays one data-batch wide). Returns (rebuilt_sim_loader, Σw_sim, Σw_data)
+    — the Σw are passed on so train_stage_joint skips its own count pass."""
+    n_sim = 0
+    w_sim = 0.0
+    for b in sim_loader:
+        m = ~b["is_data_mask"]
+        n_sim += int(m.sum())
+        w_sim += float(b["w"][m].sum())
+    n_data = 0
+    w_data = 0.0
+    for b in data_loader:
+        m = (~b["is_data_mask"] if mc_as_data else b["is_data_mask"])
+        n_data += int(m.sum())
+        w_data += float((b["w"] * m.to(b["w"].dtype)).sum())
+    data_bs = int(getattr(args, "fit_batch_size", 0) or args.batch_size)
+    matched = max(1, int(round(data_bs * n_sim / max(n_data, 1))))
+    print(f"  joint batch-count match: N_sim={n_sim:,} N_data={n_data:,} "
+          f"data_bs={data_bs:,} → sim batch_size {matched:,} "
+          f"(n_sim_batches ≈ n_data_batches ≈ {max(1, n_data // data_bs)}; "
+          f"1:1 pairing, ~no cycling → flow evaluated once/epoch)")
+    new_sim, _ = _make_loaders(args, shard_files, stats, half=half_flow,
+                               val_fraction=0.0, holdout_fraction=0.0,
+                               m_window=flow_win, batch_size=matched)
+    return new_sim, w_sim, w_data
+
+
+def train_stage_joint(args, model, sim_loader, data_loader, stats,
+                      *, mc_as_data: bool = False,
+                      w_sim: float = None, w_data: float = None) -> float:
+    """JOINT (simultaneous) training: one optimiser over (flow φ, θ_scale,
+    θ_smear, background), with the two event classes kept distinct —
+
+      • simulation  → flow NLL  ``-log p₀(m|c)``          (anchors the template)
+      • data        → calibrated NLL  ``-log[f_sig·p_θ + bkg]``  (drives θ, bkg)
+
+    EVERY optimiser step mixes both classes (``_JointLoader`` pairs a sim and a
+    data batch per step), so the joint gradient ∇L_sim+∇L_data is applied each
+    step — both terms backprop to the SHARED flow φ. The simulation term pins φ
+    to the (uncalibrated) MC shape, so φ cannot absorb the calibration without
+    paying the sim likelihood → the flow↔θ degeneracy is broken structurally, the
+    same way the disjoint two-stage setup breaks it. This is the profile-
+    likelihood form (φ = nuisance constrained by the MC control sample, θ = POI);
+    the flow statistical uncertainty propagates into Cov(θ) self-consistently.
+
+    Weighting: NATURAL N_sim:N_data — a one-time count pass gets Σw_sim/Σw_data
+    and ``step_joint`` renormalises each class per batch to its total, so the
+    weighting is the input event ratio (cycle-invariant). ``--joint-sim-weight``
+    (default 1.0 = events as-is) scales the sim anchor. Compile: ``--compile``
+    fuses the flow density (sim part), ``--fit-compile`` the calibrated NLL (data
+    part). NCE flows are not supported (different loss)."""
+    src = "MC pseudo-data" if mc_as_data else "data"
+    print(f"\n=== JOINT stage: flow(sim) + θ/bkg(calibrated {src}) — shared φ, "
+          f"one optimiser ===")
+    if getattr(model, "flow_is_nce", False):
+        raise NotImplementedError("--stage joint does not support the NCE flow "
+                                  "(its loss is a paired BCE, not -log p₀).")
+    compact = getattr(model, "flow_is_compact", False)
+    dcb = getattr(model, "flow_is_dcb", False)
+    ege = getattr(model, "flow_is_ege", False)
+    mixture = getattr(model, "flow_is_mixture", False)
+    window_norm = ((not getattr(args, "no_flow_window_norm", False))
+                   and not compact and not dcb and not ege)
+    gauge_lambda = (float(getattr(args, "flow_gauge_penalty", 0.0) or 0.0)
+                    if window_norm else 0.0)
+    sim_weight = float(getattr(args, "joint_sim_weight", 1.0) or 1.0)
+
+    # The flow is TRAINABLE here (not frozen as in stage 2).
+    for p in model.flow.parameters():
+        p.requires_grad_(True)
+    # θ / background init — mirror stage 2.
+    a0 = float(getattr(args, "init_theta_a", 0.0))
+    c0 = float(getattr(args, "init_theta_c", 0.0))
+    with torch.no_grad():
+        if model.theta_mode != "mlp":
+            model.theta_scale.zero_()
+            if a0 != 0.0 or c0 != 0.0:
+                model.theta_smear[:, 0].fill_(a0)
+                model.theta_smear[:, 1].fill_(c0)
+
+    groups = [{"params": list(model.flow.parameters()),
+               "lr": float(getattr(args, "joint_flow_lr", None) or args.lr)}]
+    tags = ["flow"]
+    _bkg_global = getattr(model, "bkg_global", False)
+    _bkg_params = (lambda: [model.bkg_global_logits]) if _bkg_global \
+        else (lambda: list(model.mlp.parameters()))
+    if model.background_enabled:
+        groups.append({"params": _bkg_params(), "lr": args.fit_mlp_lr})
+        tags.append("f0f1_global" if _bkg_global else "mlp")
+    else:
+        for p in _bkg_params():
+            p.requires_grad_(False)
+    if model.theta_mode == "mlp":
+        groups.append({"params": model.theta_net.parameters(),
+                       "lr": args.fit_theta_mlp_lr})
+        tags.append("θ_net")
+    else:
+        if not args.disable_scale:
+            groups.append({"params": [model.theta_scale], "lr": args.fit_scale_lr})
+            tags.append("θ_scale")
+        if not args.disable_smearing:
+            groups.append({"params": [model.theta_smear], "lr": args.fit_smear_lr})
+            tags.append("θ_smear")
+    print(f"  optimizer groups: {', '.join(tags)}  (flow lr="
+          f"{groups[0]['lr']:g} mlp={args.fit_mlp_lr:g} scale={args.fit_scale_lr:g} "
+          f"smear={args.fit_smear_lr:g}); sim-anchor weight={sim_weight:g}")
+
+    # --- compile the FLOW density (sim step), same wrapper as stage 1 ---
+    compiled_inwindow = None
+    if getattr(args, "compile", False):
+        _persistent_inductor_cache()
+        if compact:
+            compiled_inwindow = torch.compile(model.flow.forward_inwindow)
+            print("  --compile: compact in-window density compiled (sim step)")
+        elif dcb or ege or mixture:
+            compiled_inwindow = torch.compile(model.flow.forward)
+            print(f"  --compile: "
+                  f"{'DCB' if dcb else 'EGE' if ege else 'mixture'} density "
+                  f"compiled (sim step)")
+        else:
+            print(f"  --compile: flow density NOT compiled for arch "
+                  f"{model.flow_arch} (untraceable); sim step runs eager")
+
+    def _flow_logp(m, mk):
+        if compiled_inwindow is not None:
+            m_std = model._standardise_mll(m).clamp(
+                -MLL_STD_FLOW_CLAMP, MLL_STD_FLOW_CLAMP)
+            return compiled_inwindow(m_std, mk) - model.mll_log_scale
+        return model.log_p_nominal(m, mk)
+
+    # --- compile the CALIBRATED NLL (data step), same wrapper as stage 2 ---
+    nll_fn = model.data_nll_continuity
+    if getattr(args, "fit_compile", False):
+        _persistent_inductor_cache()
+        from jpsi_mass_model import _gh_nodes, bernstein_basis_n
+        dev_t = next(model.parameters()).device
+        dt_t = _model_dtype(model) or torch.float32
+        for ng_warm in {1, int(args.n_gh_nodes)}:
+            _gh_nodes(ng_warm, dev_t, dt_t)
+        if model.background_enabled and model.bkg_model == "bernstein":
+            bernstein_basis_n(torch.zeros(1, device=dev_t, dtype=dt_t),
+                              model._m_lo_f, model._m_hi_f, model.bkg_degree)
+        compiled_nll = torch.compile(model.data_nll_continuity, fullgraph=False)
+        fc_chunk = int(getattr(args, "fit_compile_chunk", 65536) or 0)
+
+        def nll_fn(mll, pt, eta, phi, q, b, cond, mask, n_iter=2):
+            n = mll.shape[0]
+            if fc_chunk <= 0 or n <= fc_chunk:
+                return compiled_nll(mll, pt, eta, phi, q, b, cond, mask,
+                                    n_iter=n_iter)
+            return torch.cat([
+                compiled_nll(mll[i:i + fc_chunk], pt[i:i + fc_chunk],
+                             eta[i:i + fc_chunk], phi[i:i + fc_chunk],
+                             q[i:i + fc_chunk], b[i:i + fc_chunk],
+                             cond[i:i + fc_chunk], mask[i:i + fc_chunk],
+                             n_iter=n_iter)
+                for i in range(0, n, fc_chunk)])
+
+        print(f"  --fit-compile: torch.compile(data_nll_continuity) (data step), "
+              f"event chunk {fc_chunk or 'off'}")
+
+    # Natural sim:data weighting (Σw per class). Reused from the batch-count
+    # match pass when provided; else a one-time count pass (pure I/O, no model).
+    # The per-batch renormalisation in step_joint uses these so any residual
+    # cycling does NOT change the weighting; the epoch-total stays Σw_sim : Σw_data
+    # = the natural N_sim:N_data.
+    if w_sim is None or w_data is None:
+        print("  counting events for natural sim:data weighting (one-time pass)...")
+        W_sim = 0.0
+        for b in sim_loader:
+            W_sim += float(b["w"][~b["is_data_mask"]].sum())
+        W_data = 0.0
+        for b in data_loader:
+            dm = (~b["is_data_mask"] if mc_as_data else b["is_data_mask"])
+            W_data += float((b["w"] * dm.to(b["w"].dtype)).sum())
+    else:
+        W_sim, W_data = float(w_sim), float(w_data)
+    W_sim = max(W_sim, 1e-30) * sim_weight
+    W_data = max(W_data, 1e-30)
+    print(f"  Σw_sim={W_sim/max(sim_weight,1e-30):.4e}  Σw_data={W_data:.4e}  → "
+          f"sim:data anchor weight = {W_sim/W_data:.4f}  (sim_weight={sim_weight:g})")
+
+    def step_joint(model, batch):
+        # PAIRED batch: every step mixes both classes → the joint gradient
+        # ∇L_sim+∇L_data is applied each step (robust degeneracy breaking).
+        # Each class's per-event weights are renormalised to its fixed total
+        # (W_sim / W_data) so cycling the shorter loader is weight-invariant and
+        # the sim:data ratio stays natural.
+        # --- simulation part → flow NLL (anchors φ) ---
+        s_idx = (~batch["s_is_data_mask"]).nonzero(as_tuple=True)[0]
+        m = batch["s_mll"][s_idx]
+        mk = batch["s_cond_std"][s_idx]
+        logp = _flow_logp(m, mk)
+        log_Z = None
+        if window_norm:
+            log_Z = model._flow_log_window_Z(
+                m.new_full(m.shape, model._flow_m_lo_f),
+                m.new_full(m.shape, model._flow_m_hi_f), mk)
+            logp = logp - log_Z
+        per_sim = -logp.double()
+        if window_norm and gauge_lambda > 0.0:
+            per_sim = per_sim + gauge_lambda * (log_Z.double() ** 2)
+        ws = batch["s_w"][s_idx].double()
+        w_sim = ws * (W_sim / ws.sum().clamp_min(1e-30))     # batch Σ → W_sim
+        # --- data part → calibrated NLL (drives θ, bkg; backprops to φ) ---
+        d_mask = (~batch["d_is_data_mask"] if mc_as_data
+                  else batch["d_is_data_mask"])
+        per_data = nll_fn(batch["d_mll"], batch["d_pt_pm"], batch["d_eta_pm"],
+                          batch["d_phi_pm"], batch["d_q_pm"], batch["d_b_pm"],
+                          batch["d_cond_std"], d_mask,
+                          n_iter=args.continuity_n_iter).double()
+        wd = (batch["d_w"] * d_mask.to(batch["d_w"].dtype)).double()
+        w_data = wd * (W_data / wd.sum().clamp_min(1e-30))   # batch Σ → W_data
+        # Combined weighted-mean NLL; backward gives the natural-ratio joint grad.
+        per = torch.cat([per_sim, per_data])
+        w = torch.cat([w_sim, w_data])
+        sw = float(w.sum().clamp_min(1e-30))
+        pd = per.detach()
+        return ((w * per).sum() / sw, sw,
+                float((w * pd * pd).sum()), float((w * w).sum()))
+
+    joint_loader = _JointLoader(sim_loader, data_loader)
+    optim = _make_fit_optimizer(args, groups)
+    print(f"  optimizer: {getattr(args, 'fit_optimizer', 'adam')} "
+          f"(joint over flow+θ+bkg)")
+    # Joint trains the flow from scratch too, so it needs the flow's epoch budget.
+    max_epochs = getattr(args, "flow_epochs", 0) or args.epochs
+    return _run_epochs(args, model, optim, joint_loader, None, stats,
+                       step_fn=step_joint, ckpt_prefix="fit", stage_name="joint",
+                       epochs=max_epochs, monitor="train",
+                       precision=_stage_precision(args, "fit"))
+
+
 def train_loop(args: argparse.Namespace) -> int:
     """The two-stage continuity pipeline (stage 1 flow → stage 2 fit)."""
     device = args.device
@@ -2782,6 +3063,27 @@ def train_loop(args: argparse.Namespace) -> int:
         # were already loaded into the model above; same casting applies.
         _apply_stage_precision(args, model, "fit")
         train_stage2(args, model, s2_train, s2_val, stats, mc_as_data=args.validation)
+        if args.fisher_info:
+            _run_fisher_continuity(args, model, shard_files, stats, device)
+        if args.empirical_fisher or getattr(args, "output_fisher", False):
+            _run_empirical_fisher(args, model, shard_files, stats, device)
+        if args.bootstrap > 0:
+            run_bootstrap_continuity(args, model, shard_files, stats, device,
+                                     mc_as_data=args.validation)
+    if args.stage == "joint":
+        # Simultaneous flow+θ training: one optimiser, simulation→flow NLL +
+        # data→calibrated NLL, shared φ (the MC anchors φ; degeneracy broken).
+        _apply_stage_precision(args, model, "fit")
+        # Match the sim (flow) batch COUNT to the data batch count → 1:1 pairing
+        # with ~no cycling, so the flow is evaluated once/epoch (1-sim-to-r-data
+        # efficiency; memory-safe). Also returns Σw for the natural weighting.
+        _hf = _validation_half(args, "flow")
+        _fw = _stage_windows(args, stats)[0]
+        s1_train, _wsim, _wdata = _joint_match_sim_loader(
+            args, shard_files, stats, s1_train, s2_train, _hf, _fw,
+            mc_as_data=args.validation)
+        train_stage_joint(args, model, s1_train, s2_train, stats,
+                          mc_as_data=args.validation, w_sim=_wsim, w_data=_wdata)
         if args.fisher_info:
             _run_fisher_continuity(args, model, shard_files, stats, device)
         if args.empirical_fisher or getattr(args, "output_fisher", False):
@@ -4328,14 +4630,32 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     )
     # Two-stage continuity pipeline.
     p.add_argument(
-        "--stage", choices=["both", "flow", "fit", "uncertainties"],
+        "--stage", choices=["both", "flow", "fit", "joint", "uncertainties"],
         default="both",
         help="Two-stage continuity training: 'flow' = stage 1 (nominal flow on "
         "simulation, no θ conditioning); 'fit' = stage 2 (freeze flow, fit θ + "
         "background on data via the analytic continuity tilt); 'both' = run 1 "
-        "then 2 in-process (default); 'uncertainties' = load an existing FULL fit "
+        "then 2 in-process (default); 'joint' = SIMULTANEOUS — one optimiser over "
+        "(flow φ, θ, background), simulation rows contribute the flow NLL and data "
+        "rows the calibrated NLL, both backprop to the shared φ (the MC anchors φ "
+        "so the flow↔θ degeneracy is still broken; folds the flow uncertainty into "
+        "Cov(θ) self-consistently); 'uncertainties' = load an existing FULL fit "
         "from --checkpoint and run only the Fisher info (--fisher-info) and/or "
         "warm-start bootstrap (--bootstrap), no training.",
+    )
+    p.add_argument(
+        "--joint-flow-lr", type=float, default=None,
+        help="(--stage joint) Learning rate for the flow parameter group "
+        "(default: --lr). The θ/background groups keep their fit lrs "
+        "(--fit-scale-lr / --fit-smear-lr / --fit-mlp-lr).",
+    )
+    p.add_argument(
+        "--joint-sim-weight", type=float, default=1.0,
+        help="(--stage joint) Per-event multiplier on the simulation flow-NLL "
+        "term — sets the strength of the MC anchor on the shared flow relative "
+        "to the data calibrated-NLL. Default 1.0 (event-proportional). The "
+        "degeneracy breaking is robust to this; raise it to anchor φ harder to "
+        "the MC shape.",
     )
     p.add_argument(
         "--checkpoint", type=str, default=None,
