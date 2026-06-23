@@ -2317,12 +2317,30 @@ class JpsiMassMixtureModel(nn.Module):
         #    shift alone.
         pt_truth = pt_s
         if self.smearing_enabled:
-            qop_truth = qop_s
-            for _ in range(3):
-                sig = (self._qop_var_pm(etao, phio, bpo, pt_truth).clamp_min(0.0)
-                       + 1e-14).sqrt()
-                qop_truth = qop_s - sig * eps
-                pt_truth = self._qop_new_to_pt(qop_s, qop_truth, qo, sinth)
+            # Closed-form un-smear (replaces the 3-step fixed point). The fixed
+            # point ``qop_t = qop_s − ξ·σ(qop_t)`` with the signed variance
+            # ``σ² = max(0, a_eff + β·qop_t²) + floor`` (a_eff = a·SCALE_A,
+            # β = c·SCALE_C/sinθ², since k = 1/pt = |qop_t|/sinθ) is, on the
+            # broadening (σ²≥0) branch, a QUADRATIC in qop_t:
+            #   (1−ξ²β)·qop_t² − 2 qop_s·qop_t + (qop_s² − ξ²(a_eff+floor)) = 0.
+            # Physical (small-kick) root  qop_t = (qop_s − ξ·R)/(1−ξ²β),
+            #   R = √[(a_eff+floor)(1−ξ²β) + β·qop_s²].
+            # Where σ²<0 at that root the kick collapses to the floor branch
+            # (≈ qop_s). No iteration → no non-convergence. (ξ²β ≥ 1 is the
+            # no-stable-un-kick regime — smear-curvature growth ≥ the kick scale;
+            # the clamp_min on the leading coef keeps qop_t bounded there.)
+            ac = self._smear_ac_pm(etao, phio, bpo)
+            a_eff = ac[..., 0] * SMEAR_VAR_SCALE_A
+            c_eff = ac[..., 1] * SMEAR_VAR_SCALE_C
+            floor = 1e-14
+            beta = c_eff / (sinth * sinth).clamp_min(1e-12)
+            Au = (1.0 - eps * eps * beta).clamp_min(1e-4)
+            Rarg = ((a_eff + floor) * Au + beta * qop_s * qop_s).clamp_min(0.0)
+            qop_b = (qop_s - eps * Rarg.sqrt()) / Au
+            var_b = a_eff + beta * qop_b * qop_b
+            qop_sharp = qop_s - eps * (floor ** 0.5)
+            qop_truth = torch.where(var_b >= 0.0, qop_b, qop_sharp)
+            pt_truth = self._qop_new_to_pt(qop_s, qop_truth, qo, sinth)
             qop_fin = qop_truth
             if with_dlam:
                 # Implicit-function Jacobian of the smear stage at the truncated
@@ -2883,28 +2901,46 @@ class JpsiMassMixtureModel(nn.Module):
         """Per-event pt scale ``λ`` such that ``_event_mll(pt·λ) = m_target`` at
         fixed (η, φ) — the muon-mass-EXACT inverse of pt∝m.
 
-        Newton from the massless guess ``λ₀ = m_target/m_obs``; the closed-form
-        ``∂m_ll/∂λ = (∂m/∂pt · pt)/λ`` uses ``_dm_dpt_analytic``. Shapes: pto/
-        etao/phio ``[...,2]``; m_obs / m_target broadcastable to the leading dims.
-        3 iters → median ~3e-5 GeV (the muon-mass correction is ~1e-3, Newton is
-        quadratic). Replaces the naive massless ``m_target/m_obs`` scaling whose
-        boundary config lands at an observed mass off by ~(m_μ/m)², shrinking the
-        norm window ~0.035% → signal renorm ~0.5% high → bkg-fraction bias."""
+        CLOSED FORM (no iteration). With pt→λ·pt, ``m²(λ) = 2m_μ² + 2(E₁E₂ − Cλ²)``
+        where ``Eᵢ = √(λ²aᵢ + m_μ²)``, ``aᵢ = pᵢ² = (pt_i·cosh η_i)²`` and
+        ``C = p₁·p₂``. Isolating the single root ``√(E₁E₂)`` and squaring ONCE
+        gives a quadratic in ``u = λ²``:
+
+            ``(C² − a₁a₂)·u² + (2DC − m_μ²(a₁+a₂))·u + (D² − m_μ⁴) = 0``,
+            ``D = (m_target² − 2m_μ²)/2``.
+
+        ``C² ≤ a₁a₂`` (Cauchy–Schwarz) ⇒ leading coef ≤ 0, and ``D²−m_μ⁴ > 0`` ⇒
+        the product of the roots is < 0, so there is EXACTLY ONE positive root and
+        the discriminant is always ≥ 0 (no complex/branch issues). Pick the root
+        nearest the massless guess ``λ₀² = (m_target/m_obs)²`` (collinear |Aq|→0:
+        the linear root). Replaces the bounded Newton — no iteration, no
+        non-convergence. Shapes: pto/etao/phio ``[...,2]``; m_obs/m_target
+        broadcastable. (``n_iter`` kept for signature compatibility; unused.)"""
+        mu2 = MUON_MASS_GEV * MUON_MASS_GEV
+        px = pto * torch.cos(phio)
+        py = pto * torch.sin(phio)
+        pz = pto * torch.sinh(etao)
+        a_pm = px * px + py * py + pz * pz                    # [...,2] = pᵢ²
+        a1, a2 = a_pm[..., 0], a_pm[..., 1]
+        C = (px[..., 0] * px[..., 1] + py[..., 0] * py[..., 1]
+             + pz[..., 0] * pz[..., 1])                       # p₁·p₂
+        D = 0.5 * (m_target * m_target - 2.0 * mu2)
+        Aq = C * C - a1 * a2                                  # ≤ 0
+        Bq = 2.0 * D * C - mu2 * (a1 + a2)
+        Cq = D * D - mu2 * mu2
+        disc = (Bq * Bq - 4.0 * Aq * Cq).clamp_min(0.0)      # ≥ 0 by construction
+        sq = disc.sqrt()
+        u0 = (m_target / m_obs) ** 2
+        safe = Aq.abs() > 1e-30
+        denom = torch.where(safe, 2.0 * Aq, torch.ones_like(Aq))
+        r1 = (-Bq - sq) / denom
+        r2 = (-Bq + sq) / denom
+        u_quad = torch.where((r1 - u0).abs() <= (r2 - u0).abs(), r1, r2)
+        u_lin = -Cq / torch.where(Bq.abs() > 1e-30, Bq, torch.ones_like(Bq))
+        u = torch.where(safe, u_quad, u_lin).clamp_min(1e-12)
+        lam = u.sqrt()
+        # strict-improvement guard vs the massless guess (defensive; never worse).
         lam0 = m_target / m_obs
-        # the true correction is < 0.5%; bound the iterate to ±5% of the massless
-        # guess so rare near-collinear events (∂m/∂pt → 0, Newton overshoots)
-        # stay bounded instead of diverging — a no-op for the bulk.
-        lo, hi = lam0 * 0.95, lam0 * 1.05
-        lam = lam0
-        for _ in range(n_iter):
-            ptl = pto * lam.unsqueeze(-1)
-            mll = _event_mll(ptl, etao, phio)
-            dmdl = ((_dm_dpt_analytic(ptl, etao, phio) * ptl).sum(-1)
-                    / lam.clamp_min(1e-12))
-            lam = torch.maximum(torch.minimum(
-                lam - (mll - m_target) / dmdl.clamp_min(1e-12), hi), lo)
-        # guarantee a STRICT improvement over the massless guess for every event
-        # (the rare overshooters fall back to ≈massless, never worse):
         err_n = (_event_mll(pto * lam.unsqueeze(-1), etao, phio) - m_target).abs()
         err_0 = (_event_mll(pto * lam0.unsqueeze(-1), etao, phio) - m_target).abs()
         return torch.where(err_n <= err_0, lam, lam0)
