@@ -3009,6 +3009,55 @@ class JpsiMassMixtureModel(nn.Module):
             m_t_lo.reshape(-1), m_t_hi.reshape(-1), mkf).reshape(B, G2)
         return torch.logsumexp(logW2.view(1, G2) + log_nw, dim=1)       # [B]
 
+    @torch.no_grad()
+    def _signal_cdf_gh_qop(self, m_edges, m_obs, mk, pt_obs, eta_pm, phi_pm,
+                           q_pm, b_pm):
+        """Calibrated-SIGNAL cumulative ``F_cal(x|c,θ) = Σ_i W_i F₀(m_t(x,ξ_i)|ρ_node)``
+        (UN-normalised) at the masses ``m_edges`` ``[B, E]``, for
+        ``smear_operator='gh_convolution_qop'`` at the model's CURRENT θ.
+
+        Same un-kick as ``_norm_correction_log_Z_gh_qop`` (and the density
+        operator), evaluated at arbitrary masses instead of just the window
+        boundaries: scale the observed config to mass x (muon-mass-exact
+        ``_pt_lambda_to_mass``), un-kick to the per-node nominal mass m_t, and take
+        the GH-weighted flow CDF. The per-bin signal MASS is then
+        ``F_cal(edge_{j+1}) − F_cal(edge_j)``; dividing by the per-event window Z
+        (``exp(_norm_correction_log_Z_gh_qop)``) gives the window-normalised mass
+        the data NLL uses. This is the INTEGRATED analogue of the #2 density tilt —
+        it integrates the flow's razor-thin Jacobian near-singularities exactly,
+        which a density point-eval over-counts. Returns ``[B, E]``."""
+        B = m_obs.shape[0]
+        E = m_edges.shape[1]
+        ng = self.n_gh_nodes if self.smearing_enabled else 1
+        xi, logW = _gh_nodes(ng, m_obs.device, m_obs.dtype)
+        G = xi.shape[0]
+        G2 = G * G
+        xi_p = xi.view(G, 1).expand(G, G).reshape(G2)
+        xi_m = xi.view(1, G).expand(G, G).reshape(G2)
+        logW2 = (logW.view(G, 1) + logW.view(1, G)).reshape(G2)
+        eps = torch.stack([xi_p, xi_m], dim=-1).view(1, G2, 2)
+        mo = m_obs.unsqueeze(1)
+        pto = pt_obs.unsqueeze(1)
+        etao = eta_pm.unsqueeze(1)
+        phio = phi_pm.unsqueeze(1)
+        qo = q_pm.unsqueeze(1)
+        bpo = b_pm.unsqueeze(1)
+        # Per-node nominal conditioning at the EVENT mass (the window integral is at
+        # fixed event conditioning — same convention as the norm correction).
+        _, pt_truth_evt = self._gh_qop_unsmear(pto, etao, phio, qo, bpo, eps)
+        mk_g = mk.unsqueeze(1).expand(B, G2, mk.shape[-1]).clone()
+        if self.scale_enabled or self.smearing_enabled:
+            mk_g = self._node_cond(mk_g, pt_truth_evt, etao, phio, qo)
+        mkf = mk_g.reshape(B * G2, -1)
+        out = m_obs.new_empty((B, E))
+        for j in range(E):
+            lam = self._pt_lambda_to_mass(pto, etao, phio, mo, m_edges[:, j:j + 1])
+            m_t, _ = self._gh_qop_unsmear(
+                pto * lam.unsqueeze(-1), etao, phio, qo, bpo, eps)
+            log_cdf = self._flow_log_cdf(m_t.reshape(-1), mkf).reshape(B, G2)
+            out[:, j] = torch.logsumexp(logW2.view(1, G2) + log_cdf, dim=1).exp()
+        return out
+
     def data_nll_continuity(
         self,
         mll: torch.Tensor,

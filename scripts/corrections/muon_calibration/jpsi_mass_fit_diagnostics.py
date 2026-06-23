@@ -254,7 +254,8 @@ def _tilt_density_on_grid(
 
 @torch.no_grad()
 def _nominal_density_on_grid(model, batch, idx, m_centers_dev, *, chunk_events=4096,
-                             density_ceil: float = _DIAG_DENSITY_CEIL):
+                             density_ceil: float = _DIAG_DENSITY_CEIL,
+                             norm_window=None):
     """``[len(idx), n_grid]`` log p₀(m_grid | c) — the *nominal* (θ=0) flow
     density, i.e. the stage-1 template with no scale/smear correction. Point
     evaluations of the frozen flow at the grid masses.
@@ -298,8 +299,14 @@ def _nominal_density_on_grid(model, batch, idx, m_centers_dev, *, chunk_events=4
     # flow (Z≈1); required once the flow is window-normalized (Z≠1). Uses the
     # observed (θ=0) conditioning.
     if getattr(model, "norm_correction", "none") != "none":
-        m_hi = mk.new_full((n,), float(model.m_hi))
-        m_lo = mk.new_full((n,), float(model.m_lo))
+        # Window over which the nominal flow density is renormalised. Default =
+        # the model's fit window; pass norm_window=(lo,hi) to renormalise over a
+        # WIDER range (the standalone wide-window flow-validation plot) so the
+        # curve and the MC histogram share the same [lo,hi] normalisation.
+        _whi = float(model.m_hi) if norm_window is None else float(norm_window[1])
+        _wlo = float(model.m_lo) if norm_window is None else float(norm_window[0])
+        m_hi = mk.new_full((n,), _whi)
+        m_lo = mk.new_full((n,), _wlo)
         # STABLE log window mass: the naive exp-difference of CDFs collapses
         # to the clamp once the (gauge-free) window mass drifts below the fp32
         # floor — the nominal curve then explodes by e⁶⁹·Z_true (the e21-scale
@@ -308,6 +315,65 @@ def _nominal_density_on_grid(model, batch, idx, m_centers_dev, *, chunk_events=4
         out = out - logZ.view(n, 1)
     if np.isfinite(density_ceil):
         out = torch.clamp(out, max=float(np.log(density_ceil)))     # display-only spike guard
+    return out
+
+
+@torch.no_grad()
+def _nominal_cdf_mass_on_bins(model, batch, idx, m_centers_dev, bin_width, *,
+                              norm_window=None):
+    """Per-event nominal-flow MASS per bin, ``F₀(edge_{j+1}|c) − F₀(edge_j|c)``,
+    renormalised over ``norm_window`` (default the model fit window). ``[n, n_bins]``.
+
+    This is the INTEGRATED counterpart of ``_nominal_density_on_grid`` and the
+    PROPER comparison to the MC histogram (which is itself binned mass/counts): it
+    integrates the flow's razor-thin Jacobian near-singularities to their true
+    (~0) mass, whereas a density point-eval × bin-width grossly over-counts them.
+    Uses the FIXED muon_kin conditioning (exact for muon_kin; for event_level the
+    per-mass conditioning recompute is ignored — use the density curve there)."""
+    mk = batch["cond_std"][idx]
+    n = idx.shape[0]
+    edges = torch.cat([m_centers_dev - 0.5 * bin_width,
+                       m_centers_dev[-1:] + 0.5 * bin_width])        # [n_bins+1]
+    F = torch.stack([model._flow_log_cdf(edges[j].expand(n), mk).exp()
+                     for j in range(edges.shape[0])], dim=1)         # [n, n_bins+1]
+    mass = (F[:, 1:] - F[:, :-1]).clamp_min(0.0)                     # [n, n_bins]
+    wlo = float(model.m_lo) if norm_window is None else float(norm_window[0])
+    whi = float(model.m_hi) if norm_window is None else float(norm_window[1])
+    Z = (model._flow_log_cdf(mk.new_full((n,), whi), mk).exp()
+         - model._flow_log_cdf(mk.new_full((n,), wlo), mk).exp()).clamp_min(1e-30)
+    return mass / Z.view(n, 1)
+
+
+@torch.no_grad()
+def _tilt_signal_mass_on_bins(model, batch, idx, m_centers_dev, bin_width, *,
+                              chunk_events=2048):
+    """Per-event CALIBRATED-SIGNAL mass per bin via the analytic gh_qop CDF:
+    ``(F_cal(edge_{j+1}) − F_cal(edge_j)) / Z`` at the model's current θ, window-
+    normalised over the fit window (same Z the data NLL uses). The integrated
+    counterpart of the #2 density tilt (``_tilt_density_on_grid``) — it integrates
+    the flow's razor-thin Jacobian features exactly, which a density point-eval
+    over-counts. ``smear_operator='gh_convolution_qop'`` ONLY (callers fall back to
+    the density × bin-width curve for other operators). Returns ``[n, n_bins]``."""
+    n = idx.shape[0]
+    G = m_centers_dev.shape[0]
+    edges = torch.cat([m_centers_dev - 0.5 * bin_width,
+                       m_centers_dev[-1:] + 0.5 * bin_width])       # [G+1]
+    eta = batch["eta_pm"][idx]; phi = batch["phi_pm"][idx]
+    q = batch["q_pm"][idx]; bb = batch["b_pm"][idx]
+    pt = batch["pt_pm"][idx]; mo = batch["mll"][idx]
+    mk = batch["cond_std"][idx]
+    out = torch.empty((n, G), device=m_centers_dev.device, dtype=mo.dtype)
+    for s in range(0, n, max(1, chunk_events)):
+        e = min(s + chunk_events, n)
+        sub = e - s
+        Fcal = model._signal_cdf_gh_qop(
+            edges.view(1, -1).expand(sub, -1), mo[s:e], mk[s:e], pt[s:e],
+            eta[s:e], phi[s:e], q[s:e], bb[s:e])                   # [sub, G+1]
+        mass = (Fcal[:, 1:] - Fcal[:, :-1]).clamp_min(0.0)        # [sub, G]
+        Z = model._norm_correction_log_Z(
+            mo[s:e], mk[s:e], pt[s:e], eta[s:e], phi[s:e], q[s:e],
+            bb[s:e]).exp().clamp_min(1e-30)
+        out[s:e] = mass / Z.view(sub, 1)
     return out
 
 
@@ -519,9 +585,17 @@ def evaluate_predictions(
     seed: int = 42,
     n_iter: int = 2,
     mc_as_data: bool = False,
+    nominal_only: bool = False,
+    nominal_norm_window=None,
 ):
     """Stream the loader once; collect per-event aggregates AND per-event
     × per-bin signal densities for the model curves.
+
+    ``nominal_only`` skips the fitted-θ tilt/fold/data work and computes ONLY the
+    nominal MC mass + untilted flow p₀ (for the standalone wide-window flow
+    validation, where the tilt/fold over a wide grid would be the dominant cost).
+    ``nominal_norm_window=(lo,hi)`` renormalises that nominal flow density over a
+    wider window than the fit window (passed through to _nominal_density_on_grid).
 
     The signal grid density is the **#2 direct-eval** ``_tilt_density_on_grid``
     (the same forward-folded flow density the fit optimises) and the MC
@@ -574,6 +648,16 @@ def evaluate_predictions(
             model, batch, idx, m_centers_dev, chunk_events=chunk_events,
             n_iter=n_iter)
 
+    # Calibrated-signal MASS per bin via the analytic gh_qop CDF (the integrated
+    # comparison for the closure overlays; correctly handles the flow's razor-thin
+    # Jacobian features that a density point-eval over-counts). gh_qop only — the
+    # plots fall back to the density × bin-width curve for other operators.
+    _gh_qop_mass = (getattr(model, "smear_operator", "") == "gh_convolution_qop")
+
+    def _sig_mass(idx):
+        return _tilt_signal_mass_on_bins(
+            model, batch, idx, m_centers_dev, bin_width, chunk_events=chunk_events)
+
     # Conditional slice variables for the closure plots, chosen for the active
     # basis (muon_kin → ρ, cos α; event_level → p_T^ll, y_ll, cos θ*). The
     # tertile-mode ones are accumulated per event below; |η₊| (eta_edges mode)
@@ -584,12 +668,14 @@ def evaluate_predictions(
     out = {
         "mll_data": [], "w_data": [], "eta_data": [], "f_data": [],
         "bkg_slope_data": [],
-        "pred_signal_data": [],
+        "pred_signal_data": [], "pred_signal_mass_data": [],
         "mll_mc_fold": [], "w_mc": [], "eta_mc": [],
-        "pred_signal_mc": [],
+        "pred_signal_mc": [], "pred_signal_mass_mc": [],
         # continuity only: the nominal (θ=0, unshifted/unsmeared) MC + flow,
         # to overlay the stage-1 closure alongside the folded stage-2 one.
-        "mll_mc_nominal": [], "pred_nominal_mc": [],
+        # pred_nominal_mass_mc = the flow's CDF MASS per bin (the proper integrated
+        # comparison for plot_flow_closure; density point-eval over-counts spikes).
+        "mll_mc_nominal": [], "pred_nominal_mc": [], "pred_nominal_mass_mc": [],
         # validation-with-injection only: the INJECTED pseudo-data m_ll (the
         # closure target the fold should reproduce). Distinct from the nominal
         # whenever a θ/smear injection was replayed into the loader.
@@ -597,7 +683,7 @@ def evaluate_predictions(
         # validation-with-injection only: signal density on the grid evaluated
         # at the INJECTED θ values (the closure target curve — where the
         # fitted-θ density should converge to if the fit recovers the truth).
-        "pred_signal_mc_at_inj": [],
+        "pred_signal_mc_at_inj": [], "pred_signal_mass_mc_at_inj": [],
     }
     for _k in _tkeys:
         out[f"sl_{_k}_data"] = []
@@ -647,7 +733,7 @@ def evaluate_predictions(
             data_sel = is_mc if mc_as_data else is_data
             mc_sel = is_mc
 
-            if bool(data_sel.any()):
+            if (not nominal_only) and bool(data_sel.any()):
                 data_idx = data_sel.nonzero(as_tuple=True)[0]
                 _slope_d = None
                 if getattr(model, "background_enabled", True):
@@ -690,25 +776,22 @@ def evaluate_predictions(
                 if _slope_d is not None:
                     out["bkg_slope_data"].append(_slope_d.detach().cpu().numpy())
                 out["pred_signal_data"].append(log_p_grid.exp().cpu().numpy())
+                if _gh_qop_mass:
+                    out["pred_signal_mass_data"].append(
+                        _sig_mass(data_idx).cpu().numpy())
 
             if bool(mc_sel.any()):
                 mc_idx = mc_sel.nonzero(as_tuple=True)[0]
-                # Directly shift+smear the MC at the *fitted* θ — the empirical
-                # template the model signal curve should reproduce. Use the
-                # NOMINAL (pre-injection) pt: in validation the loader replaces
-                # pt_pm with the injected/smeared pt (so mll = _event_mll(pt_pm)
-                # is consistent), so folding pt_pm again would DOUBLE the
-                # injection. pt_pm_nominal is the un-injected pt (== pt_pm when
-                # no injection / older loaders without the field).
+                # Use the NOMINAL (pre-injection) pt: in validation the loader
+                # replaces pt_pm with the injected/smeared pt (so mll =
+                # _event_mll(pt_pm) is consistent), so folding pt_pm again would
+                # DOUBLE the injection. pt_pm_nominal is the un-injected pt
+                # (== pt_pm when no injection / older loaders without the field).
                 ptm = batch.get("pt_pm_nominal", batch["pt_pm"])[mc_idx]
                 etam = batch["eta_pm"][mc_idx]
                 phim = batch["phi_pm"][mc_idx]
                 qm = batch["q_pm"][mc_idx]
                 bm = batch["b_pm"][mc_idx]
-                mll_fold = _continuity_mc_fold(model, ptm, etam, phim, qm, bm)
-                # Signal density on the grid for every MC event (#2 tilt).
-                log_p_grid_mc = _sig_grid(mc_idx)  # [n_mc, n_grid]
-                out["mll_mc_fold"].append(mll_fold.cpu().numpy())
                 out["w_mc"].append(batch["w"][mc_idx].cpu().numpy())
                 out["eta_mc"].append(batch["eta_pm"][mc_idx, 0].cpu().numpy())
                 # Slice variables from the conditioning the model sees (batch
@@ -718,34 +801,57 @@ def evaluate_predictions(
                     _tkeys, batch["pt_pm"][mc_idx], etam, phim)
                 for _k in _tkeys:
                     out[f"sl_{_k}_mc"].append(_sv_m[_k])
-                out["pred_signal_mc"].append(log_p_grid_mc.exp().cpu().numpy())
-                # Closure target: signal density at the INJECTED θ values.
-                # Temporarily SET the model's effective per-muon θ to the
-                # injection, evaluate the tilt density, restore. Uses
-                # _set_theta_output so it works for the MLP too (the old
-                # _override_theta set only the binned tensors → no-op for
-                # --theta-mlp, leaving this curve meaningless). The fitted curve
-                # should converge to this when the closure is good.
-                if has_inj:
-                    with _set_theta_output(
-                            model, inj_scale_full, inj_smear_full,
-                            nonuniform=getattr(loader, "inject_nonuniform", False)):
-                        log_p_grid_mc_inj = _sig_grid(mc_idx)
-                    out["pred_signal_mc_at_inj"].append(
-                        log_p_grid_mc_inj.exp().cpu().numpy())
+                # nominal_only (wide-window flow validation): skip the fitted-θ
+                # fold + #2 tilt + injected-θ curve — only the nominal MC mass and
+                # the untilted flow p₀ are needed for plot_flow_closure, and the
+                # tilt/fold over a wide grid would otherwise dominate the cost.
+                if not nominal_only:
+                    # Directly shift+smear the MC at the *fitted* θ — the
+                    # empirical template the model signal curve should reproduce.
+                    mll_fold = _continuity_mc_fold(model, ptm, etam, phim, qm, bm)
+                    log_p_grid_mc = _sig_grid(mc_idx)  # [n_mc, n_grid] (#2 tilt)
+                    out["mll_mc_fold"].append(mll_fold.cpu().numpy())
+                    out["pred_signal_mc"].append(log_p_grid_mc.exp().cpu().numpy())
+                    if _gh_qop_mass:
+                        out["pred_signal_mass_mc"].append(
+                            _sig_mass(mc_idx).cpu().numpy())
+                    # Closure target: signal density at the INJECTED θ values.
+                    # Temporarily SET the model's effective per-muon θ to the
+                    # injection, evaluate the tilt density, restore (works for the
+                    # MLP via _set_theta_output). The fitted curve should converge
+                    # to this when the closure is good.
+                    if has_inj:
+                        with _set_theta_output(
+                                model, inj_scale_full, inj_smear_full,
+                                nonuniform=getattr(loader, "inject_nonuniform", False)):
+                            log_p_grid_mc_inj = _sig_grid(mc_idx)
+                            if _gh_qop_mass:
+                                _mass_inj = _sig_mass(mc_idx)
+                        out["pred_signal_mc_at_inj"].append(
+                            log_p_grid_mc_inj.exp().cpu().numpy())
+                        if _gh_qop_mass:
+                            out["pred_signal_mass_mc_at_inj"].append(
+                                _mass_inj.cpu().numpy())
                 # nominal (θ=0): the TRUE un-injected reco mass, recomputed from
                 # the (un-injected) per-muon pt — NOT batch["mll"], which carries
-                # the replayed validation injection. Plus the untilted flow p₀.
+                # the replayed validation injection. Plus the untilted flow p₀
+                # (renormalised over nominal_norm_window when given).
                 out["mll_mc_nominal"].append(
                     _event_mll(ptm, etam, phim).cpu().numpy())
                 # The injected pseudo-data m_ll (= nominal + replayed injection),
-                # i.e. the closure target the fold should reproduce. Equals the
-                # nominal when no injection was replayed.
+                # the closure target the fold should reproduce (= nominal when no
+                # injection was replayed).
                 out["mll_mc_pseudodata"].append(batch["mll"][mc_idx].cpu().numpy())
                 out["pred_nominal_mc"].append(
                     _nominal_density_on_grid(
                         model, batch, mc_idx, m_centers_dev,
-                        chunk_events=chunk_events).exp().cpu().numpy())
+                        chunk_events=chunk_events,
+                        norm_window=nominal_norm_window).exp().cpu().numpy())
+                # CDF mass per bin — the integrated (proper) curve for flow_closure.
+                out["pred_nominal_mass_mc"].append(
+                    _nominal_cdf_mass_on_bins(
+                        model, batch, mc_idx, m_centers_dev, bin_width,
+                        norm_window=nominal_norm_window).cpu().numpy())
 
             total_events += int(batch["mll"].shape[0])
             bar.set_postfix_str(f"n_events={total_events:,}")
@@ -762,7 +868,9 @@ def evaluate_predictions(
             if k == "f_data":
                 out[k] = np.zeros((0, 3))
             elif k in ("pred_signal_data", "pred_signal_mc", "pred_nominal_mc",
-                       "pred_signal_mc_at_inj"):
+                       "pred_nominal_mass_mc", "pred_signal_mc_at_inj",
+                       "pred_signal_mass_data", "pred_signal_mass_mc",
+                       "pred_signal_mass_mc_at_inj"):
                 out[k] = np.zeros((0, n_grid))
             else:
                 out[k] = np.zeros((0,))
@@ -865,9 +973,15 @@ def _model_pred_histograms(
     if evals["mll_data"].size and slice_mask_data.any():
         w_d = evals["w_data"][slice_mask_data]
         f_d = evals["f_data"][slice_mask_data]
-        pred = evals["pred_signal_data"][slice_mask_data]  # [n_d, n_bins]
         weights = (w_d * f_d[:, -1])[:, None]  # [n_d, 1]
-        sig = bin_width * (pred * weights).sum(axis=0)
+        _pm = evals.get("pred_signal_mass_data")
+        if _pm is not None and _pm.shape[0] == evals["pred_signal_data"].shape[0]:
+            # integrated (analytic CDF) signal MASS per bin — exact, no spike guard
+            sig = (_pm[slice_mask_data] * weights).sum(axis=0)
+        else:
+            # fallback: density at bin centre × bin width (point-eval)
+            pred = evals["pred_signal_data"][slice_mask_data]  # [n_d, n_bins]
+            sig = bin_width * (pred * weights).sum(axis=0)
         slopes = np.asarray(evals.get("bkg_slope_data", np.zeros(0)))
         if slopes.size == evals["mll_data"].size and slopes.size > 0:
             # exp model (per-event slope array parallel to the data events):
@@ -1718,7 +1832,15 @@ def plot_mc_closure(
             evals["mll_mc_fold"][mc_mask], bins=m_edges,
             weights=evals["w_mc"][mc_mask])
         w = evals["w_mc"][mc_mask][:, None]
-        model_curve = bin_width * (evals["pred_signal_mc"][mc_mask] * w).sum(axis=0)
+
+        def _curve(dens_key, mass_key):
+            # CDF mass per bin when available (integrated, exact); else density × Δm
+            ma = evals.get(mass_key)
+            if ma is not None and ma.shape[0] == evals[dens_key].shape[0]:
+                return (ma[mc_mask] * w).sum(axis=0)
+            return bin_width * (evals[dens_key][mc_mask] * w).sum(axis=0)
+
+        model_curve = _curve("pred_signal_mc", "pred_signal_mass_mc")
         mc_label = ("MC (shifted+smeared, fitted θ)" if cont
                     else "MC (scale+smear folded)")
         model_label = ("flow (folded, tilt at fitted θ)" if cont
@@ -1728,7 +1850,7 @@ def plot_mc_closure(
             nom_hist, _ = np.histogram(
                 evals["mll_mc_nominal"][mc_mask], bins=m_edges,
                 weights=evals["w_mc"][mc_mask])
-            nom_curve = bin_width * (evals["pred_nominal_mc"][mc_mask] * w).sum(axis=0)
+            nom_curve = _curve("pred_nominal_mc", "pred_nominal_mass_mc")
         show_pseudo = (cont and injected
                        and evals.get("mll_mc_pseudodata", np.zeros((0,))).size > 0)
         if show_pseudo:
@@ -1738,8 +1860,7 @@ def plot_mc_closure(
         show_inj_curve = (cont and injected
                           and evals.get("pred_signal_mc_at_inj", np.zeros((0,))).size > 0)
         if show_inj_curve:
-            inj_curve = bin_width * (
-                evals["pred_signal_mc_at_inj"][mc_mask] * w).sum(axis=0)
+            inj_curve = _curve("pred_signal_mc_at_inj", "pred_signal_mass_mc_at_inj")
 
         if has_nom:
             ax.step(m_edges[:-1], nom_hist, where="post", color="0.6", lw=1.0,
@@ -1834,18 +1955,24 @@ def plot_mc_closure(
 
 
 def plot_flow_closure(
-    evals, m_centers_np, eta_slice_edges, output_dir: str,
+    evals, m_centers_np, eta_slice_edges, output_dir: str, *,
+    stem: str = "flow_closure",
 ):
     """PURE-FLOW closure: the UNSHIFTED/UNSMEARED nominal MC reco mass (points)
-    vs the NOMINAL flow density p₀ (line) — NO scale/smear fold and NO
-    background. Isolates the flow's intrinsic modelling of the MC mass shape
-    from the shift+smear operator: a discrepancy HERE is the flow itself,
-    whereas a discrepancy that appears only in mc_closure (folded) points to
-    the shift/smear. The ratio panel is taken RELATIVE TO THE NOMINAL FLOW.
-    Only produced when the nominal evals are present (continuity validation).
+    vs the NOMINAL flow MODEL (line) — NO scale/smear fold and NO background.
+    Isolates the flow's intrinsic modelling of the MC mass shape from the
+    shift+smear operator: a discrepancy HERE is the flow itself, whereas a
+    discrepancy that appears only in mc_closure (folded) points to the
+    shift/smear. The model curve is the flow's CDF MASS per bin
+    (F₀(edge_{j+1})−F₀(edge_j)) — the integrated comparison matching the
+    histogram (counts=mass); this correctly handles the flow's razor-thin
+    Jacobian near-singularities, which a density point-eval would over-count.
+    Ratio is RELATIVE TO THE FLOW. Only for continuity validation runs.
     """
     if evals.get("mll_mc_nominal", np.zeros((0,))).size == 0:
         return
+    _use_mass = (evals.get("pred_nominal_mass_mc", np.zeros((0,))).shape[0]
+                 == evals["mll_mc_nominal"].shape[0])
     bin_width = float(m_centers_np[1] - m_centers_np[0])
     m_edges = np.concatenate([
         [m_centers_np[0] - bin_width / 2],
@@ -1858,12 +1985,16 @@ def plot_flow_closure(
             evals["mll_mc_nominal"][mc_mask], bins=m_edges,
             weights=evals["w_mc"][mc_mask])
         w = evals["w_mc"][mc_mask][:, None]
-        nom_curve = bin_width * (evals["pred_nominal_mc"][mc_mask] * w).sum(axis=0)
+        if _use_mass:   # flow CDF mass per bin (proper integrated comparison)
+            nom_curve = (evals["pred_nominal_mass_mc"][mc_mask] * w).sum(axis=0)
+            curve_label = "flow p₀ (nominal CDF mass/bin)"
+        else:           # fallback: density × bin width (over-counts thin spikes)
+            nom_curve = bin_width * (evals["pred_nominal_mc"][mc_mask] * w).sum(axis=0)
+            curve_label = "flow p₀ (nominal density)"
         ax.errorbar(m_centers_np, nom_hist, yerr=np.sqrt(np.abs(nom_hist)),
                     fmt="o", color="k", markersize=3,
                     label="MC (nominal θ=0, unshifted+unsmeared)", zorder=3)
-        ax.plot(m_centers_np, nom_curve, color="C0", lw=1.5,
-                label="flow p₀ (nominal, θ=0)")
+        ax.plot(m_centers_np, nom_curve, color="C0", lw=1.5, label=curve_label)
         denom = np.where(nom_curve > 0, nom_curve, np.nan)
         with np.errstate(divide="ignore", invalid="ignore"):
             ratio = nom_hist / denom
@@ -1914,7 +2045,7 @@ def plot_flow_closure(
         fig.suptitle(f"PURE-FLOW closure (nominal p₀ vs unshifted MC) — slices of {label}",
                      y=0.998)
         fig.tight_layout(rect=(0, 0, 1, 0.90))
-        for p in _save_fig(fig, output_dir, f"flow_closure_{prefix}"):
+        for p in _save_fig(fig, output_dir, f"{stem}_{prefix}"):
             print(f"  wrote {p}")
 
 
@@ -3443,7 +3574,54 @@ def main() -> int:
     # the fitted scale + smearing). Re-uses pred_signal_mc — no second pass.
     print("plotting MC closure...")
     plot_mc_closure(evals, m_centers_np, eta_slice_edges, out_dir)
-    plot_flow_closure(evals, m_centers_np, eta_slice_edges, out_dir)
+    # Plot 6b: standalone PURE-FLOW validation over the WIDE flow training window
+    # (nominal p₀ vs unshifted/unsmeared MC; no fold, no background). A dedicated
+    # nominal_only pass over a wider loader + grid validates the flow across its
+    # full trained range [flow_m_lo, flow_m_hi] — not just the fit window — so the
+    # tails/shoulders the fit window clips are exposed. The nominal density is
+    # renormalised over the wide window to share the histogram's normalisation.
+    _flo = float(train_args.get("flow_m_lo", model._m_lo_f))
+    _fhi = float(train_args.get("flow_m_hi", model._m_hi_f))
+    if _fhi - _flo > (model._m_hi_f - model._m_lo_f) + 1e-6:
+        print(f"plotting wide-window pure-flow closure over [{_flo:.2f}, {_fhi:.2f}]...")
+        _wide_loader = JpsiMassArrowLoader(
+            shard_files, stats,
+            batch_size=args.batch_size,
+            split=_split, half=_half,
+            val_fraction=_vf, holdout_fraction=_hf,
+            drop_last=False,
+            inject_theta_scale=inject_np,
+            inject_theta_smear=inject_smear_np,
+            inject_seed=int(train_args.get("inject_smear_seed", 12345)),
+            cond_basis=train_args.get("cond_basis", "muon_kin"),
+            inject_nonuniform=nonuniform,
+            inject_bkg=inject_bkg_np,
+            m_window=(_flo, _fhi),
+            inject_prod=inject_prod_np,
+            reco_ptll_min=train_args.get("reco_ptll_min"),
+            reco_ptll_max=train_args.get("reco_ptll_max"),
+            fit_select=_fit_select_from(train_args),
+        )
+        _n_wide = max(2, int(round(args.n_mll_bins * (_fhi - _flo)
+                                   / (model._m_hi_f - model._m_lo_f))))
+        _edges_w = torch.linspace(_flo, _fhi, _n_wide + 1)
+        _mc_w = 0.5 * (_edges_w[:-1] + _edges_w[1:])
+        _mgs_w = (_mc_w - stats.mll_mean) / stats.mll_std
+        _wide_evals = evaluate_predictions(
+            model, _wide_loader, device, _mc_w, _mgs_w,
+            float((_edges_w[1] - _edges_w[0]).item()),
+            chunk_events=args.grid_chunk_events, max_events=args.max_events,
+            progress=True, seed=args.eval_seed, n_iter=args.continuity_n_iter,
+            mc_as_data=mc_as_data, nominal_only=True,
+            nominal_norm_window=(_flo, _fhi),
+        )
+        plot_flow_closure(_wide_evals, _mc_w.cpu().numpy(), eta_slice_edges, out_dir)
+        # additional FIT-WINDOW-only zoom (from the main fit-window evals), so the
+        # core J/ψ region is legible alongside the full-range flow_closure_*.
+        plot_flow_closure(evals, m_centers_np, eta_slice_edges, out_dir,
+                          stem="flow_closure_fitwin")
+    else:
+        plot_flow_closure(evals, m_centers_np, eta_slice_edges, out_dir)
     if getattr(model, "background_enabled", True) and "bkg_frac" in evals:
         plot_bkg_fractions(evals["bkg_frac"], stats.eta_edges, out_dir,
                            inject_bkg=inject_bkg_np,
