@@ -182,11 +182,23 @@ def load_model_from_checkpoint(checkpoint_path: str, device: str):
 # ---------------------------------------------------------------------------
 
 
+# Display-only ceiling (1/GeV) on the per-event grid signal density in the closure
+# overlays. The frozen flow extrapolates to a near-singular density (up to ~1e9) for
+# a few dozen of 5.8M events at extreme, sparsely-trained conditioning (collinear,
+# |rho|~0.9, very high boost); the mass grid sweeps mass at FIXED conditioning, so it
+# visits (conditioning x edge-mass) pairs outside the real joint support and one such
+# event dominates the weighted-average "model total". Capping the per-event plotted
+# density at ~25x the genuine J/psi peak (~20/GeV) removes the cosmetic spike. This is
+# STRICTLY a plotting guard -- the fit uses the model NLL directly (closure 1.006,
+# unaffected). Pass density_ceil=float("inf") to recover the raw (unclamped) curve.
+_DIAG_DENSITY_CEIL = 500.0
+
+
 @torch.no_grad()
 @torch.no_grad()
 def _tilt_density_on_grid(
     model, batch, idx, m_centers_dev, *, chunk_events: int = 2048,
-    n_iter: int = 2,
+    n_iter: int = 2, density_ceil: float = _DIAG_DENSITY_CEIL,
 ) -> torch.Tensor:
     """``[len(idx), n_grid]`` log p_s(m_grid | c_e, θ_fit) — the #2 direct-eval
     signal density (``_continuity_logp``) evaluated at each grid mass, exactly
@@ -206,24 +218,21 @@ def _tilt_density_on_grid(
     for start in range(0, n, max(1, chunk_events)):
         end = min(start + chunk_events, n); sub = end - start
         mg = m_centers_dev.view(1, G).expand(sub, G)                # [sub,G]
-        scale = (mg / m_obs[start:end].view(sub, 1)).unsqueeze(-1)  # [sub,G,1]
         rep = lambda x: x[start:end].unsqueeze(1).expand(
             sub, G, *x.shape[1:]).reshape(sub * G, *x.shape[1:])
-        pt_g = (pt[start:end].unsqueeze(1) * scale).reshape(sub * G, 2)
-        # Refine the pt scale so the RECOMPUTED event mass hits the grid mass
-        # EXACTLY: the operator rebuilds m from the per-muon kinematics, and
-        # the muon-mass term breaks the m ∝ pt proportionality — the naive
-        # scale misses the grid point by up to ~3 MeV at the far grid edge
-        # (δm² = B·(1−(m_g/m_obs)²), B ~ m_μ²·(p₁/p₂+p₂/p₁+2)), i.e. an O(50%)
-        # density error on the steep window edges (it made the θ=0 tilt curve
-        # visibly disagree with the nominal overlay on flow-checkpoint
-        # closures). Two fixed-point steps leave a sub-keV residual.
+        # Per (event, grid-mass) pt scale λ such that _event_mll(pt·λ) = m_grid
+        # EXACTLY, muon mass included: the operator rebuilds m from the per-muon
+        # kinematics and the muon-mass term breaks the m ∝ pt proportionality
+        # (the naive λ₀=m_grid/m_obs misses by up to ~3 MeV at the far edge →
+        # ~50% edge-density error on the θ=0 tilt overlay). Use the closed-form
+        # quadratic root (model._pt_lambda_to_mass) — exact in one shot, replacing
+        # the old 2-step fixed point. λ is a common (both-muon) dilation, so ρ/η/φ
+        # — the conditioning — are preserved; only the λ↔m map needed the fix.
         eta_r, phi_r = rep(eta), rep(phi)
-        mg_flat = mg.reshape(-1)
-        for _ in range(2):
-            m_cur = _event_mll(pt_g.unsqueeze(1), eta_r.unsqueeze(1),
-                               phi_r.unsqueeze(1)).squeeze(1)
-            pt_g = pt_g * (mg_flat / m_cur).unsqueeze(-1)
+        pt_r = rep(pt)                                              # [sub*G, 2]
+        mg_flat = mg.reshape(-1)                                    # [sub*G]
+        lam = model._pt_lambda_to_mass(pt_r, eta_r, phi_r, rep(m_obs), mg_flat)
+        pt_g = pt_r * lam.unsqueeze(-1)                            # [sub*G, 2]
         lp = model._continuity_logp(
             mg_flat, rep(mk), pt_g, eta_r, phi_r, rep(q), rep(b),
             n_iter=n_iter)
@@ -238,11 +247,14 @@ def _tilt_density_on_grid(
         logZ = model._norm_correction_log_Z(
             m_obs, mk, pt, eta, phi, q, b, n_iter=n_iter)            # [n]
         out = out - logZ.view(n, 1)
+    if np.isfinite(density_ceil):
+        out = torch.clamp(out, max=float(np.log(density_ceil)))     # display-only spike guard
     return out
 
 
 @torch.no_grad()
-def _nominal_density_on_grid(model, batch, idx, m_centers_dev, *, chunk_events=4096):
+def _nominal_density_on_grid(model, batch, idx, m_centers_dev, *, chunk_events=4096,
+                             density_ceil: float = _DIAG_DENSITY_CEIL):
     """``[len(idx), n_grid]`` log p₀(m_grid | c) — the *nominal* (θ=0) flow
     density, i.e. the stage-1 template with no scale/smear correction. Point
     evaluations of the frozen flow at the grid masses.
@@ -264,18 +276,16 @@ def _nominal_density_on_grid(model, batch, idx, m_centers_dev, *, chunk_events=4
         end = min(start + chunk_events, n); sub = end - start
         mg = m_centers_dev.view(1, G).expand(sub, G)                # [sub,G]
         if event_level:
-            scale = (mg / m_obs[start:end].view(sub, 1)).unsqueeze(-1)
             rep = lambda x: x[start:end].unsqueeze(1).expand(
                 sub, G, *x.shape[1:]).reshape(sub * G, *x.shape[1:])
-            pt_g = (pt[start:end].unsqueeze(1) * scale).reshape(sub * G, 2)
-            # Same muon-mass refinement as the tilt grid (see
-            # _tilt_density_on_grid) so the conditioning sweep is consistent.
+            # Same analytic muon-mass-exact λ as the tilt grid (see
+            # _tilt_density_on_grid) so the conditioning sweep is consistent —
+            # the closed-form quadratic root, not a fixed-point iteration.
             eta_r, phi_r = rep(eta), rep(phi)
+            pt_r = rep(pt)
             mg_flat = mg.reshape(-1)
-            for _ in range(2):
-                m_cur = _event_mll(pt_g.unsqueeze(1), eta_r.unsqueeze(1),
-                                   phi_r.unsqueeze(1)).squeeze(1)
-                pt_g = pt_g * (mg_flat / m_cur).unsqueeze(-1)
+            lam = model._pt_lambda_to_mass(pt_r, eta_r, phi_r, rep(m_obs), mg_flat)
+            pt_g = pt_r * lam.unsqueeze(-1)
             mke = model._cond_from_muons(pt_g, eta_r, phi_r, rep(q))
         else:
             mke = mk[start:end].unsqueeze(1).expand(
@@ -296,6 +306,8 @@ def _nominal_density_on_grid(model, batch, idx, m_centers_dev, *, chunk_events=4
         # mc_closure pathology at forward η).
         logZ = model._flow_log_window_Z(m_lo, m_hi, mk)
         out = out - logZ.view(n, 1)
+    if np.isfinite(density_ceil):
+        out = torch.clamp(out, max=float(np.log(density_ceil)))     # display-only spike guard
     return out
 
 
@@ -1818,6 +1830,91 @@ def plot_mc_closure(
         fig.suptitle(f"MC closure — slices of {label}", y=0.998)
         fig.tight_layout(rect=(0, 0, 1, 0.90))
         for p in _save_fig(fig, output_dir, f"mc_closure_{prefix}"):
+            print(f"  wrote {p}")
+
+
+def plot_flow_closure(
+    evals, m_centers_np, eta_slice_edges, output_dir: str,
+):
+    """PURE-FLOW closure: the UNSHIFTED/UNSMEARED nominal MC reco mass (points)
+    vs the NOMINAL flow density p₀ (line) — NO scale/smear fold and NO
+    background. Isolates the flow's intrinsic modelling of the MC mass shape
+    from the shift+smear operator: a discrepancy HERE is the flow itself,
+    whereas a discrepancy that appears only in mc_closure (folded) points to
+    the shift/smear. The ratio panel is taken RELATIVE TO THE NOMINAL FLOW.
+    Only produced when the nominal evals are present (continuity validation).
+    """
+    if evals.get("mll_mc_nominal", np.zeros((0,))).size == 0:
+        return
+    bin_width = float(m_centers_np[1] - m_centers_np[0])
+    m_edges = np.concatenate([
+        [m_centers_np[0] - bin_width / 2],
+        m_centers_np[:-1] + bin_width / 2,
+        [m_centers_np[-1] + bin_width / 2],
+    ])
+
+    def _draw_panel(ax, axr, mc_mask):
+        nom_hist, _ = np.histogram(
+            evals["mll_mc_nominal"][mc_mask], bins=m_edges,
+            weights=evals["w_mc"][mc_mask])
+        w = evals["w_mc"][mc_mask][:, None]
+        nom_curve = bin_width * (evals["pred_nominal_mc"][mc_mask] * w).sum(axis=0)
+        ax.errorbar(m_centers_np, nom_hist, yerr=np.sqrt(np.abs(nom_hist)),
+                    fmt="o", color="k", markersize=3,
+                    label="MC (nominal θ=0, unshifted+unsmeared)", zorder=3)
+        ax.plot(m_centers_np, nom_curve, color="C0", lw=1.5,
+                label="flow p₀ (nominal, θ=0)")
+        denom = np.where(nom_curve > 0, nom_curve, np.nan)
+        with np.errstate(divide="ignore", invalid="ignore"):
+            ratio = nom_hist / denom
+            ratio_err = np.sqrt(np.abs(nom_hist)) / denom
+        axr.errorbar(m_centers_np, ratio, yerr=ratio_err, fmt="o",
+                     color="k", markersize=3, zorder=3)
+        axr.axhline(1.0, color="C0", lw=1)   # nominal flow = reference
+        good = np.isfinite(ratio) & (
+            nom_hist > 0.10 * max(float(nom_hist.max()), 1e-30))
+        if good.any():
+            dev = float(np.percentile(np.abs(ratio[good] - 1.0), 90))
+            half = max(dev, float(np.median(ratio_err[good]))) * 1.3
+            axr.set_ylim(1.0 - min(max(half, 0.03), 0.4),
+                         1.0 + min(max(half, 0.03), 0.4))
+        else:
+            axr.set_ylim(0.6, 1.4)
+        return max(float((nom_hist + np.sqrt(np.abs(nom_hist))).max()),
+                   float(nom_curve.max()))
+
+    for prefix, label, fmt, _dv, mv, cols in _closure_slice_dims(
+            evals, eta_slice_edges):
+        ncol = len(cols)
+        fig, axes = plt.subplots(
+            2, ncol, figsize=(max(6.0, 4.3 * ncol), 6.2), squeeze=False,
+            sharex="col", gridspec_kw={"height_ratios": [3, 1]})
+        leg_ax = None
+        for ci, (tag, slice_def) in enumerate(cols):
+            ax, axr = axes[0, ci], axes[1, ci]
+            mc_mask = _select_slice(mv, slice_def) if mv.size else np.zeros((0,), bool)
+            if mc_mask.sum() == 0:
+                ax.set_visible(False); axr.set_visible(False); continue
+            ymax = _draw_panel(ax, axr, mc_mask)
+            if leg_ax is None:
+                leg_ax = ax
+            ttl = ("inclusive" if slice_def is None
+                   else f"{label} ∈ [{slice_def[0]:{fmt}}, {slice_def[1]:{fmt}}]")
+            ax.set_title(ttl, fontsize=9)
+            if ymax > 0:
+                ax.set_ylim(0, ymax * 1.25)
+            if ci == 0:
+                ax.set_ylabel("events / bin (weighted)")
+                axr.set_ylabel("ratio to flow p₀")
+            axr.set_xlabel("m_ll [GeV]")
+        if leg_ax is not None:
+            h, l = leg_ax.get_legend_handles_labels()
+            fig.legend(h, l, loc="upper center", bbox_to_anchor=(0.5, 0.945),
+                       ncol=min(len(l), 4), fontsize=8, framealpha=0.9)
+        fig.suptitle(f"PURE-FLOW closure (nominal p₀ vs unshifted MC) — slices of {label}",
+                     y=0.998)
+        fig.tight_layout(rect=(0, 0, 1, 0.90))
+        for p in _save_fig(fig, output_dir, f"flow_closure_{prefix}"):
             print(f"  wrote {p}")
 
 
@@ -3346,6 +3443,7 @@ def main() -> int:
     # the fitted scale + smearing). Re-uses pred_signal_mc — no second pass.
     print("plotting MC closure...")
     plot_mc_closure(evals, m_centers_np, eta_slice_edges, out_dir)
+    plot_flow_closure(evals, m_centers_np, eta_slice_edges, out_dir)
     if getattr(model, "background_enabled", True) and "bkg_frac" in evals:
         plot_bkg_fractions(evals["bkg_frac"], stats.eta_edges, out_dir,
                            inject_bkg=inject_bkg_np,
