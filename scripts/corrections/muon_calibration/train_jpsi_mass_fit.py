@@ -1080,11 +1080,14 @@ def _make_loaders(args, shard_files, stats, *, half=None, inject_theta=None,
 
 
 def _conditioning_fixed_cuts(args):
-    """True when the fit-time cuts are applied as conditioning-fixed selections
-    (ratio or exact-rescale) — both drop at load and normalise the signal over
-    the full fixed window, so the model carries NO per-event m_min(c) edge."""
-    return bool(getattr(args, "fit_cuts_as_ratio", False)
-                or getattr(args, "fit_cuts_exact_rescale", False))
+    """True when the fit-time cuts are conditioning-fixed (exact-rescale — the
+    DEFAULT — or ratio): both drop at load and normalise the signal over the full
+    fixed window, so the model carries NO per-event m_min(c) edge. Only the legacy
+    --fit-cuts-direct (or a missing --fit-m-lo, which exact/ratio need as the
+    reference) falls back to direct pt>C cuts with a per-event m_min."""
+    if getattr(args, "fit_cuts_direct", False):
+        return False
+    return getattr(args, "fit_m_lo", None) is not None
 
 
 def _fit_select_args(args):
@@ -1106,22 +1109,19 @@ def _fit_select_args(args):
            getattr(args, "fit_pt_both_min", None))
     if not any(sel):
         return None
-    if getattr(args, "fit_cuts_exact_rescale", False):
-        # EXACT-RESCALE: keep the ORIGINAL pt thresholds; the loader cuts on the
-        # pt evaluated at the window lower edge (exact, muon mass included). The
-        # "exact" flag (4th element) selects this mode; needs --fit-m-lo (the
-        # loader uses the fit-window lower edge as the reference mass).
-        if getattr(args, "fit_m_lo", None) is None:
-            raise ValueError("--fit-cuts-exact-rescale requires --fit-m-lo")
-        return sel + ("exact",)
+    m_lo = getattr(args, "fit_m_lo", None)
+    # Legacy DIRECT pt>C: explicit --fit-cuts-direct, or no window edge to rescale
+    # to (exact/ratio both need m_lo). Matched by the model's per-event m_min(c).
+    if getattr(args, "fit_cuts_direct", False) or m_lo is None:
+        return sel
     if getattr(args, "fit_cuts_as_ratio", False):
-        m_lo = getattr(args, "fit_m_lo", None)
-        if m_lo is None:
-            raise ValueError("--fit-cuts-as-ratio requires --fit-m-lo (window "
-                             "lower edge) to set ratio thresholds C/m_lo")
-        m_lo = float(m_lo)
-        return tuple((c / m_lo if c else None) for c in sel) + (True,)
-    return sel
+        # SCALE-INVARIANT ratio mode: thresholds C/m_lo, cut on pt/m_ll (4th
+        # element flags the loader). Massless-exact (O((m_μ/m)²)≈1e-3 leak).
+        return tuple((c / float(m_lo) if c else None) for c in sel) + (True,)
+    # DEFAULT (and explicit --fit-cuts-exact-rescale): muon-mass-EXACT rescale —
+    # cut on the pt the event would have at m_lo (no muon-mass leak). The "exact"
+    # flag (4th element) selects this mode in the loader.
+    return sel + ("exact",)
 
 
 def _inject_theta_np(args, n_eta):
@@ -5211,17 +5211,23 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "point; event_level: closed-form inverse-CS at m_lo). Removes "
                    "the O((m_μ/m)²)≈1e-3 muon-mass leak of --fit-cuts-as-ratio "
                    "while keeping full-window normalisation (no per-event m_min). "
-                   "Requires --fit-m-lo; takes precedence over --fit-cuts-as-ratio.")
+                   "This is now the DEFAULT when fit pt cuts + --fit-m-lo are set "
+                   "(the flag is kept for explicitness); use --fit-cuts-as-ratio "
+                   "or --fit-cuts-direct to override.")
     p.add_argument("--fit-cuts-as-ratio", action="store_true",
                    dest="fit_cuts_as_ratio",
                    help="Apply the fit-time pt cuts (--fit-ptll/pt-lead/pt-both-min) "
-                   "as SCALE-INVARIANT ratio cuts pt/m_ll > C/m_lo instead of direct "
-                   "pt > C cuts. At fixed conditioning pt/m=R(c) is constant over the "
-                   "mass window, so the cut is conditioning-fixed (all-or-nothing, "
-                   "forbids no in-window mass) → the signal normalises over the FULL "
-                   "fixed window [m_lo,m_hi] with NO per-event m_min(c) (avoids the "
-                   "thin-window normalisation collapse). Threshold C/m_lo guarantees "
-                   "pt>C over the whole window. Requires --fit-m-lo.")
+                   "as SCALE-INVARIANT ratio cuts pt/m_ll > C/m_lo. Conditioning-"
+                   "fixed (full-window normalisation, NO per-event m_min) but only "
+                   "massless-exact (O((m_μ/m)²)≈1e-3 muon-mass leak). Superseded as "
+                   "the default by --fit-cuts-exact-rescale; pass this to force the "
+                   "ratio form. Requires --fit-m-lo.")
+    p.add_argument("--fit-cuts-direct", action="store_true",
+                   dest="fit_cuts_direct",
+                   help="Apply the fit-time pt cuts as LEGACY direct pt>C cuts (NOT "
+                   "conditioning-fixed; induces a per-event m_min(c) normalisation "
+                   "edge). Overrides the default exact-rescale and --fit-cuts-as-"
+                   "ratio. Also the implicit fallback when --fit-m-lo is unset.")
     p.add_argument("--flow-m-lo", type=float, default=None,
                    help="Optional TIGHTER lower mass edge for STAGE 1 (flow "
                    "training + the flow's own normalisation window). Default: "

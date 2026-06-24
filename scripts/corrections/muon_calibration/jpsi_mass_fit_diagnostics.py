@@ -79,15 +79,14 @@ def _fit_select_from(targs):
            targs.get("fit_pt_both_min"))
     if not any(sel):
         return None
-    if targs.get("fit_cuts_exact_rescale"):
-        # Exact-rescale: original pt thresholds, loader cuts at m_lo exactly.
-        return sel + ("exact",)
+    m_lo = targs.get("fit_m_lo")
+    # Mirror _fit_select_args: DEFAULT = exact-rescale; --fit-cuts-direct (or no
+    # m_lo) → legacy direct pt>C; --fit-cuts-as-ratio → massless ratio.
+    if targs.get("fit_cuts_direct") or m_lo is None:
+        return sel
     if targs.get("fit_cuts_as_ratio"):
-        # Scale-invariant ratio mode: thresholds C/m_lo, cut on pt/m_ll (4th
-        # element flags the loader). Matches the fit (no per-event m_min).
-        m_lo = float(targs.get("fit_m_lo"))
-        return tuple((c / m_lo if c else None) for c in sel) + (True,)
-    return sel
+        return tuple((c / float(m_lo) if c else None) for c in sel) + (True,)
+    return sel + ("exact",)
 
 
 def load_model_from_checkpoint(checkpoint_path: str, device: str):
@@ -135,18 +134,19 @@ def load_model_from_checkpoint(checkpoint_path: str, device: str):
         norm_correction=args.get("norm_correction", "none"),
         background_enabled=not bool(args.get("no_background", False)),
         bkg_global=bool(args.get("bkg_global", False)),
-        # Ratio / exact-rescale cuts are conditioning-fixed → fixed-window
-        # normalisation, so the model carries NO per-event m_min edge (matches
-        # the fit).
-        fit_ptll_min=(None if (args.get("fit_cuts_as_ratio")
-                               or args.get("fit_cuts_exact_rescale"))
-                      else args.get("fit_ptll_min")),
-        fit_pt_lead_min=(None if (args.get("fit_cuts_as_ratio")
-                                  or args.get("fit_cuts_exact_rescale"))
-                         else args.get("fit_pt_lead_min")),
-        fit_pt_both_min=(None if (args.get("fit_cuts_as_ratio")
-                                  or args.get("fit_cuts_exact_rescale"))
-                         else args.get("fit_pt_both_min")),
+        # Exact-rescale (DEFAULT) / ratio cuts are conditioning-fixed → fixed-window
+        # normalisation, so the model carries NO per-event m_min edge. Only the
+        # legacy direct mode (--fit-cuts-direct, or no fit_m_lo) keeps a per-event
+        # m_min (matches _conditioning_fixed_cuts in train_jpsi_mass_fit).
+        fit_ptll_min=(args.get("fit_ptll_min")
+                      if (args.get("fit_cuts_direct") or args.get("fit_m_lo") is None)
+                      else None),
+        fit_pt_lead_min=(args.get("fit_pt_lead_min")
+                         if (args.get("fit_cuts_direct") or args.get("fit_m_lo") is None)
+                         else None),
+        fit_pt_both_min=(args.get("fit_pt_both_min")
+                         if (args.get("fit_cuts_direct") or args.get("fit_m_lo") is None)
+                         else None),
         bkg_model=args.get("bkg_model", "bernstein"),
         bkg_degree=int(args.get("bkg_degree", 1)),
         theta_mode=("mlp" if args.get("theta_mlp", False)
