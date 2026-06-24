@@ -1055,6 +1055,12 @@ def _batch_tensors(
                 sel_ok &= (lead_obs / denom >= np.float32(ps_lead))
             if ps_both:
                 sel_ok &= (soft_obs / denom >= np.float32(ps_both))
+        # Muon |η±| acceptance cut (5th element; pt-invariant, so observed ==
+        # nominal — applied directly on the per-muon η, no rescaling). Drops
+        # events instead of edge-clipping them to the η-bin range.
+        eta_max = fit_select[4] if len(fit_select) > 4 else None
+        if eta_max is not None:
+            sel_ok &= (np.abs(eta_pm).max(axis=1) < np.float32(eta_max))
     keep_mask = in_window & bkg_fid & sel_ok
     w = w * keep_mask.astype(np.float32)
     keep = None

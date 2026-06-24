@@ -77,16 +77,20 @@ def _fit_select_from(targs):
     per-event normalisation edge)."""
     sel = (targs.get("fit_ptll_min"), targs.get("fit_pt_lead_min"),
            targs.get("fit_pt_both_min"))
-    if not any(sel):
+    eta_max = targs.get("fit_eta_max")
+    if not any(sel) and eta_max is None:
         return None
     m_lo = targs.get("fit_m_lo")
-    # Mirror _fit_select_args: DEFAULT = exact-rescale; --fit-cuts-direct (or no
-    # m_lo) → legacy direct pt>C; --fit-cuts-as-ratio → massless ratio.
-    if targs.get("fit_cuts_direct") or m_lo is None:
-        return sel
-    if targs.get("fit_cuts_as_ratio"):
-        return tuple((c / float(m_lo) if c else None) for c in sel) + (True,)
-    return sel + ("exact",)
+    # Mirror _fit_select_args: pt MODE (4th) — direct (--fit-cuts-direct/no m_lo),
+    # massless ratio (--fit-cuts-as-ratio), or DEFAULT exact-rescale; + eta_max
+    # (5th) the muon |η±| acceptance cut.
+    if (not any(sel)) or targs.get("fit_cuts_direct") or m_lo is None:
+        pt_sel, mode = sel, None
+    elif targs.get("fit_cuts_as_ratio"):
+        pt_sel, mode = tuple((c / float(m_lo) if c else None) for c in sel), True
+    else:
+        pt_sel, mode = sel, "exact"
+    return pt_sel + (mode, eta_max)
 
 
 def load_model_from_checkpoint(checkpoint_path: str, device: str):

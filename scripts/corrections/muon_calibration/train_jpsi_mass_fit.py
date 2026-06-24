@@ -1107,21 +1107,22 @@ def _fit_select_args(args):
     sel = (getattr(args, "fit_ptll_min", None),
            getattr(args, "fit_pt_lead_min", None),
            getattr(args, "fit_pt_both_min", None))
-    if not any(sel):
+    eta_max = getattr(args, "fit_eta_max", None)
+    if not any(sel) and eta_max is None:
         return None
     m_lo = getattr(args, "fit_m_lo", None)
-    # Legacy DIRECT pt>C: explicit --fit-cuts-direct, or no window edge to rescale
-    # to (exact/ratio both need m_lo). Matched by the model's per-event m_min(c).
-    if getattr(args, "fit_cuts_direct", False) or m_lo is None:
-        return sel
-    if getattr(args, "fit_cuts_as_ratio", False):
-        # SCALE-INVARIANT ratio mode: thresholds C/m_lo, cut on pt/m_ll (4th
-        # element flags the loader). Massless-exact (O((m_μ/m)²)≈1e-3 leak).
-        return tuple((c / float(m_lo) if c else None) for c in sel) + (True,)
-    # DEFAULT (and explicit --fit-cuts-exact-rescale): muon-mass-EXACT rescale —
-    # cut on the pt the event would have at m_lo (no muon-mass leak). The "exact"
-    # flag (4th element) selects this mode in the loader.
-    return sel + ("exact",)
+    # pt thresholds + MODE (4th element): legacy direct pt>C (explicit
+    # --fit-cuts-direct or no window edge), scale-invariant ratio (massless,
+    # ~1e-3 leak), or the DEFAULT muon-mass-EXACT rescale at m_lo (no leak).
+    if (not any(sel)) or getattr(args, "fit_cuts_direct", False) or m_lo is None:
+        pt_sel, mode = sel, None
+    elif getattr(args, "fit_cuts_as_ratio", False):
+        pt_sel, mode = tuple((c / float(m_lo) if c else None) for c in sel), True
+    else:
+        pt_sel, mode = sel, "exact"
+    # eta_max (5th element): explicit muon |η±| acceptance cut (pt-invariant event
+    # selection — applied directly in the loader; None disables it).
+    return pt_sel + (mode, eta_max)
 
 
 def _inject_theta_np(args, n_eta):
@@ -5203,6 +5204,14 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    dest="fit_pt_both_min",
                    help="Fit-time both-muon pt cut [GeV] → per-event lower mass "
                    "edge. Default: none.")
+    p.add_argument("--fit-eta-max", type=float, default=2.4, dest="fit_eta_max",
+                   help="Fit-time muon ACCEPTANCE cut: drop events with "
+                   "|η₊|≥V or |η₋|≥V (V=this value). A pt-invariant event "
+                   "selection (no per-event m_min, no rescaling), applied in the "
+                   "loader to the fit + flow + diagnostics samples. Default 2.4 "
+                   "(the detector acceptance); the shards are NOT η-cut, so without "
+                   "this a ~0.2%% tail at |η|∈[2.4,2.46] would be edge-clipped to the "
+                   "η-bin range instead of dropped. Set very large to disable.")
     p.add_argument("--fit-cuts-exact-rescale", action="store_true",
                    dest="fit_cuts_exact_rescale",
                    help="Apply the fit-time pt cuts EXACTLY conditioning-fixed: "
