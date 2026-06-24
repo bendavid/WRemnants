@@ -255,7 +255,7 @@ def _tilt_density_on_grid(
 @torch.no_grad()
 def _nominal_density_on_grid(model, batch, idx, m_centers_dev, *, chunk_events=4096,
                              density_ceil: float = _DIAG_DENSITY_CEIL,
-                             norm_window=None):
+                             norm_window=None, cond_override=None):
     """``[len(idx), n_grid]`` log p₀(m_grid | c) — the *nominal* (θ=0) flow
     density, i.e. the stage-1 template with no scale/smear correction. Point
     evaluations of the frozen flow at the grid masses.
@@ -266,7 +266,10 @@ def _nominal_density_on_grid(model, batch, idx, m_centers_dev, *, chunk_events=4
     ``muon_kin`` the conditioning is invariant under the common pt scaling, so it
     is held fixed (the legacy fast path)."""
     n = idx.shape[0]; G = m_centers_dev.shape[0]
-    mk = batch["cond_std"][idx]
+    # cond_override: use a caller-supplied conditioning (e.g. the NOMINAL,
+    # un-injected one) instead of the batch's stored cond_std — keeps the nominal
+    # overlay consistent with mll_mc_nominal in validation runs (muon_kin path).
+    mk = batch["cond_std"][idx] if cond_override is None else cond_override
     out = torch.empty((n, G), device=m_centers_dev.device, dtype=mk.dtype)
     event_level = getattr(model, "cond_basis", "muon_kin") == "event_level"
     if event_level:
@@ -320,7 +323,7 @@ def _nominal_density_on_grid(model, batch, idx, m_centers_dev, *, chunk_events=4
 
 @torch.no_grad()
 def _nominal_cdf_mass_on_bins(model, batch, idx, m_centers_dev, bin_width, *,
-                              norm_window=None):
+                              norm_window=None, cond_override=None):
     """Per-event nominal-flow MASS per bin, ``F₀(edge_{j+1}|c) − F₀(edge_j|c)``,
     renormalised over ``norm_window`` (default the model fit window). ``[n, n_bins]``.
 
@@ -329,8 +332,9 @@ def _nominal_cdf_mass_on_bins(model, batch, idx, m_centers_dev, bin_width, *,
     integrates the flow's razor-thin Jacobian near-singularities to their true
     (~0) mass, whereas a density point-eval × bin-width grossly over-counts them.
     Uses the FIXED muon_kin conditioning (exact for muon_kin; for event_level the
-    per-mass conditioning recompute is ignored — use the density curve there)."""
-    mk = batch["cond_std"][idx]
+    per-mass conditioning recompute is ignored — use the density curve there).
+    cond_override: caller-supplied conditioning (e.g. the NOMINAL one)."""
+    mk = batch["cond_std"][idx] if cond_override is None else cond_override
     n = idx.shape[0]
     edges = torch.cat([m_centers_dev - 0.5 * bin_width,
                        m_centers_dev[-1:] + 0.5 * bin_width])        # [n_bins+1]
@@ -842,16 +846,23 @@ def evaluate_predictions(
                 # the closure target the fold should reproduce (= nominal when no
                 # injection was replayed).
                 out["mll_mc_pseudodata"].append(batch["mll"][mc_idx].cpu().numpy())
+                # NOMINAL conditioning (recomputed from the un-injected pt) so the
+                # nominal flow overlay is consistent with mll_mc_nominal — in a
+                # validation run cond_std carries the injected ρ; here we want the
+                # un-injected ρ. (No-op when not injected: == cond_std.)
+                mk_nom = model._cond_from_muons(ptm, etam, phim, qm)
                 out["pred_nominal_mc"].append(
                     _nominal_density_on_grid(
                         model, batch, mc_idx, m_centers_dev,
                         chunk_events=chunk_events,
-                        norm_window=nominal_norm_window).exp().cpu().numpy())
+                        norm_window=nominal_norm_window,
+                        cond_override=mk_nom).exp().cpu().numpy())
                 # CDF mass per bin — the integrated (proper) curve for flow_closure.
                 out["pred_nominal_mass_mc"].append(
                     _nominal_cdf_mass_on_bins(
                         model, batch, mc_idx, m_centers_dev, bin_width,
-                        norm_window=nominal_norm_window).cpu().numpy())
+                        norm_window=nominal_norm_window,
+                        cond_override=mk_nom).cpu().numpy())
 
             total_events += int(batch["mll"].shape[0])
             bar.set_postfix_str(f"n_events={total_events:,}")
@@ -3578,55 +3589,54 @@ def main() -> int:
     # the fitted scale + smearing). Re-uses pred_signal_mc — no second pass.
     print("plotting MC closure...")
     plot_mc_closure(evals, m_centers_np, eta_slice_edges, out_dir)
-    # Plot 6b: standalone PURE-FLOW validation over the WIDE flow training window
-    # (nominal p₀ vs unshifted/unsmeared MC; no fold, no background). A dedicated
-    # nominal_only pass over a wider loader + grid validates the flow across its
-    # full trained range [flow_m_lo, flow_m_hi] — not just the fit window — so the
-    # tails/shoulders the fit window clips are exposed. The nominal density is
-    # renormalised over the wide window to share the histogram's normalisation.
+    # Plot 6b: PURE-FLOW closure — nominal p₀ vs unshifted/unsmeared MC (no fold,
+    # no background). Run from DEDICATED, NON-INJECTED passes so mass, conditioning
+    # AND selection are all nominal (the injected pseudo-data above is irrelevant to
+    # a nominal-vs-nominal flow test). Four variants: {fit, flow} window × {with the
+    # analysis ptll/pt cuts, none of them}. Wide-window plots use log-y (tail
+    # decades); fit-window stay linear. The flow density is renormalised over each
+    # plot's own window.
     _flo = float(train_args.get("flow_m_lo", model._m_lo_f))
     _fhi = float(train_args.get("flow_m_hi", model._m_hi_f))
-    if _fhi - _flo > (model._m_hi_f - model._m_lo_f) + 1e-6:
-        print(f"plotting wide-window pure-flow closure over [{_flo:.2f}, {_fhi:.2f}]...")
-        _wide_loader = JpsiMassArrowLoader(
-            shard_files, stats,
-            batch_size=args.batch_size,
-            split=_split, half=_half,
-            val_fraction=_vf, holdout_fraction=_hf,
+    _ffit_lo, _ffit_hi = float(model._m_lo_f), float(model._m_hi_f)
+    _wider = _fhi - _flo > (_ffit_hi - _ffit_lo) + 1e-6
+
+    def _flow_closure_pass(m_lo, m_hi, with_cuts, log_y, stem):
+        cuts = _fit_select_from(train_args) if with_cuts else None
+        loader_fc = JpsiMassArrowLoader(
+            shard_files, stats, batch_size=args.batch_size,
+            split=_split, half=_half, val_fraction=_vf, holdout_fraction=_hf,
             drop_last=False,
-            inject_theta_scale=inject_np,
-            inject_theta_smear=inject_smear_np,
-            inject_seed=int(train_args.get("inject_smear_seed", 12345)),
+            # NO injection → fully nominal (mass, conditioning, selection).
+            inject_theta_scale=None, inject_theta_smear=None,
+            inject_bkg=None, inject_prod=None, inject_nonuniform=False,
             cond_basis=train_args.get("cond_basis", "muon_kin"),
-            inject_nonuniform=nonuniform,
-            inject_bkg=inject_bkg_np,
-            m_window=(_flo, _fhi),
-            inject_prod=inject_prod_np,
-            reco_ptll_min=train_args.get("reco_ptll_min"),
-            reco_ptll_max=train_args.get("reco_ptll_max"),
-            fit_select=_fit_select_from(train_args),
-        )
-        _n_wide = max(2, int(round(args.n_mll_bins * (_fhi - _flo)
-                                   / (model._m_hi_f - model._m_lo_f))))
-        _edges_w = torch.linspace(_flo, _fhi, _n_wide + 1)
-        _mc_w = 0.5 * (_edges_w[:-1] + _edges_w[1:])
-        _mgs_w = (_mc_w - stats.mll_mean) / stats.mll_std
-        _wide_evals = evaluate_predictions(
-            model, _wide_loader, device, _mc_w, _mgs_w,
-            float((_edges_w[1] - _edges_w[0]).item()),
-            chunk_events=args.grid_chunk_events, max_events=args.max_events,
-            progress=True, seed=args.eval_seed, n_iter=args.continuity_n_iter,
-            mc_as_data=mc_as_data, nominal_only=True,
-            nominal_norm_window=(_flo, _fhi),
-        )
-        plot_flow_closure(_wide_evals, _mc_w.cpu().numpy(), eta_slice_edges, out_dir,
-                          log_y=True)   # wide range → log-y to show the tail decades
-        # additional FIT-WINDOW-only zoom (from the main fit-window evals), so the
-        # core J/ψ region is legible alongside the full-range flow_closure_* (linear).
-        plot_flow_closure(evals, m_centers_np, eta_slice_edges, out_dir,
-                          stem="flow_closure_fitwin")
+            m_window=(m_lo, m_hi),
+            reco_ptll_min=(train_args.get("reco_ptll_min") if with_cuts else None),
+            reco_ptll_max=(train_args.get("reco_ptll_max") if with_cuts else None),
+            fit_select=cuts)
+        nb = max(2, int(round(args.n_mll_bins * (m_hi - m_lo)
+                              / (_ffit_hi - _ffit_lo))))
+        ed = torch.linspace(m_lo, m_hi, nb + 1)
+        mc = 0.5 * (ed[:-1] + ed[1:])
+        ev = evaluate_predictions(
+            model, loader_fc, device, mc, (mc - stats.mll_mean) / stats.mll_std,
+            float((ed[1] - ed[0]).item()), chunk_events=args.grid_chunk_events,
+            max_events=args.max_events, progress=True, seed=args.eval_seed,
+            n_iter=args.continuity_n_iter, mc_as_data=mc_as_data,
+            nominal_only=True, nominal_norm_window=(m_lo, m_hi))
+        plot_flow_closure(ev, mc.cpu().numpy(), eta_slice_edges, out_dir,
+                          stem=stem, log_y=log_y)
+
+    print("plotting pure-flow closure (nominal, non-injected passes)...")
+    if _wider:
+        _flow_closure_pass(_flo, _fhi, True, True, "flow_closure")              # wide+cuts
+        _flow_closure_pass(_ffit_lo, _ffit_hi, True, False, "flow_closure_fitwin")
+        _flow_closure_pass(_flo, _fhi, False, True, "flow_closure_nocut")       # wide, no cuts
+        _flow_closure_pass(_ffit_lo, _ffit_hi, False, False, "flow_closure_nocut_fitwin")
     else:
-        plot_flow_closure(evals, m_centers_np, eta_slice_edges, out_dir, log_y=True)
+        _flow_closure_pass(_ffit_lo, _ffit_hi, True, True, "flow_closure")
+        _flow_closure_pass(_ffit_lo, _ffit_hi, False, True, "flow_closure_nocut")
     if getattr(model, "background_enabled", True) and "bkg_frac" in evals:
         plot_bkg_fractions(evals["bkg_frac"], stats.eta_edges, out_dir,
                            inject_bkg=inject_bkg_np,
