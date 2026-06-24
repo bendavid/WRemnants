@@ -521,7 +521,7 @@ class _override_theta:
                 self.model.theta_smear.copy_(self._saved_smear)
 
 
-def _continuity_mc_fold(model, ptm, etam, phim, qm, bm):
+def _continuity_mc_fold(model, ptm, etam, phim, qm, bm, return_pt=False):
     """Fold MC reco at the fitted θ — the empirical template the model signal
     curve should reproduce. The per-muon PHYSICAL fold, in the model's
     generative order: FIRST the forward Gaussian σ_qop smear at the truth pt
@@ -532,14 +532,19 @@ def _continuity_mc_fold(model, ptm, etam, phim, qm, bm):
     is RECOMPUTED from the folded 4-vectors. This is the exact operation the
     continuity density inverts, so the closure overlay exposes the residual
     approximations. (ρ is a flow condition, not histogrammed/binned here, so
-    it is not recomputed — no effect on the m_ll closure plots.)"""
+    it is not recomputed — no effect on the m_ll closure plots.)
+
+    ``return_pt=True`` also returns the folded per-muon pt ``[N, 2]`` — needed to
+    re-apply the (pt-based) fit cuts on the θ_fit-folded kinematics for the
+    consistent fitted-θ MC-fold closure (see ``evaluate_mc_fold_at_fitted``)."""
     pt_cur = ptm
     if model.smearing_enabled:
         sig = model.fold_sigma_qop_pm(pt_cur, etam, phim, bm)
         pt_cur = model.apply_smear_pt(pt_cur, etam, qm, sig, torch.randn_like(sig))
     if model.scale_enabled:
         pt_cur = model._scale_apply_pt_forward(pt_cur, etam, phim, qm, bm)
-    return _event_mll(pt_cur, etam, phim).detach()
+    mll = _event_mll(pt_cur, etam, phim).detach()
+    return (mll, pt_cur.detach()) if return_pt else mll
 
 
 N_PHI_BKG_BINS = 16
@@ -907,6 +912,144 @@ def evaluate_predictions(
     out["injected"] = bool(
         getattr(loader, "inject_theta_scale", None) is not None
         or getattr(loader, "inject_theta_smear", None) is not None)
+    return out
+
+
+def _apply_fit_cuts_folded(fit_select, pt, mll, eta, phi, m_lo, m_hi):
+    """Boolean survival mask for the fit selection applied on the θ_fit-FOLDED
+    per-muon kinematics (pt ``[N,2]``, mll ``[N]``, eta/phi ``[N,2]``) — the exact
+    loader logic (jpsi_mass_arrow_loader ``_build_batch``) re-expressed in torch:
+    mass window, then the ptll/leading/both-muon pt cuts in the active mode
+    (direct / ratio / exact-rescale to the window lower edge), then |η±| < eta_max.
+    This is what makes the fitted-θ MC fold consistently re-windowed — the cuts are
+    imposed AFTER the fold, on the same kinematics that produce the folded mass."""
+    ok = (mll >= m_lo) & (mll <= m_hi)
+    if fit_select is None:
+        return ok
+    ps_ptll, ps_lead, ps_both = fit_select[0], fit_select[1], fit_select[2]
+    mode = fit_select[3] if len(fit_select) > 3 else None
+    eta_max = fit_select[4] if len(fit_select) > 4 else None
+    ptll = torch.hypot((pt * torch.cos(phi)).sum(1), (pt * torch.sin(phi)).sum(1))
+    lead = pt.max(dim=1).values
+    soft = pt.min(dim=1).values
+    if mode == "exact":
+        m_ref = float(m_lo)                              # cut at the window lower edge
+        s = m_ref / mll.clamp_min(1e-9)
+        for _ in range(3):                               # _event_mll(s·pt) = m_ref
+            cur = _event_mll(pt * s.unsqueeze(1), eta, phi)
+            s = s * (m_ref / cur.clamp_min(1e-9))
+        ptll_r, lead_r, soft_r = s * ptll, s * lead, s * soft
+        if ps_ptll:
+            ok &= (ptll_r >= float(ps_ptll))
+        if ps_lead:
+            ok &= (lead_r >= float(ps_lead))
+        if ps_both:
+            ok &= (soft_r >= float(ps_both))
+    else:
+        denom = mll if (mode is True or mode == "ratio") else torch.ones_like(mll)
+        if ps_ptll:
+            ok &= (ptll / denom >= float(ps_ptll))
+        if ps_lead:
+            ok &= (lead / denom >= float(ps_lead))
+        if ps_both:
+            ok &= (soft / denom >= float(ps_both))
+    if eta_max is not None:
+        ok &= (eta.abs().max(dim=1).values < float(eta_max))
+    return ok
+
+
+@torch.no_grad()
+def evaluate_mc_fold_at_fitted(
+    model, loader, device, m_centers, bin_width, fit_select, *,
+    chunk_events: int = 4096, max_events: int = 0, seed: int = 42,
+):
+    """CONSISTENT fitted-θ MC-fold closure. Streams a loader of NOMINAL MC (no
+    injection, no background — a dedicated instance), folds each event at the
+    per-event FITTED θ via the model's own scale+smear (``_continuity_mc_fold``),
+    then applies the fit cuts AFTER the fold (``_apply_fit_cuts_folded``): mass
+    window, pt, |η|. The surviving θ_fit-folded masses are the empirical template
+    (BLACK); the model curve (ORANGE) is the window-normalised gh_qop CDF mass
+    (``_tilt_signal_mass_on_bins``, ÷Z) evaluated on the SAME folded kinematics,
+    summed over the SAME survivors. Both live at θ_fit on one selection, so there
+    is no window spill, no injected-θ pre-selection bias, and no background; every
+    curve is CDF-integral-over-bin so the flow's Jacobian spikes integrate to ~0
+    (no spike protection needed). Returns an evals-compatible dict (MC keys only)
+    for ``plot_mc_closure``."""
+    cpu_state = torch.random.get_rng_state()
+    cuda_avail = device.startswith("cuda") and torch.cuda.is_available()
+    cuda_state = torch.cuda.get_rng_state(device) if cuda_avail else None
+    torch.manual_seed(seed)
+    if cuda_avail:
+        torch.cuda.manual_seed_all(seed)
+    m_centers_dev = m_centers.to(device)
+    m_lo, m_hi = float(model._m_lo_f), float(model._m_hi_f)
+    _slv = _diag_slice_vars(getattr(model, "cond_basis", "muon_kin"))
+    _tkeys = [k for k, _, _, m in _slv if m == "tertile"]
+    _gh_qop_mass = (getattr(model, "smear_operator", "") == "gh_convolution_qop")
+    out = {"mll_mc_fold": [], "w_mc": [], "eta_mc": [],
+           "pred_signal_mc": [], "pred_signal_mass_mc": []}
+    for _k in _tkeys:
+        out[f"sl_{_k}_mc"] = []
+    total = 0
+    print("  (fitted-θ MC-fold closure: NOMINAL MC folded at the per-event fitted "
+          "θ, cuts applied AFTER the fold, no background)")
+    try:
+        for batch in loader:
+            if max_events and total >= max_events:
+                break
+            batch = _move_batch(batch, device)
+            is_mc = ~batch["is_data_mask"]
+            if not bool(is_mc.any()):
+                continue
+            idx = is_mc.nonzero(as_tuple=True)[0]
+            ptm = batch.get("pt_pm_nominal", batch["pt_pm"])[idx]
+            etam = batch["eta_pm"][idx]; phim = batch["phi_pm"][idx]
+            qm = batch["q_pm"][idx]; bm = batch["b_pm"][idx]
+            w = batch["w"][idx]
+            mll_fold, pt_fold = _continuity_mc_fold(
+                model, ptm, etam, phim, qm, bm, return_pt=True)
+            ok = _apply_fit_cuts_folded(
+                fit_select, pt_fold, mll_fold, etam, phim, m_lo, m_hi)
+            if not bool(ok.any()):
+                continue
+            s = ok.nonzero(as_tuple=True)[0]
+            total += int(s.numel())
+            # The tilt's "observed config" IS the θ_fit-folded kinematics (so the
+            # un-kick/normalisation are consistent with the fold), recomputing ρ.
+            fb = {"pt_pm": pt_fold[s], "mll": mll_fold[s], "eta_pm": etam[s],
+                  "phi_pm": phim[s], "q_pm": qm[s], "b_pm": bm[s],
+                  "cond_std": model._cond_from_muons(
+                      pt_fold[s], etam[s], phim[s], qm[s])}
+            sidx = torch.arange(s.numel(), device=device)
+            out["mll_mc_fold"].append(mll_fold[s].cpu().numpy())
+            out["w_mc"].append(w[s].cpu().numpy())
+            out["eta_mc"].append(etam[s, 0].cpu().numpy())
+            out["pred_signal_mc"].append(_tilt_density_on_grid(
+                model, fb, sidx, m_centers_dev,
+                chunk_events=chunk_events).exp().cpu().numpy())
+            if _gh_qop_mass:
+                out["pred_signal_mass_mc"].append(_tilt_signal_mass_on_bins(
+                    model, fb, sidx, m_centers_dev, bin_width,
+                    chunk_events=chunk_events).cpu().numpy())
+            _sv = _slice_vals_np(_tkeys, pt_fold[s], etam[s], phim[s])
+            for _k in _tkeys:
+                out[f"sl_{_k}_mc"].append(_sv[_k])
+    finally:
+        torch.random.set_rng_state(cpu_state)
+        if cuda_state is not None:
+            torch.cuda.set_rng_state(cuda_state, device)
+    for k in list(out.keys()):
+        out[k] = np.concatenate(out[k]) if out[k] else np.zeros((0,))
+    out["bin_width"] = bin_width
+    out["continuity"] = True
+    out["mc_as_data"] = False
+    out["injected"] = False        # no pseudo-data / injected-θ overlays here
+    out["slice_specs"] = _slv
+    out["eta_data"] = np.zeros((0,))
+    for _k in _tkeys:
+        out[f"sl_{_k}_data"] = np.zeros((0,))
+    print(f"  collected {out['mll_mc_fold'].shape[0]} fitted-θ-folded MC events "
+          f"(passing the post-fold selection)")
     return out
 
 
@@ -1814,7 +1957,7 @@ def plot_cov_corr(cov: np.ndarray, labels, n_scale: int, output_dir: str,
 
 
 def plot_mc_closure(
-    evals, m_centers_np, eta_slice_edges, output_dir: str,
+    evals, m_centers_np, eta_slice_edges, output_dir: str, *, stem="mc_closure",
 ):
     """MC closure: forward-folded-MC histogram (points) vs flow-density
     curve (line), both at the fitted scale + smearing. One PANEL FIGURE per
@@ -1965,7 +2108,7 @@ def plot_mc_closure(
                        ncol=min(len(l), 4), fontsize=8, framealpha=0.9)
         fig.suptitle(f"MC closure — slices of {label}", y=0.998)
         fig.tight_layout(rect=(0, 0, 1, 0.90))
-        for p in _save_fig(fig, output_dir, f"mc_closure_{prefix}"):
+        for p in _save_fig(fig, output_dir, f"{stem}_{prefix}"):
             print(f"  wrote {p}")
 
 
@@ -3003,6 +3146,21 @@ def main() -> int:
         n_iter=args.continuity_n_iter,
         mc_as_data=mc_as_data,
     )
+    # Optional: dump the MC-branch closure arrays for offline analysis of the
+    # fitted-θ vs injected-θ comparison consistency (WMASS_DUMP_EVALS=<path>).
+    _dump_evals = os.environ.get("WMASS_DUMP_EVALS")
+    if _dump_evals:
+        _keys = ["mll_mc_fold", "mll_mc_pseudodata", "mll_mc_nominal",
+                 "pred_signal_mc", "pred_signal_mc_at_inj",
+                 "pred_signal_mass_mc", "pred_signal_mass_mc_at_inj",
+                 "pred_nominal_mc", "w_mc", "eta_mc"]
+        _dd = {k: np.asarray(evals[k]) for k in _keys if k in evals}
+        _dd["m_centers"] = m_centers_np
+        _dd["bin_width"] = np.array(bin_width)
+        _dd["eta_slice_edges"] = eta_slice_edges
+        np.savez(_dump_evals, **_dd)
+        print(f"  [dump] wrote MC-branch eval arrays → {_dump_evals} "
+              f"({', '.join(k for k in _keys if k in evals)})")
     if mc_as_data:
         print(
             f"  collected {evals['mll_data'].shape[0]} MC pseudo-data events "
@@ -3593,6 +3751,44 @@ def main() -> int:
     # the fitted scale + smearing). Re-uses pred_signal_mc — no second pass.
     print("plotting MC closure...")
     plot_mc_closure(evals, m_centers_np, eta_slice_edges, out_dir)
+    # Plot 6c: CONSISTENT fitted-θ MC-fold closure (the principled MC closure).
+    # A DEDICATED loader streams NOMINAL MC (no injection, no background) over a
+    # WIDER pre-window so events that fold INTO [m_lo,m_hi] are present; each event
+    # is folded at its per-event FITTED θ and the fit cuts (mass window, pt, |η|)
+    # are applied AFTER the fold, with the flow curve window-normalised over the
+    # same window. This removes the window spill, the injected-θ pre-selection
+    # bias, and the background from the comparison (all curves CDF-mass).
+    print("plotting consistent fitted-θ MC-fold closure...")
+    _pre_lo = min(float(train_args.get("flow_m_lo", model._m_lo_f)),
+                  float(model._m_lo_f) - 0.4)
+    _pre_hi = max(float(train_args.get("flow_m_hi", model._m_hi_f)),
+                  float(model._m_hi_f) + 0.4)
+    loader_fold = JpsiMassArrowLoader(
+        shard_files, stats, batch_size=args.batch_size,
+        split=_split, half=_half, val_fraction=_vf, holdout_fraction=_hf,
+        drop_last=False,
+        inject_theta_scale=None, inject_theta_smear=None,
+        inject_bkg=None, inject_prod=None, inject_nonuniform=False,
+        cond_basis=train_args.get("cond_basis", "muon_kin"),
+        m_window=(_pre_lo, _pre_hi),
+        reco_ptll_min=None, reco_ptll_max=None,
+        fit_select=None)                      # cuts applied AFTER the fold
+    ev_fold = evaluate_mc_fold_at_fitted(
+        model, loader_fold, device, m_centers, bin_width,
+        _fit_select_from(train_args), chunk_events=args.grid_chunk_events,
+        max_events=args.max_events, seed=args.eval_seed)
+    if _dump_evals:
+        _fk = ["mll_mc_fold", "pred_signal_mc", "pred_signal_mass_mc",
+               "w_mc", "eta_mc"]
+        _fd = {k: np.asarray(ev_fold[k]) for k in _fk if k in ev_fold}
+        _fd["m_centers"] = m_centers_np
+        _fd["bin_width"] = np.array(bin_width)
+        _fd["eta_slice_edges"] = eta_slice_edges
+        np.savez(_dump_evals.replace(".npz", "") + "_fold.npz", **_fd)
+        print(f"  [dump] wrote fitted-θ fold arrays → "
+              f"{_dump_evals.replace('.npz', '') + '_fold.npz'}")
+    plot_mc_closure(ev_fold, m_centers_np, eta_slice_edges, out_dir,
+                    stem="mc_closure_fitted")
     # Plot 6b: PURE-FLOW closure — nominal p₀ vs unshifted/unsmeared MC (no fold,
     # no background). Run from DEDICATED, NON-INJECTED passes so mass, conditioning
     # AND selection are all nominal (the injected pseudo-data above is irrelevant to
