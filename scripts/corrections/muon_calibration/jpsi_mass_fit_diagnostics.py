@@ -682,21 +682,13 @@ def evaluate_predictions(
         "mll_data": [], "w_data": [], "eta_data": [], "f_data": [],
         "bkg_slope_data": [],
         "pred_signal_data": [], "pred_signal_mass_data": [],
-        "mll_mc_fold": [], "w_mc": [], "eta_mc": [],
-        "pred_signal_mc": [], "pred_signal_mass_mc": [],
-        # continuity only: the nominal (θ=0, unshifted/unsmeared) MC + flow,
-        # to overlay the stage-1 closure alongside the folded stage-2 one.
+        "w_mc": [], "eta_mc": [],
+        # MC branch (nominal_only passes only, for plot_flow_closure): the nominal
+        # (θ=0, unshifted/unsmeared) MC mass + the untilted flow p₀.
         # pred_nominal_mass_mc = the flow's CDF MASS per bin (the proper integrated
-        # comparison for plot_flow_closure; density point-eval over-counts spikes).
+        # comparison; density point-eval over-counts spikes). The fitted-θ MC
+        # closure is the dedicated evaluate_mc_fold_at_fitted (→ mc_closure).
         "mll_mc_nominal": [], "pred_nominal_mc": [], "pred_nominal_mass_mc": [],
-        # validation-with-injection only: the INJECTED pseudo-data m_ll (the
-        # closure target the fold should reproduce). Distinct from the nominal
-        # whenever a θ/smear injection was replayed into the loader.
-        "mll_mc_pseudodata": [],
-        # validation-with-injection only: signal density on the grid evaluated
-        # at the INJECTED θ values (the closure target curve — where the
-        # fitted-θ density should converge to if the fit recovers the truth).
-        "pred_signal_mc_at_inj": [], "pred_signal_mass_mc_at_inj": [],
     }
     for _k in _tkeys:
         out[f"sl_{_k}_data"] = []
@@ -793,72 +785,30 @@ def evaluate_predictions(
                     out["pred_signal_mass_data"].append(
                         _sig_mass(data_idx).cpu().numpy())
 
-            if bool(mc_sel.any()):
+            # MC branch — ONLY the nominal MC mass + untilted flow p₀, and ONLY for
+            # the nominal-only flow-validation passes (plot_flow_closure). The
+            # fitted-θ MC closure is the dedicated, consistent
+            # evaluate_mc_fold_at_fitted (→ mc_closure); the legacy fold / #2 tilt /
+            # injected-θ work that fed the old mc_closure is gone, so the full pass
+            # does no MC-branch work at all (the data branch carries mll_closure).
+            if nominal_only and bool(mc_sel.any()):
                 mc_idx = mc_sel.nonzero(as_tuple=True)[0]
-                # Use the NOMINAL (pre-injection) pt: in validation the loader
-                # replaces pt_pm with the injected/smeared pt (so mll =
-                # _event_mll(pt_pm) is consistent), so folding pt_pm again would
-                # DOUBLE the injection. pt_pm_nominal is the un-injected pt
-                # (== pt_pm when no injection / older loaders without the field).
-                ptm = batch.get("pt_pm_nominal", batch["pt_pm"])[mc_idx]
+                ptm = batch.get("pt_pm_nominal", batch["pt_pm"])[mc_idx]  # un-injected
                 etam = batch["eta_pm"][mc_idx]
                 phim = batch["phi_pm"][mc_idx]
                 qm = batch["q_pm"][mc_idx]
-                bm = batch["b_pm"][mc_idx]
                 out["w_mc"].append(batch["w"][mc_idx].cpu().numpy())
                 out["eta_mc"].append(batch["eta_pm"][mc_idx, 0].cpu().numpy())
-                # Slice variables from the conditioning the model sees (batch
-                # pt_pm = injected pt in validation), matching the data side so a
-                # given bin compares the same physical region.
                 _sv_m = _slice_vals_np(
                     _tkeys, batch["pt_pm"][mc_idx], etam, phim)
                 for _k in _tkeys:
                     out[f"sl_{_k}_mc"].append(_sv_m[_k])
-                # nominal_only (wide-window flow validation): skip the fitted-θ
-                # fold + #2 tilt + injected-θ curve — only the nominal MC mass and
-                # the untilted flow p₀ are needed for plot_flow_closure, and the
-                # tilt/fold over a wide grid would otherwise dominate the cost.
-                if not nominal_only:
-                    # Directly shift+smear the MC at the *fitted* θ — the
-                    # empirical template the model signal curve should reproduce.
-                    mll_fold = _continuity_mc_fold(model, ptm, etam, phim, qm, bm)
-                    log_p_grid_mc = _sig_grid(mc_idx)  # [n_mc, n_grid] (#2 tilt)
-                    out["mll_mc_fold"].append(mll_fold.cpu().numpy())
-                    out["pred_signal_mc"].append(log_p_grid_mc.exp().cpu().numpy())
-                    if _gh_qop_mass:
-                        out["pred_signal_mass_mc"].append(
-                            _sig_mass(mc_idx).cpu().numpy())
-                    # Closure target: signal density at the INJECTED θ values.
-                    # Temporarily SET the model's effective per-muon θ to the
-                    # injection, evaluate the tilt density, restore (works for the
-                    # MLP via _set_theta_output). The fitted curve should converge
-                    # to this when the closure is good.
-                    if has_inj:
-                        with _set_theta_output(
-                                model, inj_scale_full, inj_smear_full,
-                                nonuniform=getattr(loader, "inject_nonuniform", False)):
-                            log_p_grid_mc_inj = _sig_grid(mc_idx)
-                            if _gh_qop_mass:
-                                _mass_inj = _sig_mass(mc_idx)
-                        out["pred_signal_mc_at_inj"].append(
-                            log_p_grid_mc_inj.exp().cpu().numpy())
-                        if _gh_qop_mass:
-                            out["pred_signal_mass_mc_at_inj"].append(
-                                _mass_inj.cpu().numpy())
-                # nominal (θ=0): the TRUE un-injected reco mass, recomputed from
-                # the (un-injected) per-muon pt — NOT batch["mll"], which carries
-                # the replayed validation injection. Plus the untilted flow p₀
-                # (renormalised over nominal_norm_window when given).
+                # nominal (θ=0): the TRUE un-injected reco mass + the untilted flow
+                # p₀ (renormalised over nominal_norm_window when given). NOMINAL
+                # conditioning (recomputed from the un-injected pt) so the overlay is
+                # consistent with mll_mc_nominal (cond_std carries the injected ρ).
                 out["mll_mc_nominal"].append(
                     _event_mll(ptm, etam, phim).cpu().numpy())
-                # The injected pseudo-data m_ll (= nominal + replayed injection),
-                # the closure target the fold should reproduce (= nominal when no
-                # injection was replayed).
-                out["mll_mc_pseudodata"].append(batch["mll"][mc_idx].cpu().numpy())
-                # NOMINAL conditioning (recomputed from the un-injected pt) so the
-                # nominal flow overlay is consistent with mll_mc_nominal — in a
-                # validation run cond_std carries the injected ρ; here we want the
-                # un-injected ρ. (No-op when not injected: == cond_std.)
                 mk_nom = model._cond_from_muons(ptm, etam, phim, qm)
                 out["pred_nominal_mc"].append(
                     _nominal_density_on_grid(
@@ -887,10 +837,8 @@ def evaluate_predictions(
         else:
             if k == "f_data":
                 out[k] = np.zeros((0, 3))
-            elif k in ("pred_signal_data", "pred_signal_mc", "pred_nominal_mc",
-                       "pred_nominal_mass_mc", "pred_signal_mc_at_inj",
-                       "pred_signal_mass_data", "pred_signal_mass_mc",
-                       "pred_signal_mass_mc_at_inj"):
+            elif k in ("pred_signal_data", "pred_signal_mass_data",
+                       "pred_nominal_mc", "pred_nominal_mass_mc"):
                 out[k] = np.zeros((0, n_grid))
             else:
                 out[k] = np.zeros((0,))
@@ -1346,7 +1294,10 @@ def plot_mll_closure(
         else:
             data_hist = np.zeros(m_centers_np.shape[0])
         # Forward-folded MC, scaled to the data signal weight in the slice.
-        if mc_mask.any():
+        # (Skipped now: the full pass no longer computes the MC-branch fold — the
+        # consistent fitted-θ MC fold is the dedicated mc_closure plot. Guarded so
+        # this overlay still works if an evals dict carrying mll_mc_fold is passed.)
+        if evals.get("mll_mc_fold", np.zeros((0,))).size > 0 and mc_mask.any():
             mc_hist_raw, _ = np.histogram(
                 evals["mll_mc_fold"][mc_mask], bins=m_edges,
                 weights=evals["w_mc"][mc_mask])
@@ -3146,31 +3097,27 @@ def main() -> int:
         n_iter=args.continuity_n_iter,
         mc_as_data=mc_as_data,
     )
-    # Optional: dump the MC-branch closure arrays for offline analysis of the
-    # fitted-θ vs injected-θ comparison consistency (WMASS_DUMP_EVALS=<path>).
+    # Optional: dump the (data-branch) mll-closure arrays for offline analysis
+    # (WMASS_DUMP_EVALS=<path>); the consistent fitted-θ MC fold is dumped
+    # separately to <path>_fold.npz below.
     _dump_evals = os.environ.get("WMASS_DUMP_EVALS")
     if _dump_evals:
-        _keys = ["mll_mc_fold", "mll_mc_pseudodata", "mll_mc_nominal",
-                 "pred_signal_mc", "pred_signal_mc_at_inj",
-                 "pred_signal_mass_mc", "pred_signal_mass_mc_at_inj",
-                 "pred_nominal_mc", "w_mc", "eta_mc"]
+        _keys = ["mll_data", "w_data", "eta_data", "f_data", "bkg_slope_data",
+                 "pred_signal_data", "pred_signal_mass_data"]
         _dd = {k: np.asarray(evals[k]) for k in _keys if k in evals}
         _dd["m_centers"] = m_centers_np
         _dd["bin_width"] = np.array(bin_width)
         _dd["eta_slice_edges"] = eta_slice_edges
         np.savez(_dump_evals, **_dd)
-        print(f"  [dump] wrote MC-branch eval arrays → {_dump_evals} "
+        print(f"  [dump] wrote data-branch eval arrays → {_dump_evals} "
               f"({', '.join(k for k in _keys if k in evals)})")
     if mc_as_data:
         print(
             f"  collected {evals['mll_data'].shape[0]} MC pseudo-data events "
-            f"(same simulation also drives the MC-branch closure)"
+            f"(the fitted-θ MC fold is a separate, dedicated pass)"
         )
     else:
-        print(
-            f"  collected {evals['mll_data'].shape[0]} data events, "
-            f"{evals['mll_mc_fold'].shape[0]} MC events"
-        )
+        print(f"  collected {evals['mll_data'].shape[0]} data events")
 
     # Plot 1: m_ll closure.
     print("plotting m_ll closure...")
@@ -3747,18 +3694,16 @@ def main() -> int:
         model._m_lo_f, model._m_hi_f, out_dir,
     )
 
-    # Plot 6: MC closure (forward-folded MC vs flow density curve, both at
-    # the fitted scale + smearing). Re-uses pred_signal_mc — no second pass.
-    print("plotting MC closure...")
-    plot_mc_closure(evals, m_centers_np, eta_slice_edges, out_dir)
-    # Plot 6c: CONSISTENT fitted-θ MC-fold closure (the principled MC closure).
+    # Plot 6: MC closure — the CONSISTENT fitted-θ MC fold (canonical mc_closure).
     # A DEDICATED loader streams NOMINAL MC (no injection, no background) over a
     # WIDER pre-window so events that fold INTO [m_lo,m_hi] are present; each event
     # is folded at its per-event FITTED θ and the fit cuts (mass window, pt, |η|)
     # are applied AFTER the fold, with the flow curve window-normalised over the
     # same window. This removes the window spill, the injected-θ pre-selection
-    # bias, and the background from the comparison (all curves CDF-mass).
-    print("plotting consistent fitted-θ MC-fold closure...")
+    # bias, and the background from the comparison (all curves CDF-mass). Replaces
+    # the legacy mc_closure (which folded injected-θ-selected events without
+    # re-windowing, against a ÷Z curve, with a bkg-contaminated pseudo-data overlay).
+    print("plotting MC closure (consistent fitted-θ MC fold)...")
     _pre_lo = min(float(train_args.get("flow_m_lo", model._m_lo_f)),
                   float(model._m_lo_f) - 0.4)
     _pre_hi = max(float(train_args.get("flow_m_hi", model._m_hi_f)),
@@ -3788,7 +3733,7 @@ def main() -> int:
         print(f"  [dump] wrote fitted-θ fold arrays → "
               f"{_dump_evals.replace('.npz', '') + '_fold.npz'}")
     plot_mc_closure(ev_fold, m_centers_np, eta_slice_edges, out_dir,
-                    stem="mc_closure_fitted")
+                    stem="mc_closure")
     # Plot 6b: PURE-FLOW closure — nominal p₀ vs unshifted/unsmeared MC (no fold,
     # no background). Run from DEDICATED, NON-INJECTED passes so mass, conditioning
     # AND selection are all nominal (the injected pseudo-data above is irrelevant to
