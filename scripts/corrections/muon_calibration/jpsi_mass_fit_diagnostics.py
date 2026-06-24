@@ -1284,15 +1284,21 @@ def plot_mll_closure(
     def _draw_panel(ax, axr, data_mask, mc_mask):
         """Draw one slice into (main, ratio) axes and set the ratio panel's
         own autoscaled y-range; return (ymax, has_curves)."""
-        # Data hist.
+        # Data hist + its Σw² (the correct weighted Poisson error is √Σw², not
+        # √Σw — they coincide only for unweighted data; MC pseudo-data is weighted).
         if data_mask.any():
             data_hist, _ = np.histogram(
                 evals["mll_data"][data_mask], bins=m_edges,
                 weights=evals["w_data"][data_mask])
-            ax.errorbar(m_centers_np, data_hist, yerr=np.sqrt(np.abs(data_hist)),
+            data_sumw2, _ = np.histogram(
+                evals["mll_data"][data_mask], bins=m_edges,
+                weights=evals["w_data"][data_mask] ** 2)
+            data_err = np.sqrt(np.abs(data_sumw2))
+            ax.errorbar(m_centers_np, data_hist, yerr=data_err,
                         fmt="o", color="k", markersize=3, label=data_label, zorder=3)
         else:
             data_hist = np.zeros(m_centers_np.shape[0])
+            data_err = np.zeros(m_centers_np.shape[0])
         # Forward-folded MC, scaled to the data signal weight in the slice.
         # (Skipped now: the full pass no longer computes the MC-branch fold — the
         # consistent fitted-θ MC fold is the dedicated mc_closure plot. Guarded so
@@ -1331,7 +1337,7 @@ def plot_mll_closure(
             with np.errstate(divide="ignore", invalid="ignore"):
                 denom = np.where(total > 0, total, np.nan)
                 ratio = data_hist / denom
-                ratio_err = np.sqrt(np.abs(data_hist)) / denom
+                ratio_err = data_err / denom
             axr.errorbar(m_centers_np, ratio, yerr=ratio_err, fmt="o",
                          color="k", markersize=3)
             # ratio-panel autoscale: a ROBUST symmetric half-window about 1.
@@ -1355,7 +1361,7 @@ def plot_mll_closure(
         else:
             axr.set_ylim(0.6, 1.4)
         axr.axhline(1.0, color="C0", lw=1)
-        ymax = max(float((data_hist + np.sqrt(np.abs(data_hist))).max()),
+        ymax = max(float((data_hist + data_err).max()),
                    float(mc_hist.max()), float(total.max()))
         return ymax, total.sum() > 0
 
@@ -1940,6 +1946,11 @@ def plot_mc_closure(
         mc_hist, _ = np.histogram(
             evals["mll_mc_fold"][mc_mask], bins=m_edges,
             weights=evals["w_mc"][mc_mask])
+        # Σw² → the correct weighted Poisson error √Σw² (the folded MC is weighted).
+        mc_sumw2, _ = np.histogram(
+            evals["mll_mc_fold"][mc_mask], bins=m_edges,
+            weights=evals["w_mc"][mc_mask] ** 2)
+        mc_err = np.sqrt(np.abs(mc_sumw2))
         w = evals["w_mc"][mc_mask][:, None]
 
         def _curve(dens_key, mass_key):
@@ -1979,7 +1990,7 @@ def plot_mc_closure(
         if show_pseudo:
             ax.step(m_edges[:-1], pseudo_hist, where="post", color="C2", lw=1.3,
                     label="pseudo-data (injected θ)", zorder=2)
-        ax.errorbar(m_centers_np, mc_hist, yerr=np.sqrt(np.abs(mc_hist)),
+        ax.errorbar(m_centers_np, mc_hist, yerr=mc_err,
                     fmt="o", color="k", markersize=3, label=mc_label, zorder=3)
         ax.plot(m_centers_np, model_curve, color="C1", ls="--", lw=1.5,
                 label=model_label)
@@ -1991,7 +2002,7 @@ def plot_mc_closure(
         denom = np.where(model_curve > 0, model_curve, np.nan)
         with np.errstate(divide="ignore", invalid="ignore"):
             ratio = mc_hist / denom
-            ratio_err = np.sqrt(np.abs(mc_hist)) / denom
+            ratio_err = mc_err / denom
         axr.errorbar(m_centers_np, ratio, yerr=ratio_err, fmt="o",
                      color="k", markersize=3, zorder=3)
         if show_pseudo:
@@ -2021,7 +2032,7 @@ def plot_mc_closure(
             axr.set_ylim(1.0 - h, 1.0 + h)
         else:
             axr.set_ylim(0.6, 1.4)
-        ymax = max(float((mc_hist + np.sqrt(np.abs(mc_hist))).max()),
+        ymax = max(float((mc_hist + mc_err).max()),
                    float(model_curve.max()),
                    float(nom_hist.max()) if has_nom else 0.0,
                    float(nom_curve.max()) if has_nom else 0.0,
@@ -2093,6 +2104,11 @@ def plot_flow_closure(
         nom_hist, _ = np.histogram(
             evals["mll_mc_nominal"][mc_mask], bins=m_edges,
             weights=evals["w_mc"][mc_mask])
+        # Σw² → correct weighted Poisson error √Σw² (the MC is weighted).
+        nom_sumw2, _ = np.histogram(
+            evals["mll_mc_nominal"][mc_mask], bins=m_edges,
+            weights=evals["w_mc"][mc_mask] ** 2)
+        nom_err = np.sqrt(np.abs(nom_sumw2))
         w = evals["w_mc"][mc_mask][:, None]
         if _use_mass:   # flow CDF mass per bin (proper integrated comparison)
             nom_curve = (evals["pred_nominal_mass_mc"][mc_mask] * w).sum(axis=0)
@@ -2100,14 +2116,14 @@ def plot_flow_closure(
         else:           # fallback: density × bin width (over-counts thin spikes)
             nom_curve = bin_width * (evals["pred_nominal_mc"][mc_mask] * w).sum(axis=0)
             curve_label = "flow p₀ (nominal density)"
-        ax.errorbar(m_centers_np, nom_hist, yerr=np.sqrt(np.abs(nom_hist)),
+        ax.errorbar(m_centers_np, nom_hist, yerr=nom_err,
                     fmt="o", color="k", markersize=3,
                     label="MC (nominal θ=0, unshifted+unsmeared)", zorder=3)
         ax.plot(m_centers_np, nom_curve, color="C0", lw=1.5, label=curve_label)
         denom = np.where(nom_curve > 0, nom_curve, np.nan)
         with np.errstate(divide="ignore", invalid="ignore"):
             ratio = nom_hist / denom
-            ratio_err = np.sqrt(np.abs(nom_hist)) / denom
+            ratio_err = nom_err / denom
         axr.errorbar(m_centers_np, ratio, yerr=ratio_err, fmt="o",
                      color="k", markersize=3, zorder=3)
         axr.axhline(1.0, color="C0", lw=1)   # nominal flow = reference
@@ -2120,7 +2136,7 @@ def plot_flow_closure(
                          1.0 + min(max(half, 0.03), 0.4))
         else:
             axr.set_ylim(0.6, 1.4)
-        return max(float((nom_hist + np.sqrt(np.abs(nom_hist))).max()),
+        return max(float((nom_hist + nom_err).max()),
                    float(nom_curve.max()))
 
     for prefix, label, fmt, _dv, mv, cols in _closure_slice_dims(
