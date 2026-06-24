@@ -1956,7 +1956,7 @@ def plot_mc_closure(
 
 def plot_flow_closure(
     evals, m_centers_np, eta_slice_edges, output_dir: str, *,
-    stem: str = "flow_closure",
+    stem: str = "flow_closure", log_y: bool = False,
 ):
     """PURE-FLOW closure: the UNSHIFTED/UNSMEARED nominal MC reco mass (points)
     vs the NOMINAL flow MODEL (line) — NO scale/smear fold and NO background.
@@ -2033,7 +2033,11 @@ def plot_flow_closure(
                    else f"{label} ∈ [{slice_def[0]:{fmt}}, {slice_def[1]:{fmt}}]")
             ax.set_title(ttl, fontsize=9)
             if ymax > 0:
-                ax.set_ylim(0, ymax * 1.25)
+                if log_y:
+                    ax.set_yscale("log")
+                    ax.set_ylim(ymax * 3e-5, ymax * 2.0)   # ~4-5 decades of tail
+                else:
+                    ax.set_ylim(0, ymax * 1.25)
             if ci == 0:
                 ax.set_ylabel("events / bin (weighted)")
                 axr.set_ylabel("ratio to flow p₀")
@@ -3615,13 +3619,14 @@ def main() -> int:
             mc_as_data=mc_as_data, nominal_only=True,
             nominal_norm_window=(_flo, _fhi),
         )
-        plot_flow_closure(_wide_evals, _mc_w.cpu().numpy(), eta_slice_edges, out_dir)
+        plot_flow_closure(_wide_evals, _mc_w.cpu().numpy(), eta_slice_edges, out_dir,
+                          log_y=True)   # wide range → log-y to show the tail decades
         # additional FIT-WINDOW-only zoom (from the main fit-window evals), so the
-        # core J/ψ region is legible alongside the full-range flow_closure_*.
+        # core J/ψ region is legible alongside the full-range flow_closure_* (linear).
         plot_flow_closure(evals, m_centers_np, eta_slice_edges, out_dir,
                           stem="flow_closure_fitwin")
     else:
-        plot_flow_closure(evals, m_centers_np, eta_slice_edges, out_dir)
+        plot_flow_closure(evals, m_centers_np, eta_slice_edges, out_dir, log_y=True)
     if getattr(model, "background_enabled", True) and "bkg_frac" in evals:
         plot_bkg_fractions(evals["bkg_frac"], stats.eta_edges, out_dir,
                            inject_bkg=inject_bkg_np,

@@ -2752,6 +2752,10 @@ def train_stage_joint(args, model, sim_loader, data_loader, stats,
     gauge_lambda = (float(getattr(args, "flow_gauge_penalty", 0.0) or 0.0)
                     if window_norm else 0.0)
     sim_weight = float(getattr(args, "joint_sim_weight", 1.0) or 1.0)
+    detach_flow_data = bool(getattr(args, "joint_detach_flow_data", False))
+    if detach_flow_data:
+        print("  --joint-detach-flow-data: flow φ trained by the SIM anchor ONLY; "
+              "θ/bkg fit to data with φ held constant in the data term")
 
     # The flow is TRAINABLE here (not frozen as in stage 2).
     for p in model.flow.parameters():
@@ -2890,13 +2894,25 @@ def train_stage_joint(args, model, sim_loader, data_loader, stats,
             per_sim = per_sim + gauge_lambda * (log_Z.double() ** 2)
         ws = batch["s_w"][s_idx].double()
         w_sim = ws * (W_sim / ws.sum().clamp_min(1e-30))     # batch Σ → W_sim
-        # --- data part → calibrated NLL (drives θ, bkg; backprops to φ) ---
+        # --- data part → calibrated NLL (drives θ, bkg; backprops to φ unless
+        #     --joint-detach-flow-data) ---
         d_mask = (~batch["d_is_data_mask"] if mc_as_data
                   else batch["d_is_data_mask"])
+        # Detach the flow PARAMETERS for the data term: build the data graph with
+        # the flow's leaves not requiring grad (so no data→φ path), then restore
+        # before the caller's backward so the SIM graph still feeds φ its grads.
+        # θ gradients through the flow's evaluation point are preserved (the flow
+        # INPUTS still carry θ grad — only the flow params are held constant).
+        if detach_flow_data:
+            for _pf in model.flow.parameters():
+                _pf.requires_grad_(False)
         per_data = nll_fn(batch["d_mll"], batch["d_pt_pm"], batch["d_eta_pm"],
                           batch["d_phi_pm"], batch["d_q_pm"], batch["d_b_pm"],
                           batch["d_cond_std"], d_mask,
                           n_iter=args.continuity_n_iter).double()
+        if detach_flow_data:
+            for _pf in model.flow.parameters():
+                _pf.requires_grad_(True)
         wd = (batch["d_w"] * d_mask.to(batch["d_w"].dtype)).double()
         w_data = wd * (W_data / wd.sum().clamp_min(1e-30))   # batch Σ → W_data
         # Combined weighted-mean NLL; backward gives the natural-ratio joint grad.
@@ -4661,6 +4677,16 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
         "to the data calibrated-NLL. Default 1.0 (event-proportional). The "
         "degeneracy breaking is robust to this; raise it to anchor φ harder to "
         "the MC shape.",
+    )
+    p.add_argument(
+        "--joint-detach-flow-data", action="store_true",
+        help="(--stage joint) DETACH the flow gradient from the DATA (calibrated-"
+        "NLL) term: the flow φ is then trained ONLY by the simulation flow-NLL "
+        "anchor, while θ/background are fit to the data through the (frozen-φ) "
+        "calibrated density. θ gradients through the flow's evaluation point are "
+        "preserved (only the flow PARAMETERS are held constant in the data term). "
+        "Closer to the two-stage (frozen-flow) fit but still co-trained — a "
+        "control for whether the data term's pull on φ helps or hurts.",
     )
     p.add_argument(
         "--checkpoint", type=str, default=None,
