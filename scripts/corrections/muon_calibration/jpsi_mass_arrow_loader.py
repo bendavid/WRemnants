@@ -50,7 +50,8 @@ import numpy as np
 import pyarrow as pa
 import pyarrow.ipc as ipc
 import torch
-from torch.utils.data import IterableDataset
+from torch.utils.data import (IterableDataset, DataLoader,
+                              get_worker_info as _torch_get_worker_info)
 
 
 # ---------------------------------------------------------------------------
@@ -1262,7 +1263,13 @@ class JpsiMassArrowLoader(IterableDataset):
         OS page cache makes repeat epochs cheap) — no full read-then-discard and
         no in-RAM caching. The full-dataset path is unchanged (OSFile read_all)."""
         subsample = self.max_events > 0 or self.event_fraction < 1.0
-        for path in self.my_shards:
+        # DataLoader-worker sharding: inside a worker subprocess, take only this
+        # worker's stride of my_shards so each shard is read by exactly ONE worker
+        # (no duplication). Single-process (num_workers=0) → all shards.
+        _wi = _torch_get_worker_info()
+        _shards = (self.my_shards if _wi is None
+                   else self.my_shards[_wi.id::_wi.num_workers])
+        for path in _shards:
             if not subsample:
                 # Full dataset: read the whole shard (~a few MB) as before.
                 with pa.OSFile(path, "rb") as src:
@@ -1324,8 +1331,12 @@ class JpsiMassArrowLoader(IterableDataset):
         # (and identical across epochs → a fixed pseudo-data set). The
         # background injection gets its own stream (fixed offset) so the two
         # injections are independent and individually reproducible.
-        rng = np.random.default_rng(self.inject_seed)
-        rng_bkg = np.random.default_rng(self.inject_seed + 1000003)
+        # Per-worker RNG offset so the injected realisation stays reproducible AND
+        # distinct per DataLoader worker (no duplicated injection across workers).
+        _wi = _torch_get_worker_info()
+        _wid = 0 if _wi is None else _wi.id
+        rng = np.random.default_rng(self.inject_seed + _wid)
+        rng_bkg = np.random.default_rng(self.inject_seed + 1000003 + _wid)
 
         for cols in self._iter_shard_cols():
             for c in _RAW_COLUMNS:
@@ -1353,6 +1364,26 @@ class JpsiMassArrowLoader(IterableDataset):
                 self.inject_nonuniform, self.inject_bkg, rng_bkg,
                 self.m_window, self.inject_prod,
                 self.reco_ptll_min, self.reco_ptll_max)
+
+    def make_dataloader(self, num_workers=0, prefetch_factor=4,
+                        pin_memory=False):
+        """Wrap this IterableDataset in a torch DataLoader for background batch
+        production. With num_workers>0, each worker subprocess runs ``__iter__``
+        over its own stride of the shards (shard-split + per-worker-seeded
+        injection), overlapping the CPU batch build (conditioning, fit cuts,
+        injection) with GPU compute. ``batch_size=None`` because the dataset
+        already yields full batches (no collation). Returns ``self`` unchanged
+        for num_workers<=0 (current single-process behaviour)."""
+        if not num_workers or num_workers <= 0:
+            return self
+        return DataLoader(
+            self,
+            batch_size=None,
+            num_workers=int(num_workers),
+            prefetch_factor=int(prefetch_factor),
+            persistent_workers=True,
+            pin_memory=bool(pin_memory),
+        )
 
 
 # ---------------------------------------------------------------------------

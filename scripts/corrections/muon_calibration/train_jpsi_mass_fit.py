@@ -570,10 +570,12 @@ class _StepProfiler:
         self.n = int(n)
         self.is_cuda = (str(device).startswith("cuda")
                         and torch.cuda.is_available())
-        self.data = self.fwd = self.bwd = 0.0
+        self.fetch = self.data = self.fwd = self.bwd = 0.0
         self.count = 0
         self._t = None
-        self._pd = self._pf = 0.0   # pending (this-iter) data / fwd, committed at backward
+        self._last_end = None        # synced wall-clock at the end of the prev step
+        # pending (this-iter) fetch / data / fwd, committed at backward
+        self._pfetch = self._pd = self._pf = 0.0
 
     def _sync(self):
         if self.is_cuda:
@@ -583,8 +585,13 @@ class _StepProfiler:
         return self.count < self.n
 
     def mark_iter_start(self):
-        """Call at the top of the loop body (a batch has just been yielded)."""
+        """Call at the top of the loop body (a batch has just been yielded). The
+        gap since the previous step ended is the LOADER FETCH (the ``for batch in
+        loader`` next() that runs _batch_tensors — conditioning, cuts, injection —
+        plus the iterator/prefetch wait), which is NOT part of the data/move phase."""
         if self.active():
+            now = time.time()
+            self._pfetch = (now - self._last_end) if self._last_end is not None else 0.0
             self._pd = self._pf = 0.0
             self._sync(); self._t = time.time()
 
@@ -597,25 +604,30 @@ class _StepProfiler:
             self._sync(); now = time.time(); self._pf = now - self._t; self._t = now
 
     def after_backward(self):
-        # Commit all three phases together so bailed steps (sw<=0 / NaN-skip,
-        # which never reach here) don't leak a partial iter into the averages.
+        # Commit all phases together so bailed steps (sw<=0 / NaN-skip, which never
+        # reach here) don't leak a partial iter into the averages.
         if self.active():
             self._sync(); now = time.time()
+            self.fetch += self._pfetch
             self.data += self._pd; self.fwd += self._pf; self.bwd += now - self._t
             self.count += 1
+            self._last_end = now
 
     def report(self, stage_name, epoch):
         if self.count == 0:
             return
         n = self.count
-        d, f, b = self.data / n, self.fwd / n, self.bwd / n
-        tot = d + f + b
+        ld, d, f, b = self.fetch / n, self.data / n, self.fwd / n, self.bwd / n
+        tot = ld + d + f + b
         if tot <= 0:
             return
+        # fetch≫(fwd+bwd) → loader/host-bound (the GPU starves on batch production);
+        # fetch small + fwd/bwd high → compute-bound. data is just the H→D copy.
         msg = (f"[{stage_name}] epoch {epoch:>3} profile (mean of {n} steps): "
+               f"fetch={ld*1e3:.1f}ms ({100*ld/tot:.0f}%)  "
                f"data={d*1e3:.1f}ms ({100*d/tot:.0f}%)  "
                f"fwd={f*1e3:.1f}ms ({100*f/tot:.0f}%)  "
-               f"bwd+step={b*1e3:.1f}ms ({100*b/tot:.0f}%)")
+               f"bwd+step={b*1e3:.1f}ms ({100*b/tot:.0f}%)  step≈{tot*1e3:.0f}ms")
         if self.is_cuda:
             try:
                 util = torch.cuda.utilization()
@@ -2924,6 +2936,17 @@ def train_stage_joint(args, model, sim_loader, data_loader, stats,
         return ((w * per).sum() / sw, sw,
                 float((w * pd * pd).sum()), float((w * w).sum()))
 
+    # Optionally move batch production to background DataLoader workers so the CPU
+    # batch build (conditioning, fit cuts, injection) overlaps GPU compute. The
+    # one-shot count passes above already ran on the raw single-process loaders;
+    # only the training loop is wrapped.
+    _nw = int(getattr(args, "loader_workers", 0) or 0)
+    _pf = int(getattr(args, "loader_prefetch", 4) or 4)
+    if _nw > 0 and hasattr(sim_loader, "make_dataloader"):
+        print(f"  loader: {_nw} workers, prefetch_factor={_pf} (background batch "
+              f"production)")
+        sim_loader = sim_loader.make_dataloader(num_workers=_nw, prefetch_factor=_pf)
+        data_loader = data_loader.make_dataloader(num_workers=_nw, prefetch_factor=_pf)
     joint_loader = _JointLoader(sim_loader, data_loader)
     optim = _make_fit_optimizer(args, groups)
     print(f"  optimizer: {getattr(args, 'fit_optimizer', 'adam')} "
@@ -5089,6 +5112,17 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "in events; Adam just takes more, smaller steps per "
                    "epoch). Does not affect the Fisher/bootstrap loaders "
                    "(they have their own caps/chunking).")
+    p.add_argument("--loader-workers", type=int, default=0,
+                   help="Background DataLoader workers for the joint stage. 0 = "
+                   "single-process (current behaviour: batches built inline on "
+                   "the main process). >0 spawns that many subprocesses, each "
+                   "reading its own stride of the shards (per-worker shard split "
+                   "+ seed offset) so the CPU batch build (conditioning, fit "
+                   "cuts, injection — ~40%% of step time) overlaps GPU compute. "
+                   "Both the sim and data loaders get this count.")
+    p.add_argument("--loader-prefetch", type=int, default=4,
+                   help="DataLoader prefetch_factor (batches each worker buffers "
+                   "ahead). Only used when --loader-workers>0.")
     p.add_argument("--lr", type=float, default=1e-3,
                    help="Adam lr for flow + MLP.")
     p.add_argument("--weight-decay", type=float, default=0.0,
