@@ -1082,21 +1082,30 @@ def _model_pred_histograms(
         weights = (w_d * f_d[:, -1])[:, None]  # [n_d, 1]
         _pm = evals.get("pred_signal_mass_data")
         if _pm is not None and _pm.shape[0] == evals["pred_signal_data"].shape[0]:
-            # integrated (analytic CDF) signal MASS per bin — exact, no spike guard
-            sig = (_pm[slice_mask_data] * weights).sum(axis=0)
+            # integrated (analytic CDF) signal MASS per bin — exact, no spike guard.
+            # dtype=float64: the per-EVENT reduction is over axis=0 (the strided
+            # outer axis of a [N_events, n_bins] f32 array), where numpy uses NAIVE
+            # (non-pairwise) accumulation. For the inclusive panel (~5M events) the
+            # running sum reaches ~3e5 while each term is ~0.06 (< the f32 ulp of
+            # that accumulator) → ~0.5-0.8% stagnation error, jagged bin-to-bin,
+            # worst at the peak — the spurious "inclusive-only" ripple. f64 accum
+            # makes it exact (per-slice sums are smaller so the bug barely shows).
+            sig = (_pm[slice_mask_data] * weights).sum(axis=0, dtype=np.float64)
         else:
             # fallback: density at bin centre × bin width (point-eval)
             pred = evals["pred_signal_data"][slice_mask_data]  # [n_d, n_bins]
-            sig = bin_width * (pred * weights).sum(axis=0)
+            sig = bin_width * (pred * weights).sum(axis=0, dtype=np.float64)
         slopes = np.asarray(evals.get("bkg_slope_data", np.zeros(0)))
         if slopes.size == evals["mll_data"].size and slopes.size > 0:
             # exp model (per-event slope array parallel to the data events):
             # closed-form per-event bin fractions × fraction weights.
             u_edges = (np.asarray(m_edges) - m_lo) / (m_hi - m_lo)
             dF = _exp_bin_fractions_np(u_edges, slopes[slice_mask_data])
-            bkg = ((w_d * f_d[:, 0])[:, None] * dF).sum(axis=0)
+            bkg = ((w_d * f_d[:, 0])[:, None] * dF).sum(axis=0, dtype=np.float64)
         else:
-            sum_fk_w = (w_d[:, None] * f_d[:, :-1]).sum(axis=0)   # [n_bkg]
+            # f64 accum: same per-event strided-axis-0 naive-sum stagnation as the
+            # signal term above (smaller magnitude here, but keep it consistent).
+            sum_fk_w = (w_d[:, None] * f_d[:, :-1]).sum(axis=0, dtype=np.float64)  # [n_bkg]
             I = evals.get("bkg_bin_integrals")
             if I is not None and I.shape[0] == sum_fk_w.shape[0]:
                 bkg = (sum_fk_w[:, None] * I).sum(axis=0)
