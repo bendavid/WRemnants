@@ -2942,11 +2942,14 @@ def train_stage_joint(args, model, sim_loader, data_loader, stats,
     # only the training loop is wrapped.
     _nw = int(getattr(args, "loader_workers", 0) or 0)
     _pf = int(getattr(args, "loader_prefetch", 4) or 4)
+    _pin = bool(getattr(args, "loader_pin_memory", False))
     if _nw > 0 and hasattr(sim_loader, "make_dataloader"):
-        print(f"  loader: {_nw} workers, prefetch_factor={_pf} (background batch "
-              f"production)")
-        sim_loader = sim_loader.make_dataloader(num_workers=_nw, prefetch_factor=_pf)
-        data_loader = data_loader.make_dataloader(num_workers=_nw, prefetch_factor=_pf)
+        print(f"  loader: {_nw} workers, prefetch_factor={_pf}, "
+              f"pin_memory={_pin} (background batch production)")
+        sim_loader = sim_loader.make_dataloader(
+            num_workers=_nw, prefetch_factor=_pf, pin_memory=_pin)
+        data_loader = data_loader.make_dataloader(
+            num_workers=_nw, prefetch_factor=_pf, pin_memory=_pin)
     joint_loader = _JointLoader(sim_loader, data_loader)
     optim = _make_fit_optimizer(args, groups)
     print(f"  optimizer: {getattr(args, 'fit_optimizer', 'adam')} "
@@ -5123,6 +5126,12 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
     p.add_argument("--loader-prefetch", type=int, default=4,
                    help="DataLoader prefetch_factor (batches each worker buffers "
                    "ahead). Only used when --loader-workers>0.")
+    p.add_argument("--loader-pin-memory", action="store_true",
+                   help="Pin the DataLoader output in page-locked host memory so "
+                   "the H→D copy (already issued non_blocking) is genuinely "
+                   "ASYNC and overlaps GPU compute, instead of the synchronous "
+                   "pageable copy you get without pinning. Only used with "
+                   "--loader-workers>0; costs some host RAM + a pinning thread.")
     p.add_argument("--lr", type=float, default=1e-3,
                    help="Adam lr for flow + MLP.")
     p.add_argument("--weight-decay", type=float, default=0.0,
