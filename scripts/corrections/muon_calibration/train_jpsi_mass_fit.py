@@ -5115,23 +5115,28 @@ def parse_args(argv: List[str] | None = None) -> argparse.Namespace:
                    "in events; Adam just takes more, smaller steps per "
                    "epoch). Does not affect the Fisher/bootstrap loaders "
                    "(they have their own caps/chunking).")
-    p.add_argument("--loader-workers", type=int, default=0,
-                   help="Background DataLoader workers for the joint stage. 0 = "
-                   "single-process (current behaviour: batches built inline on "
-                   "the main process). >0 spawns that many subprocesses, each "
-                   "reading its own stride of the shards (per-worker shard split "
-                   "+ seed offset) so the CPU batch build (conditioning, fit "
-                   "cuts, injection — ~40%% of step time) overlaps GPU compute. "
-                   "Both the sim and data loaders get this count.")
+    p.add_argument("--loader-workers", type=int, default=4,
+                   help="Background DataLoader workers for the joint stage "
+                   "(default 4). 0 = single-process (batches built inline on the "
+                   "main process). >0 spawns that many subprocesses, each reading "
+                   "its own stride of the shards (per-worker shard split + seed "
+                   "offset) so the CPU batch build (conditioning, fit cuts, "
+                   "injection — ~38%% of step time) overlaps GPU compute. Both the "
+                   "sim and data loaders get this count. NOTE: with injection "
+                   "(--validation) the per-worker seed offset makes the pseudo-data "
+                   "realisation differ from num_workers=0 (still reproducible); "
+                   "pass --loader-workers 0 to recover the exact single-process set.")
     p.add_argument("--loader-prefetch", type=int, default=4,
                    help="DataLoader prefetch_factor (batches each worker buffers "
-                   "ahead). Only used when --loader-workers>0.")
-    p.add_argument("--loader-pin-memory", action="store_true",
+                   "ahead, default 4). Only used when --loader-workers>0.")
+    p.add_argument("--loader-pin-memory", action=argparse.BooleanOptionalAction,
+                   default=True,
                    help="Pin the DataLoader output in page-locked host memory so "
-                   "the H→D copy (already issued non_blocking) is genuinely "
-                   "ASYNC and overlaps GPU compute, instead of the synchronous "
-                   "pageable copy you get without pinning. Only used with "
-                   "--loader-workers>0; costs some host RAM + a pinning thread.")
+                   "the H→D copy (already issued non_blocking) is genuinely ASYNC "
+                   "and overlaps GPU compute, instead of the synchronous pageable "
+                   "copy you get without pinning (default ON; --no-loader-pin-memory "
+                   "to disable). Only used with --loader-workers>0; costs some host "
+                   "RAM + a pinning thread.")
     p.add_argument("--lr", type=float, default=1e-3,
                    help="Adam lr for flow + MLP.")
     p.add_argument("--weight-decay", type=float, default=0.0,
